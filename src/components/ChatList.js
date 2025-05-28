@@ -11,12 +11,19 @@ import {
   getDocs,
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { FaPlus } from "react-icons/fa";
+import Modal from "react-modal";
 
 function ChatList() {
   const [rooms, setRooms] = useState([]);
   const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [searchActive, setSearchActive] = useState(false);
   const [filter, setFilter] = useState("최신순");
-  const [activeTab, setActiveTab] = useState("전체");
+  const [activeTab, setActiveTab] = useState("내 채팅방");
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newRoomName, setNewRoomName] = useState("");
+  const [creating, setCreating] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -339,6 +346,23 @@ function ChatList() {
     return () => unsubscribe();
   }, [activeTab, search, filter]);
 
+  // 방 생성 핸들러
+  const handleCreateRoom = async () => {
+    if (!newRoomName.trim()) return;
+    setCreating(true);
+    const docRef = await addDoc(collection(db, "chatRooms"), {
+      name: newRoomName,
+      createdAt: serverTimestamp(),
+      createdBy: auth.currentUser?.uid || "anonymous",
+      profileImage: "",
+      maxParticipants: 10,
+    });
+    setNewRoomName("");
+    setCreating(false);
+    setShowCreateModal(false);
+    navigate(`/chat/${docRef.id}`); // 방 생성 후 곧바로 입장
+  };
+
   return (
     <div className="max-w-md mx-auto bg-[#f7faff] rounded-2xl p-3 min-h-screen flex flex-col">
       <h2 className="text-2xl font-bold text-center mt-4 mb-2">채팅방 리스트</h2>
@@ -348,12 +372,42 @@ function ChatList() {
         <button className={`flex-1 py-2 rounded-full font-bold text-base ${activeTab === "전체" ? "bg-blue-500 text-white" : "bg-blue-100 text-gray-500"}`} onClick={() => setActiveTab("전체")}>전체</button>
       </div>
       {/* 검색창 */}
-      <input className="w-full rounded-lg border px-3 py-2 mb-2 text-sm" placeholder="채팅방 이름, 키워드 검색" value={search} onChange={e => setSearch(e.target.value)} />
-      {/* 필터 버튼 */}
-      <div className="flex gap-2 mb-3">
-        <button className={`flex-1 py-2 rounded-full font-bold text-base ${filter === "최신순" ? "bg-yellow-400 text-gray-900" : "bg-gray-100 text-gray-500"}`} onClick={() => setFilter("최신순")}>최신순</button>
-        <button className={`flex-1 py-2 rounded-full font-bold text-base ${filter === "좋아요순" ? "bg-yellow-400 text-gray-900" : "bg-gray-100 text-gray-500"}`} onClick={() => setFilter("좋아요순")}>좋아요순</button>
-        <button className={`flex-1 py-2 rounded-full font-bold text-base ${filter === "참여인원순" ? "bg-yellow-400 text-gray-900" : "bg-gray-100 text-gray-500"}`} onClick={() => setFilter("참여인원순")}>참여인원순</button>
+      <input
+        className="w-full rounded-lg border px-3 py-2 mb-2 text-sm"
+        placeholder="채팅방 이름, 키워드 검색"
+        value={searchInput}
+        onChange={e => setSearchInput(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === "Enter") {
+            setSearch(searchInput);
+            setSearchActive(true);
+          }
+        }}
+      />
+      {/* 검색 해제 버튼 */}
+      {searchActive && (
+          <button
+          className="text-xs text-blue-500 underline mb-2 ml-1"
+          onClick={() => {
+            setSearch("");
+            setSearchInput("");
+            setSearchActive(false);
+          }}
+        >
+          검색 해제
+          </button>
+      )}
+      {/* 정렬 셀렉트 박스 */}
+      <div className="mb-3">
+        <select
+          className="w-full rounded-lg border px-3 py-2 text-sm bg-white"
+          value={filter}
+          onChange={e => setFilter(e.target.value)}
+        >
+          <option value="최신순">최신순</option>
+          <option value="좋아요순">좋아요순</option>
+          <option value="참여인원순">참여인원순</option>
+        </select>
       </div>
       {/* 채팅방 리스트 */}
       <div className="text-sm text-gray-500 mb-2">방 개수: {rooms.length}</div>
@@ -368,7 +422,7 @@ function ChatList() {
           });
         })()}
         {activeTab === "전체" ? (
-          rooms.map(room => (
+          rooms.filter(room => room.isSearched).map(room => (
             <div key={room.id} className="flex items-center bg-white rounded-xl shadow p-3 gap-3 hover:bg-blue-50 transition">
               {/* 썸네일 */}
               <img src={room.imageUrl} alt="썸네일" className="w-14 h-14 rounded-lg object-cover" />
@@ -376,9 +430,20 @@ function ChatList() {
               <div className="flex-1 min-w-0">
                 <div className="font-bold text-base truncate mb-1">{room.title}</div>
                 <div className="text-xs text-gray-500 truncate mb-1">{room.desc}</div>
-                <div className="flex gap-4 text-xs text-gray-400 mt-1">
+                <div className="flex gap-4 text-xs text-gray-400 mt-1 items-center">
                   <span className="flex items-center"><span className="mr-1">👥</span>{room.members}명</span>
                   <span className="flex items-center"><span className="mr-1">❤️</span>{room.likes}</span>
+                  {/* 해시태그 노출 */}
+                  {(() => {
+                    const hashtags = (room.desc || "").match(/#[^#\s]+/g);
+                    return hashtags && hashtags.length > 0 ? (
+                      <span className="flex flex-wrap gap-1">
+                        {hashtags.map((tag, i) => (
+                          <span key={i} className="bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full text-xs font-semibold">{tag}</span>
+                        ))}
+                      </span>
+                    ) : null;
+                  })()}
                 </div>
               </div>
               {/* 입장 버튼 */}
@@ -393,19 +458,38 @@ function ChatList() {
         ) : (
           <>
             {/* 내가 만든 방 */}
-            <div className="mb-2 mt-2 text-base font-bold text-blue-700">내가 만든 방</div>
-            {rooms.filter(room => room.isMine).length === 0 && (
+            <div className="mb-2 mt-2 flex items-center justify-between">
+              <span className="text-base font-bold text-blue-700">내가 만든 방</span>
+              <button
+                className="flex items-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-full shadow font-bold text-sm hover:bg-blue-600 transition"
+                onClick={() => navigate('/chat/create')}
+              >
+                <FaPlus /> 방 생성하기
+              </button>
+            </div>
+            {rooms.filter(room => room.isMine && room.isSearched).length === 0 && (
               <div className="text-sm text-gray-400 mb-2">내가 만든 방이 없습니다.</div>
             )}
-            {rooms.filter(room => room.isMine).map(room => (
+            {rooms.filter(room => room.isMine && room.isSearched).map(room => (
               <div key={room.id} className="flex items-center bg-white rounded-xl shadow p-3 gap-3 hover:bg-blue-50 transition">
                 <img src={room.imageUrl} alt="썸네일" className="w-14 h-14 rounded-lg object-cover" />
                 <div className="flex-1 min-w-0">
                   <div className="font-bold text-base truncate mb-1">{room.title}</div>
                   <div className="text-xs text-gray-500 truncate mb-1">{room.desc}</div>
-                  <div className="flex gap-4 text-xs text-gray-400 mt-1">
+                  <div className="flex gap-4 text-xs text-gray-400 mt-1 items-center">
                     <span className="flex items-center"><span className="mr-1">👥</span>{room.members}명</span>
                     <span className="flex items-center"><span className="mr-1">❤️</span>{room.likes}</span>
+                    {/* 해시태그 노출 */}
+                    {(() => {
+                      const hashtags = (room.desc || "").match(/#[^#\s]+/g);
+                      return hashtags && hashtags.length > 0 ? (
+                        <span className="flex flex-wrap gap-1">
+                          {hashtags.map((tag, i) => (
+                            <span key={i} className="bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full text-xs font-semibold">{tag}</span>
+                          ))}
+                        </span>
+                      ) : null;
+                    })()}
                   </div>
                 </div>
                 <button
@@ -418,31 +502,76 @@ function ChatList() {
             ))}
             {/* 참여중인 방 */}
             <div className="mb-2 mt-4 text-base font-bold text-blue-700">참여중인 방</div>
-            {rooms.filter(room => !room.isMine && room.isJoined).length === 0 && (
+            {rooms.filter(room => !room.isMine && room.isJoined && room.isSearched).length === 0 && (
               <div className="text-sm text-gray-400 mb-2">참여중인 방이 없습니다.</div>
             )}
-            {rooms.filter(room => !room.isMine && room.isJoined).map(room => (
+            {rooms.filter(room => !room.isMine && room.isJoined && room.isSearched).map(room => (
               <div key={room.id} className="flex items-center bg-white rounded-xl shadow p-3 gap-3 hover:bg-blue-50 transition">
                 <img src={room.imageUrl} alt="썸네일" className="w-14 h-14 rounded-lg object-cover" />
                 <div className="flex-1 min-w-0">
                   <div className="font-bold text-base truncate mb-1">{room.title}</div>
                   <div className="text-xs text-gray-500 truncate mb-1">{room.desc}</div>
-                  <div className="flex gap-4 text-xs text-gray-400 mt-1">
+                  <div className="flex gap-4 text-xs text-gray-400 mt-1 items-center">
                     <span className="flex items-center"><span className="mr-1">👥</span>{room.members}명</span>
                     <span className="flex items-center"><span className="mr-1">❤️</span>{room.likes}</span>
+                    {/* 해시태그 노출 */}
+                    {(() => {
+                      const hashtags = (room.desc || "").match(/#[^#\s]+/g);
+                      return hashtags && hashtags.length > 0 ? (
+                        <span className="flex flex-wrap gap-1">
+                          {hashtags.map((tag, i) => (
+                            <span key={i} className="bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full text-xs font-semibold">{tag}</span>
+                          ))}
+                        </span>
+                      ) : null;
+                    })()}
                   </div>
                 </div>
-                <button
+            <button
                   className="bg-blue-500 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-blue-600 transition"
                   onClick={room.onEnter}
-                >
+            >
                   입장하기
-                </button>
+            </button>
               </div>
             ))}
           </>
         )}
       </div>
+      {/* 방 생성 모달 */}
+      <Modal
+        isOpen={showCreateModal}
+        onRequestClose={() => setShowCreateModal(false)}
+        className="fixed inset-0 flex items-center justify-center z-50"
+        overlayClassName="fixed inset-0 bg-black bg-opacity-40 z-40"
+        ariaHideApp={false}
+      >
+        <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-xs flex flex-col items-center">
+          <h3 className="font-bold text-lg mb-4">새 채팅방 만들기</h3>
+            <input
+            className="w-full border rounded-lg px-3 py-2 mb-4 text-base"
+            placeholder="채팅방 이름 입력"
+            value={newRoomName}
+            onChange={e => setNewRoomName(e.target.value)}
+            maxLength={30}
+            autoFocus
+          />
+          <button
+            className="w-full bg-blue-500 text-white py-2 rounded-lg font-bold text-base hover:bg-blue-600 transition mb-2"
+            onClick={handleCreateRoom}
+            disabled={creating || !newRoomName.trim()}
+          >
+            {creating ? "생성 중..." : "방 만들기"}
+          </button>
+          <button
+            className="w-full bg-gray-200 text-gray-700 py-2 rounded-lg font-bold text-base hover:bg-gray-300 transition"
+            onClick={() => setShowCreateModal(false)}
+            disabled={creating}
+          >
+            취소
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

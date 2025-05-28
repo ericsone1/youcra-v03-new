@@ -56,6 +56,13 @@ function VideoListPage() {
         >
           내 영상 등록하기
         </button>
+        <button
+          className="ml-2 text-gray-400 hover:text-blue-500 text-2xl font-bold"
+          onClick={() => navigate(`/chat/${roomId}`)}
+          aria-label="닫기"
+        >
+          ×
+        </button>
       </div>
       {videoList.length === 0 && (
         <div className="text-sm text-gray-400">아직 등록된 영상이 없습니다.</div>

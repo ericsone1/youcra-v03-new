@@ -11,6 +11,7 @@ import VideoListPage from "./components/VideoListPage"; // 새로 만들 파일
 import AddVideoPage from "./components/AddVideoPage"; // 새 파일
 import SearchResult from "./components/SearchResult";
 import ChatRoomManage from "./components/ChatRoomManage";
+import ChatRoomCreate from "./components/ChatRoomCreate";
 
 function App() {
   const location = useLocation();
@@ -29,6 +30,7 @@ function App() {
         <Route path="/videos" element={<VideoListPage />} />
         <Route path="/add-video" element={<AddVideoPage />} />
         <Route path="/search" element={<SearchResult />} />
+        <Route path="/chat/create" element={<ChatRoomCreate />} />
       </Routes>
       {/* 하단 네비게이션 바 */}
       <footer className="fixed bottom-0 left-0 w-full bg-white rounded-t-2xl shadow-lg border-t flex justify-around items-center h-16 z-50">

@@ -547,7 +547,10 @@ function ChatRoom() {
   return (
     <div className="flex flex-col bg-blue-50" style={{ height: '100vh', overflow: 'hidden', position: 'relative' }}>
       {/* 상단바 (56px) - 항상 상단 고정 */}
-      <div className="flex items-center justify-between px-4 py-3 border-b bg-white shadow-sm" style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: 56, zIndex: 200 }}>
+      <div
+        className="flex items-center justify-between px-4 py-3 border-b bg-white shadow-sm"
+        style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: 56, zIndex: 200 }}
+      >
         <button onClick={handleBack} className="text-2xl text-gray-600 hover:text-blue-600 mr-2" aria-label="뒤로가기">←</button>
         <div className="flex-1 text-center font-bold text-lg text-gray-800 truncate">{roomName || "맞구톡방입니다."}</div>
         <div className="flex items-center gap-2 ml-2">
@@ -633,8 +636,9 @@ function ChatRoom() {
       <div
         className="flex-1 overflow-y-auto px-2 py-2 bg-blue-50"
         style={{
-          height: 'calc(100vh - 56px - 60px - 56px)',
-          paddingTop: 56, // 상단바 높이만큼 여백 추가
+          paddingTop: 72,        // 헤더(56) + 추가여백(16)
+          paddingBottom: 120,    // 하단 입력창+네비+여유 여백
+          minHeight: 'calc(100vh - 56px)',
           boxSizing: 'border-box',
         }}
       >

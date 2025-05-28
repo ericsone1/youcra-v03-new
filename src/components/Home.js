@@ -26,6 +26,7 @@ function Home() {
   const navigate = useNavigate();
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
+  const [visibleCount, setVisibleCount] = useState(5);
 
   useEffect(() => {
     async function fetchVideos() {
@@ -69,7 +70,13 @@ function Home() {
 
   // 영상 클릭 시 플레이어 노출
   const handleVideoClick = (video) => {
-    setSelectedVideo(video);
+    const watching = Math.floor(Math.random()*1000)+100;
+    const likeCount = Number(video.statistics.likeCount || 0);
+    setSelectedVideo({
+      ...video,
+      watching,
+      likeCount,
+    });
     setWatchSeconds(0);
     setIsPlaying(false);
   };
@@ -129,7 +136,7 @@ function Home() {
   // 영상 선택 시 좋아요 상태 초기화
   useEffect(() => {
     setLiked(false);
-    setLikeCount(selectedVideo ? (selectedVideo.ucraLikeCount || 0) : 0);
+    setLikeCount(selectedVideo ? (selectedVideo.likeCount || 0) : 0);
   }, [selectedVideo]);
 
   if (loading) return <div className="p-8 text-center text-gray-500">로딩 중...</div>;
@@ -266,6 +273,10 @@ function Home() {
                 </span>
                 <span className="ml-1 text-base text-gray-700">{likeCount}</span>
               </button>
+              {/* 시청자수 */}
+              <span className="ml-4 flex items-center text-blue-400 text-sm">
+                👁️ {selectedVideo.watching}명
+              </span>
             </div>
           </motion.div>
         )}
@@ -275,7 +286,7 @@ function Home() {
       <div>
         <h3 className="text-xl font-bold mb-4 text-blue-700">실시간 UCRA 시청순위</h3>
         <ul>
-          {filteredVideos.map((video, idx) => {
+          {filteredVideos.slice(0, visibleCount).map((video, idx) => {
             const viewCount = Number(video.statistics.viewCount).toLocaleString();
             const likeCount = Number(video.statistics.likeCount || 0).toLocaleString();
             const watching = Math.floor(Math.random()*1000)+100;
@@ -309,11 +320,11 @@ function Home() {
                   <div className="text-xs text-gray-500 mb-1">{video.snippet.channelTitle}</div>
                   <div className="flex flex-col items-center justify-center mt-1">
                     <div className="flex gap-6 justify-center items-center text-lg font-bold">
-                      <span className="flex items-center text-pink-400">
+                      <span className="flex items-center text-pink-400 text-sm">
                         ❤️ {likeCount}
                       </span>
-                      <span className="flex items-center text-blue-400">
-                        👁️ {watching}명 시청중
+                      <span className="flex items-center text-blue-400 text-sm">
+                        👁️ {watching}명
                       </span>
                     </div>
                   </div>
@@ -325,6 +336,16 @@ function Home() {
             );
           })}
         </ul>
+        {filteredVideos.length > visibleCount && visibleCount < 20 && (
+          <div className="text-center mt-2">
+            <button
+              className="px-6 py-2 bg-blue-100 text-blue-700 rounded-full font-bold hover:bg-blue-200 transition"
+              onClick={() => setVisibleCount(c => Math.min(c + 5, 20))}
+            >
+              더보기
+            </button>
+          </div>
+        )}
         {filteredVideos.length === 0 && (
           <div className="text-center text-gray-400 py-8">검색 결과가 없습니다.</div>
         )}
