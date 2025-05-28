@@ -1,0 +1,50 @@
+{
+  "name": "youcra-v03",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@emoji-mart/data": "^1.2.1",
+    "@emoji-mart/react": "^1.1.1",
+    "ajv": "^8.17.1",
+    "ajv-keywords": "^5.1.0",
+    "emoji-mart": "^5.6.0",
+    "firebase": "^11.8.1",
+    "framer-motion": "12.12.1",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "react-modal": "3.16.1",
+    "react-router-dom": "6.22.3",
+    "react-scripts": "^5.0.1",
+    "react-youtube": "^10.1.0",
+    "web-vitals": "^5.0.1"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "devDependencies": {
+    "@pmmmwh/react-refresh-webpack-plugin": "^0.6.0",
+    "autoprefixer": "^10.4.21",
+    "css-loader": "^7.1.2",
+    "html-webpack-plugin": "^5.6.3",
+    "postcss": "^8.5.3",
+    "style-loader": "^4.0.0",
+    "tailwindcss": "^3.3.3",
+    "webpack-cli": "^6.0.1",
+    "webpack-dev-server": "^5.2.1"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}
