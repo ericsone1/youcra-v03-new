@@ -543,224 +543,105 @@ function ChatRoom() {
     };
   }, []);
 
+  // 메시지 영역 스크롤 항상 마지막으로
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages]);
+
+  // 입력창 포커스 시 스크롤 보정 (모바일 대응)
+  const handleInputFocus = () => {
+    setTimeout(() => {
+      if (messagesEndRef.current) {
+        messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+      }
+    }, 300);
+  };
+
   // ---------------------- return문 시작 ----------------------
   return (
-    <div className="flex flex-col bg-blue-50" style={{ height: '100vh', overflow: 'hidden', position: 'relative' }}>
-      {/* 상단바 (56px) - 항상 상단 고정 */}
-      <div
-        className="flex items-center justify-between px-4 py-3 border-b bg-white shadow-sm"
-        style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: 56, zIndex: 200 }}
-      >
-        <button onClick={handleBack} className="text-2xl text-gray-600 hover:text-blue-600 mr-2" aria-label="뒤로가기">←</button>
-        <div className="flex-1 text-center font-bold text-lg text-gray-800 truncate">{roomName || "맞구톡방입니다."}</div>
-        <div className="flex items-center gap-2 ml-2">
-          <button className="text-xl text-gray-500 hover:text-blue-500" aria-label="검색"><svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4-4m0 0A7 7 0 104 4a7 7 0 0013 13z" /></svg></button>
-          <button className="text-xl text-gray-500 hover:text-blue-500" aria-label="메뉴" onClick={() => setShowInfoPanel(true)}><svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg></button>
-        </div>
-      </div>
-      {/* 플레이어 상단 고정 */}
-      {selectedVideoIdx !== null && videoList[selectedVideoIdx] && (
-        <div className="w-full bg-white shadow z-20 sticky top-0 left-0 flex flex-col items-center" style={{ position: 'relative' }}>
-          {/* X버튼을 플레이어 바깥 상단 우측에 flex로 배치 */}
-          <div className="w-full flex justify-end items-center" style={{ minHeight: 40 }}>
-            <button
-              className="text-2xl text-gray-400 hover:text-gray-700 z-30 mr-2 mt-2"
-              onClick={() => setSelectedVideoIdx(null)}
-              aria-label="플레이어 닫기"
-              style={{ background: 'none', border: 'none' }}
-            >
-              ✕
-            </button>
-          </div>
-          <div className="w-full flex flex-col items-center">
-            {/* 반응형 유튜브 플레이어 */}
-            <div className="relative w-full" style={{ paddingTop: '56.25%' }}>
-              <div className="absolute top-0 left-0 w-full h-full">
-                <YouTube
-                  videoId={videoList[selectedVideoIdx].videoId}
-                  opts={{
-                    width: '100%',
-                    height: '100%',
-                    playerVars: { autoplay: 1 },
-                  }}
-                  onReady={handleYoutubeReady}
-                  onStateChange={handleYoutubeStateChange}
-                  onEnd={handleYoutubeEnd}
-                  className="rounded"
-                />
-              </div>
-            </div>
-            {/* 제목 - 1줄, 말줄임 처리 */}
-            <h4 className="font-bold mt-3 mb-2 w-full text-center truncate" style={{ wordBreak: 'break-all', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={videoList[selectedVideoIdx].title}>
-              {videoList[selectedVideoIdx].title}
-            </h4>
-            {/* 안내 문구 - 버튼 위에 조건에 따라 노출 */}
-            <div className="mb-2 text-sm text-gray-600">
-              {videoList[selectedVideoIdx]?.duration >= 180
-                ? '최소 3분 이상 시청 시 인증 가능'
-                : '영상 끝까지 시청 시 인증 가능'}
-            </div>
-            <button
-              className={`w-full py-2 rounded font-bold ${
-                certAvailable && !certLoading
-                  ? "bg-green-500 text-white hover:bg-green-600"
-                  : "bg-gray-300 text-gray-500"
-              }`}
-              disabled={!certAvailable || certLoading}
-              onClick={handleCertify}
-            >
-              {certAvailable
-                ? (certLoading ? "인증 중..." : (videoList[selectedVideoIdx]?.duration >= 180 ? "3분 이상 인증완료" : "영상 끝 인증완료"))
-                : (videoList[selectedVideoIdx]?.duration >= 180 ? "3분 이상 시청해야 인증 가능" : "영상 끝까지 시청해야 인증 가능")}
-            </button>
-            {certAvailable && selectedVideoIdx < videoList.length - 1 && (
-              <div className="mt-2 text-xs text-blue-500">
-                {countdown}초 후 다음 영상으로 자동 이동합니다.
-              </div>
-            )}
-            <div className="flex items-center gap-4 mt-4 mb-4">
-              <a
-                href={getYoutubeUrl(videoList[selectedVideoIdx].videoId)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 text-blue-600 hover:text-red-500 font-bold underline"
-                title="유튜브에서 좋아요/댓글 남기기"
-              >
-                👍 좋아요 / 💬 댓글 (유튜브로 이동)
-              </a>
-            </div>
-          </div>
-        </div>
+    <div className="flex flex-col h-screen max-w-md mx-auto bg-white relative">
+      {/* 헤더 */}
+      {!showInfoPanel && (
+        <header className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md flex-shrink-0 flex items-center justify-between px-4 py-3 border-b z-30" style={{height: 56, minHeight: 56, background: '#ffcccc'}}>
+          <button onClick={() => navigate(-1)} className="text-2xl text-gray-600 hover:text-blue-600" aria-label="뒤로가기">←</button>
+          <div className="flex-1 text-center font-bold text-lg truncate">{roomName}</div>
+          <button onClick={() => setShowInfoPanel(true)} className="text-2xl text-gray-600 hover:text-blue-600" aria-label="메뉴">≡</button>
+        </header>
       )}
-      {/* 채팅 메시지 리스트 */}
-      <div
-        className="flex-1 overflow-y-auto px-2 py-2 bg-blue-50"
-        style={{
-          paddingTop: 72,        // 헤더(56) + 추가여백(16)
-          paddingBottom: 120,    // 하단 입력창+네비+여유 여백
-          minHeight: 'calc(100vh - 56px)',
-          boxSizing: 'border-box',
-        }}
-      >
+
+      {/* 채팅메시지 패널 */}
+      <main className="flex-1 min-h-0 overflow-y-auto px-2 py-3" style={{background: '#ccffcc', paddingBottom: 200, paddingTop: 64}}>
         {messages.map((msg, idx) => {
-          const isMine = msg.uid === myUid;
-          const showProfile = !isMine && (idx === 0 || messages[idx - 1].uid !== msg.uid);
-          const showNickname = !isMine && (idx === 0 || messages[idx - 1].uid !== msg.uid);
-          // 날짜 구분선 표시
-          const prevDate = idx > 0 ? formatTime(messages[idx - 1].createdAt).slice(0, 10) : null;
-          const currDate = formatTime(msg.createdAt).slice(0, 10);
-          const showDateDivider = idx === 0 || prevDate !== currDate;
+          const isMine = msg.uid === auth.currentUser?.uid;
+          const showDate = idx === 0 || (formatTime(msg.createdAt).slice(0, 10) !== formatTime(messages[idx - 1]?.createdAt).slice(0, 10));
           return (
             <React.Fragment key={msg.id}>
-              {showDateDivider && (
-                <div className="flex justify-center my-3">
-                  <div className="bg-gray-200 text-gray-600 text-xs rounded-xl px-3 py-1 shadow-sm">
-                    {currDate.replace(/-/g, ".")} {getDayOfWeek(msg.createdAt)}
-                  </div>
+              {showDate && (
+                <div className="text-center text-xs text-gray-400 my-4">
+                  {formatTime(msg.createdAt).slice(0, 10)} {getDayOfWeek(msg.createdAt)}
                 </div>
               )}
-              <div
-                className={`flex w-full mb-1 ${isMine ? 'justify-end' : 'justify-start'} items-end`}
-              >
-                {/* 상대방 프로필/닉네임 */}
-                {!isMine && showProfile && (
-                  <img
-                    src={msg.photoURL || `https://i.pravatar.cc/40?u=${msg.email}`}
-                    alt="profile"
-                    className="w-8 h-8 rounded-full mr-2 border"
-                  />
+              <div className={`flex ${isMine ? 'justify-end' : 'justify-start'} mb-2`}>
+                {!isMine && (
+                  <div className="flex flex-col items-start mr-2">
+                    <div className="text-xs text-gray-500 mb-1 ml-2">{userNickMap[msg.uid] || '익명'}</div>
+                    <img src={msg.photoURL || '/default-profile.png'} alt="프로필" className="w-8 h-8 rounded-full self-end" />
+                  </div>
                 )}
-                <div className={`flex flex-col max-w-[75%] ${isMine ? 'items-end' : 'items-start'}`}>
-                  {/* 닉네임 */}
-                  {!isMine && showNickname && (
-                    <div className="text-xs text-gray-500 mb-1 ml-1">{userNickMap[msg.uid] || msg.email?.split("@")?.[0] || "익명"}</div>
-                  )}
-                  <div
-                    className={`px-4 py-2 rounded-2xl shadow-md break-words whitespace-pre-line ${
-                      isMine
-                        ? 'bg-yellow-200 text-gray-900 rounded-br-md'
-                        : 'bg-white text-gray-900 rounded-bl-md'
-                    }`}
-                    style={{
-                      borderTopLeftRadius: isMine ? 20 : 6,
-                      borderTopRightRadius: isMine ? 6 : 20,
-                      marginLeft: isMine ? 32 : 0,
-                      marginRight: isMine ? 0 : 32,
-                      minWidth: 40,
-                    }}
-                  >
-                    <div>{renderMessageWithPreview(msg.text)}</div>
-                  </div>
-                  <div className={`text-xs text-gray-400 mt-1 ${isMine ? 'text-right' : 'text-left'} px-1`}>
-                    {formatTime(msg.createdAt)}
-                  </div>
+                <div className={`max-w-[70%] px-3 py-2 rounded-2xl shadow ${isMine ? 'bg-yellow-200 text-right' : 'bg-white text-left'} break-words`}>
+                  <div className="text-sm">{msg.text}</div>
+                  <div className="text-[10px] text-gray-400 mt-1 text-right">{formatTime(msg.createdAt).slice(11, 16)}</div>
                 </div>
-                {/* 내 메시지 프로필 */}
                 {isMine && (
-                  <img
-                    src={msg.photoURL || `https://i.pravatar.cc/40?u=${msg.email}`}
-                    alt="profile"
-                    className="w-8 h-8 rounded-full ml-2 border"
-                  />
+                  <img src={msg.photoURL || '/default-profile.png'} alt="프로필" className="w-8 h-8 rounded-full ml-2 self-end" />
                 )}
               </div>
             </React.Fragment>
           );
         })}
         <div ref={messagesEndRef} />
-      </div>
-      {/* 카카오톡 스타일 입력창 - 푸터 위에 고정 */}
-      <div
-        style={{
-          position: 'fixed',
-          left: 0,
-          bottom: 60,
-          width: '100vw',
-          zIndex: 100,
-          background: '#fff',
-          boxShadow: '0 -2px 12px 0 rgba(0,0,0,0.04)',
-          padding: '10px 12px 14px 12px',
-          boxSizing: 'border-box',
-        }}
-      >
-        <form
-          className="flex items-end gap-2 w-full"
-          onSubmit={handleSend}
-          style={{ margin: 0 }}
-        >
-          <button
-            type="button"
-            className="text-2xl mr-2"
-            onClick={() => setShowEmoji((v) => !v)}
-            style={{ background: 'none', border: 'none', padding: 0 }}
-          >
-            😊
-          </button>
-          <div className="flex-1 flex items-center bg-gray-100 rounded-2xl px-3 py-2" style={{ minHeight: 44 }}>
-            <textarea
-              ref={inputRef}
-              className="flex-1 bg-gray-100 border-0 outline-none resize-none text-base"
-              rows={1}
-              value={newMsg}
-              onChange={handleChange}
-              onKeyDown={handleKeyDown}
-              maxLength={MAX_LENGTH}
-              placeholder="메시지 입력"
-              style={{ background: 'transparent', minHeight: 24, maxHeight: 80 }}
-            />
-          </div>
-          <button
-            type="submit"
-            className="bg-blue-500 text-white px-4 py-2 rounded-2xl ml-2 font-bold shadow"
-            disabled={sending}
-            style={{ minWidth: 56 }}
-          >
-            전송
-          </button>
-        </form>
-      </div>
+      </main>
 
-      {/* 영상 리스트/등록 모달 */}
+      {/* 메시지 입력창 */}
+      <form className="flex items-center px-2 py-2 border-t gap-2 w-full max-w-md mx-auto" style={{ minHeight: 56, position: 'fixed', bottom: 64, left: '50%', transform: 'translateX(-50%)', zIndex: 30, background: '#ccccff' }} onSubmit={handleSend}>
+        <button type="button" className="text-2xl" onClick={() => setShowEmoji(!showEmoji)} aria-label="이모지">😊</button>
+        <input
+          ref={inputRef}
+          className="flex-1 border rounded-2xl px-3 py-2 text-base outline-none bg-gray-100"
+          value={newMsg}
+          onChange={handleChange}
+          onKeyDown={handleKeyDown}
+          onFocus={handleInputFocus}
+          maxLength={MAX_LENGTH}
+          placeholder="메시지 입력"
+        />
+        <button
+          type="submit"
+          className="bg-blue-500 text-white px-4 py-2 rounded-2xl font-bold shadow disabled:opacity-50"
+          disabled={sending || !newMsg.trim()}
+        >
+          전송
+        </button>
+      </form>
+
+      {/* 푸터(탭 네비게이터) */}
+      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md flex justify-around items-center border-t h-16 z-40" style={{background: '#ffffcc'}}>
+        <button className="flex flex-col items-center text-gray-500 hover:text-blue-500 text-sm font-bold focus:outline-none" onClick={() => navigate('/')}>🏠<span>홈</span></button>
+        <button className="flex flex-col items-center text-blue-500 text-sm font-bold focus:outline-none" onClick={() => navigate('/chat')}>💬<span>채팅방</span></button>
+        <button className="flex flex-col items-center text-gray-500 hover:text-blue-500 text-sm font-bold focus:outline-none" onClick={() => navigate('/tools')}>🛒<span>UCRA공구</span></button>
+        <button className="flex flex-col items-center text-gray-500 hover:text-blue-500 text-sm font-bold focus:outline-none" onClick={() => navigate('/my')}>👤<span>마이채널</span></button>
+      </nav>
+
+      {/* 이모지 패널이 있다면 절대 위치로 */}
+      {showEmoji && (
+        <div className="absolute bottom-32 left-0 right-0 max-w-md mx-auto z-50">
+          {/* 이모지 패널 내용 */}
+        </div>
+      )}
+
+      {/* 기존 모달 등은 그대로 유지 */}
       <Modal
         isOpen={showVideoPanel}
         onRequestClose={() => setShowVideoPanel(false)}
@@ -847,13 +728,11 @@ function ChatRoom() {
           ))}
         </div>
       </Modal>
-
-      {/* 채팅방 정보 패널 (모달) */}
       {showInfoPanel && (
-        <div className="fixed inset-0 z-50 flex justify-center items-center bg-black bg-opacity-30">
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-lg overflow-hidden animate-slideInUp">
+        <div className="fixed inset-0 z-60 flex justify-center items-center bg-black bg-opacity-30">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-lg overflow-hidden animate-slideInUp max-h-[90vh] overflow-y-auto">
             {/* 상단 */}
-            <div className="flex items-center justify-between px-4 py-4 border-b">
+            <div className="flex items-center justify-between px-4 py-4 border-b sticky top-0 bg-white z-10">
               <button onClick={() => setShowInfoPanel(false)} className="text-2xl text-gray-600 hover:text-blue-600" aria-label="뒤로가기">←</button>
               <div className="flex-1 text-center font-bold text-lg">채팅방 정보</div>
               <div style={{ width: 32 }} />
@@ -910,6 +789,47 @@ function ChatRoom() {
               <button onClick={() => setShowInfoPanel(false)} className="w-full text-blue-600 font-bold py-2 rounded hover:bg-blue-50">💬 채팅방으로 돌아가기</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 드래그 가능한 영상 팝업 플레이어 */}
+      {selectedVideoIdx !== null && videoList[selectedVideoIdx] && (
+        <div
+          className="fixed z-50 bg-white rounded-lg shadow-lg p-4"
+          style={{
+            top: popupPos.y,
+            left: popupPos.x,
+            width: 380,
+            maxWidth: '90vw',
+            cursor: dragging ? 'grabbing' : 'grab',
+          }}
+          onMouseDown={handleDragStart}
+          onMouseMove={handleDrag}
+          onMouseUp={handleDragEnd}
+          onMouseLeave={handleDragEnd}
+          onTouchStart={handleDragStart}
+          onTouchMove={handleDrag}
+          onTouchEnd={handleDragEnd}
+        >
+          <button
+            className="absolute top-2 right-2 text-gray-400 hover:text-gray-700"
+            onClick={() => setSelectedVideoIdx(null)}
+            style={{ position: 'absolute', top: 8, right: 8 }}
+          >
+            ✕
+          </button>
+          <h4 className="font-bold mb-2">{videoList[selectedVideoIdx].title}</h4>
+          <YouTube
+            videoId={videoList[selectedVideoIdx].videoId}
+            opts={{
+              width: "340",
+              height: "200",
+              playerVars: { autoplay: 1 },
+            }}
+            onReady={handleYoutubeReady}
+            onStateChange={handleYoutubeStateChange}
+            onEnd={handleYoutubeEnd}
+          />
         </div>
       )}
     </div>
