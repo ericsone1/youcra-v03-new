@@ -181,6 +181,9 @@ function ChatRoom() {
   const [likeCount, setLikeCount] = useState(0);
   const [watching, setWatching] = useState(0);
 
+  // 내 joinedAt을 저장할 state 추가
+  const [myJoinedAt, setMyJoinedAt] = useState(null);
+
   // 비로그인 접근 제한
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
@@ -205,7 +208,18 @@ function ChatRoom() {
     return () => unsub && unsub();
   }, [roomId, loading]);
 
-  // 메시지 실시간 구독 + 닉네임 매핑
+  // 참여자 joinedAt 읽기
+  useEffect(() => {
+    if (!roomId || !auth.currentUser) return;
+    const participantRef = doc(db, "chatRooms", roomId, "participants", auth.currentUser.uid);
+    getDoc(participantRef).then(docSnap => {
+      if (docSnap.exists()) {
+        setMyJoinedAt(docSnap.data().joinedAt || null);
+      }
+    });
+  }, [roomId, auth.currentUser]);
+
+  // 메시지 실시간 구독 + 닉네임 매핑 (joinedAt 이후 메시지만)
   useEffect(() => {
     if (loading) return;
     const q = query(
@@ -213,10 +227,14 @@ function ChatRoom() {
       orderBy("createdAt")
     );
     const unsub = onSnapshot(q, async (snapshot) => {
-      const msgs = snapshot.docs.map((doc) => ({
+      let msgs = snapshot.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
       }));
+      // joinedAt 이후 메시지만 필터링
+      if (myJoinedAt && myJoinedAt.seconds) {
+        msgs = msgs.filter(msg => msg.createdAt && msg.createdAt.seconds >= myJoinedAt.seconds);
+      }
       setMessages(msgs);
       // 닉네임 매핑
       const uids = Array.from(new Set(msgs.map((m) => m.uid).filter(Boolean)));
@@ -238,7 +256,7 @@ function ChatRoom() {
       setUserNickMap((prev) => ({ ...prev, ...nickMap }));
     });
     return () => unsub && unsub();
-  }, [roomId, loading]);
+  }, [roomId, loading, myJoinedAt]);
 
   // 실시간 참여자 관리
   useEffect(() => {
