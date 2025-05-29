@@ -176,6 +176,11 @@ function ChatRoom() {
 
   const [userNickMap, setUserNickMap] = useState({});
 
+  // 추가 state 선언 (return문 바로 위)
+  const [liked, setLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(0);
+  const [watching, setWatching] = useState(0);
+
   // 비로그인 접근 제한
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
@@ -305,6 +310,13 @@ function ChatRoom() {
       clearInterval(playerRef.current._interval);
       playerRef.current._interval = null;
     }
+  }, [selectedVideoIdx]);
+
+  // 영상 선택 시 좋아요 상태 초기화
+  useEffect(() => {
+    setLiked(false);
+    setLikeCount(0);
+    setWatching(Math.floor(Math.random() * 1000) + 100);
   }, [selectedVideoIdx]);
 
   useEffect(() => {
@@ -460,11 +472,13 @@ function ChatRoom() {
   };
   const handleYoutubeStateChange = (event) => {
     if (event.data === 1) {
-      if (!playerRef.current._interval) {
-        playerRef.current._interval = setInterval(() => {
-          setWatchSeconds((prev) => prev + 1);
-        }, 1000);
+      if (playerRef.current && playerRef.current._interval) {
+        clearInterval(playerRef.current._interval);
+        playerRef.current._interval = null;
       }
+      playerRef.current._interval = setInterval(() => {
+        setWatchSeconds((prev) => prev + 1);
+      }, 1000);
     } else {
       if (playerRef.current && playerRef.current._interval) {
         clearInterval(playerRef.current._interval);
@@ -558,6 +572,16 @@ function ChatRoom() {
       }
     }, 300);
   };
+
+  // selectedVideoIdx가 바뀔 때 interval 무조건 clear
+  useEffect(() => {
+    setWatchSeconds(0);
+    setVideoEnded(false);
+    if (playerRef.current && playerRef.current._interval) {
+      clearInterval(playerRef.current._interval);
+      playerRef.current._interval = null;
+    }
+  }, [selectedVideoIdx]);
 
   // ---------------------- return문 시작 ----------------------
   return (
@@ -795,7 +819,7 @@ function ChatRoom() {
       {/* 드래그 가능한 영상 팝업 플레이어 */}
       {selectedVideoIdx !== null && videoList[selectedVideoIdx] && (
         <div
-          className="fixed z-50 bg-white rounded-lg shadow-lg p-4"
+          className="fixed z-50 bg-white rounded-xl shadow-lg p-4"
           style={{
             top: popupPos.y,
             left: popupPos.x,
@@ -811,25 +835,106 @@ function ChatRoom() {
           onTouchMove={handleDrag}
           onTouchEnd={handleDragEnd}
         >
+          {/* 닫기 버튼 */}
           <button
-            className="absolute top-2 right-2 text-gray-400 hover:text-gray-700"
-            onClick={() => setSelectedVideoIdx(null)}
-            style={{ position: 'absolute', top: 8, right: 8 }}
-          >
-            ✕
-          </button>
-          <h4 className="font-bold mb-2">{videoList[selectedVideoIdx].title}</h4>
-          <YouTube
-            videoId={videoList[selectedVideoIdx].videoId}
-            opts={{
-              width: "340",
-              height: "200",
-              playerVars: { autoplay: 1 },
+            className="absolute top-2 right-2 text-xl text-gray-400 hover:text-gray-700"
+            onClick={() => {
+              setSelectedVideoIdx(null);
+              if (playerRef.current && playerRef.current._interval) {
+                clearInterval(playerRef.current._interval);
+                playerRef.current._interval = null;
+              }
             }}
-            onReady={handleYoutubeReady}
-            onStateChange={handleYoutubeStateChange}
-            onEnd={handleYoutubeEnd}
-          />
+            aria-label="닫기"
+            style={{ position: 'absolute', top: 8, right: 8 }}
+          >×</button>
+          {/* 제목 */}
+          <div className="font-bold text-sm mb-2 pr-6 truncate" title={videoList[selectedVideoIdx].title}>
+            {videoList[selectedVideoIdx].title}
+          </div>
+          {/* 유튜브 플레이어 */}
+          <div className="mb-2">
+            <YouTube
+              key={videoList[selectedVideoIdx].videoId}
+              videoId={videoList[selectedVideoIdx].videoId}
+              opts={{
+                width: '100%',
+                height: '220',
+                playerVars: { autoplay: 1 }
+              }}
+              onReady={handleYoutubeReady}
+              onStateChange={handleYoutubeStateChange}
+              onEnd={handleYoutubeEnd}
+              className="rounded"
+            />
+          </div>
+          {/* 시청 시간/인증 안내 */}
+          <div className="text-xs text-gray-600 mb-2 text-left">
+            {videoList[selectedVideoIdx]?.duration >= 180
+              ? `시청 시간: ${watchSeconds}초 (3분 이상 시 인증 가능)`
+              : `시청 시간: ${watchSeconds}초 (끝까지 시청 시 인증 가능)`}
+          </div>
+          <button
+            className={`w-full py-2 rounded font-bold ${
+              (videoList[selectedVideoIdx]?.duration >= 180 ? watchSeconds >= 180 : certAvailable) && !certLoading
+                ? "bg-green-500 text-white hover:bg-green-600"
+                : "bg-gray-200 text-gray-400 cursor-not-allowed"
+            }`}
+            disabled={videoList[selectedVideoIdx]?.duration >= 180 ? watchSeconds < 180 : !certAvailable || certLoading}
+            onClick={handleCertify}
+          >
+            {videoList[selectedVideoIdx]?.duration >= 180
+              ? "3분 이상 시청해야 인증 가능"
+              : "영상 끝까지 시청해야 인증 가능"}
+          </button>
+          {/* 구독 홍보 안내 문구 */}
+          {(videoList[selectedVideoIdx]?.duration >= 180 ? watchSeconds >= 180 : certAvailable) && (
+            <div className="mt-2 text-xs text-green-700 font-semibold text-center">
+              영상을 시청하시고 구독하면 상대방에게도 내채널이 홍보됩니다.
+            </div>
+          )}
+          {/* 하단: 구독/좋아요/댓글(유튜브 이동), 하트, 시청자수 */}
+          <div className="flex gap-4 justify-between text-sm mt-2 items-center">
+            <a
+              href={getYoutubeUrl(videoList[selectedVideoIdx].videoId)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-500 hover:underline flex items-center"
+              title="유튜브에서 좋아요/댓글 남기기"
+            >
+              <span className="mr-1">🔔👍💬</span>
+              구독과 좋아요, 댓글(유튜브로 이동)
+            </a>
+            {/* 하트 아이콘 (좋아요) */}
+            <button
+              className="ml-auto flex items-center focus:outline-none"
+              style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+              onClick={() => {
+                if (!liked) {
+                  setLiked(true);
+                  setLikeCount((prev) => prev + 1);
+                } else {
+                  setLiked(false);
+                  setLikeCount((prev) => (prev > 0 ? prev - 1 : 0));
+                }
+              }}
+              aria-label="좋아요"
+            >
+              <span style={{ fontSize: 24, color: liked ? 'red' : '#bbb', transition: 'color 0.2s' }}>
+                {liked ? '♥' : '♡'}
+              </span>
+              <span className="ml-1 text-base text-gray-700">{likeCount}</span>
+            </button>
+            {/* 시청자수 */}
+            <span className="ml-4 flex items-center text-blue-400 text-sm">
+              👁️ {watching}명
+            </span>
+          </div>
+          {certAvailable && selectedVideoIdx < videoList.length - 1 && (
+            <div className="mt-2 text-xs text-blue-500 text-center">
+              {countdown}초 후 다음 영상으로 자동 이동합니다.
+            </div>
+          )}
         </div>
       )}
     </div>
