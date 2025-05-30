@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { auth, db } from "../firebase";
 import {
   collection,
@@ -12,6 +12,8 @@ import {
   setDoc,
   deleteDoc,
   getDoc,
+  getDocs,
+  where,
 } from "firebase/firestore";
 // import Picker from '@emoji-mart/react';
 // import data from '@emoji-mart/data';
@@ -140,6 +142,7 @@ function getYoutubeUrl(videoId) {
 function ChatRoom() {
   const { roomId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [messages, setMessages] = useState([]);
   const [newMsg, setNewMsg] = useState("");
   const [participants, setParticipants] = useState([]);
@@ -171,8 +174,6 @@ function ChatRoom() {
   const [showDelete, setShowDelete] = useState(null);
   const longPressTimer = useRef(null);
   const [countdown, setCountdown] = useState(5);
-  const [showVideoPanel, setShowVideoPanel] = useState(false);
-  const [showInfoPanel, setShowInfoPanel] = useState(false);
 
   const [userNickMap, setUserNickMap] = useState({});
 
@@ -222,6 +223,10 @@ function ChatRoom() {
   // 메시지 실시간 구독 + 닉네임 매핑 (joinedAt 이후 메시지만)
   useEffect(() => {
     if (loading) return;
+
+    // 최초 입장 시간 저장
+    const initialJoinTime = myJoinedAt?.seconds;
+
     const q = query(
       collection(db, "chatRooms", roomId, "messages"),
       orderBy("createdAt")
@@ -231,11 +236,14 @@ function ChatRoom() {
         id: doc.id,
         ...doc.data(),
       }));
-      // joinedAt 이후 메시지만 필터링
-      if (myJoinedAt && myJoinedAt.seconds) {
-        msgs = msgs.filter(msg => msg.createdAt && msg.createdAt.seconds >= myJoinedAt.seconds);
+      
+      // 최초 입장 시에만 메시지 필터링 적용
+      if (initialJoinTime && messages.length === 0) {
+        msgs = msgs.filter(msg => msg.createdAt && msg.createdAt.seconds >= initialJoinTime);
       }
+      
       setMessages(msgs);
+      
       // 닉네임 매핑
       const uids = Array.from(new Set(msgs.map((m) => m.uid).filter(Boolean)));
       const nickMap = {};
@@ -256,7 +264,7 @@ function ChatRoom() {
       setUserNickMap((prev) => ({ ...prev, ...nickMap }));
     });
     return () => unsub && unsub();
-  }, [roomId, loading, myJoinedAt]);
+  }, [roomId, loading]);
 
   // 실시간 참여자 관리
   useEffect(() => {
@@ -424,39 +432,95 @@ function ChatRoom() {
     inputRef.current?.focus();
   };
 
+  // URL 입력 시 실시간 중복 체크
+  const [isDuplicateVideo, setIsDuplicateVideo] = useState(false);
+  useEffect(() => {
+    const checkDuplicate = async () => {
+      if (!videoUrl) {
+        setVideoMsg("");
+        setIsDuplicateVideo(false);
+        return;
+      }
+
+      const videoId = getYoutubeId(videoUrl);
+      if (!videoId) return;
+
+      try {
+        const videosRef = collection(db, "chatRooms", roomId, "videos");
+        const duplicateQuery = query(videosRef, where("videoId", "==", videoId));
+        const duplicateSnapshot = await getDocs(duplicateQuery);
+
+        if (!duplicateSnapshot.empty) {
+          setVideoMsg("이미 등록된 영상입니다.");
+          setIsDuplicateVideo(true);
+        } else {
+          setVideoMsg("");
+          setIsDuplicateVideo(false);
+        }
+      } catch (error) {
+        console.error("중복 체크 중 오류:", error);
+      }
+    };
+
+    const timeoutId = setTimeout(checkDuplicate, 500); // 디바운스 처리
+    return () => clearTimeout(timeoutId);
+  }, [videoUrl, roomId]);
+
   // 영상 등록 체크
   const handleVideoCheck = async () => {
-    setVideoMsg("");
-    setVideoMeta(null);
-    const videoId = getYoutubeId(videoUrl);
-    if (!videoId) {
-      setVideoMsg("유효한 유튜브 링크를 입력하세요.");
-      return;
-    }
-    setVideoLoading(true);
-    const meta = await fetchYoutubeMeta(videoId);
-    if (!meta) {
-      setVideoMsg("유튜브 정보를 불러올 수 없습니다.");
+    try {
+      setVideoMsg("");
+      setVideoMeta(null);
+      const videoId = getYoutubeId(videoUrl);
+      if (!videoId) {
+        setVideoMsg("유효한 유튜브 링크를 입력하세요.");
+        return;
+      }
+
+      if (isDuplicateVideo) {
+        setVideoMsg("이미 등록된 영상입니다.");
+        return;
+      }
+
+      setVideoLoading(true);
+      const meta = await fetchYoutubeMeta(videoId);
+      if (!meta) {
+        setVideoMsg("유튜브 정보를 불러올 수 없습니다.");
+        setVideoLoading(false);
+        return;
+      }
+      setVideoMeta(meta);
       setVideoLoading(false);
-      return;
+    } catch (error) {
+      console.error("영상 확인 중 오류:", error);
+      setVideoMsg("영상 확인 중 오류가 발생했습니다.");
+      setVideoLoading(false);
     }
-    setVideoMeta(meta);
-    setVideoLoading(false);
   };
 
   // 영상 등록
   const handleVideoRegister = async () => {
-    if (!videoMeta) return;
-    setVideoLoading(true);
-    await addDoc(collection(db, "chatRooms", roomId, "videos"), {
-      ...videoMeta,
-      registeredBy: auth.currentUser?.uid || "anonymous",
-      registeredAt: serverTimestamp(),
-    });
-    setVideoMsg("영상이 등록되었습니다!");
-    setVideoUrl("");
-    setVideoMeta(null);
-    setVideoLoading(false);
+    if (!videoMeta || isDuplicateVideo) return;
+    
+    try {
+      setVideoLoading(true);
+      const videosRef = collection(db, "chatRooms", roomId, "videos");
+      
+      await addDoc(videosRef, {
+        ...videoMeta,
+        registeredBy: auth.currentUser?.uid || "anonymous",
+        registeredAt: serverTimestamp(),
+      });
+
+      setVideoMsg("영상이 등록되었습니다!");
+      setVideoUrl("");
+      setVideoMeta(null);
+    } catch (error) {
+      console.error("영상 등록 중 오류:", error);
+      setVideoMsg("영상 등록 중 오류가 발생했습니다.");
+    } finally {
+      setVideoLoading(false);
+    }
   };
 
   // 드래그 핸들러
@@ -601,20 +665,40 @@ function ChatRoom() {
     }
   }, [selectedVideoIdx]);
 
+  React.useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const videoId = params.get('video');
+    console.log('쿼리 videoId:', videoId);
+    console.log('videoList:', videoList.map(v => v.id));
+    if (videoId && videoList.length > 0) {
+      const idx = videoList.findIndex(v => v.id === videoId);
+      console.log('찾은 idx:', idx);
+      if (idx !== -1) {
+        setSelectedVideoIdx(idx);
+      }
+    }
+  }, [location.search, videoList]);
+
   // ---------------------- return문 시작 ----------------------
   return (
     <div className="flex flex-col h-screen max-w-md mx-auto bg-white relative">
       {/* 헤더 */}
-      {!showInfoPanel && (
-        <header className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md flex-shrink-0 flex items-center justify-between px-4 py-3 border-b z-30" style={{height: 56, minHeight: 56, background: '#ffcccc'}}>
-          <button onClick={() => navigate(-1)} className="text-2xl text-gray-600 hover:text-blue-600" aria-label="뒤로가기">←</button>
-          <div className="flex-1 text-center font-bold text-lg truncate">{roomName}</div>
-          <button onClick={() => setShowInfoPanel(true)} className="text-2xl text-gray-600 hover:text-blue-600" aria-label="메뉴">≡</button>
-        </header>
-      )}
+      <header className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md flex-shrink-0 flex items-center justify-between px-4 py-3 border-b z-30" style={{height: 56, minHeight: 56, background: '#ffcccc'}}>
+        <button onClick={() => navigate(-1)} className="text-2xl text-gray-600 hover:text-blue-600" aria-label="뒤로가기">←</button>
+        <div className="flex-1 text-center font-bold text-lg truncate">{roomName}</div>
+        <button onClick={() => navigate(`/chat/${roomId}/info`)} className="text-2xl text-gray-600 hover:text-blue-600" aria-label="메뉴">≡</button>
+      </header>
 
       {/* 채팅메시지 패널 */}
-      <main className="flex-1 min-h-0 overflow-y-auto px-2 py-3" style={{background: '#ccffcc', paddingBottom: 200, paddingTop: 64}}>
+      <main className="flex-1 min-h-0 overflow-y-auto px-2 py-3 hide-scrollbar" style={{
+        background: '#ccffcc', 
+        paddingBottom: 200, 
+        paddingTop: 120,
+        position: 'relative',
+        zIndex: 10,
+        msOverflowStyle: 'none',
+        scrollbarWidth: 'none'
+      }}>
         {messages.map((msg, idx) => {
           const isMine = msg.uid === auth.currentUser?.uid;
           const showDate = idx === 0 || (formatTime(msg.createdAt).slice(0, 10) !== formatTime(messages[idx - 1]?.createdAt).slice(0, 10));
@@ -683,161 +767,10 @@ function ChatRoom() {
         </div>
       )}
 
-      {/* 기존 모달 등은 그대로 유지 */}
-      <Modal
-        isOpen={showVideoPanel}
-        onRequestClose={() => setShowVideoPanel(false)}
-        className="fixed top-0 right-0 w-full max-w-md h-full bg-white shadow-lg z-50 p-4 overflow-y-auto"
-        overlayClassName="fixed inset-0 bg-black bg-opacity-30 z-40"
-        ariaHideApp={false}
-      >
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="font-bold text-lg">시청 영상 리스트</h2>
-          <button onClick={() => setShowVideoPanel(false)} className="text-2xl text-gray-400 hover:text-gray-700">✕</button>
-        </div>
-        {/* 영상 등록 폼 */}
-        <div className="flex gap-2 items-center mb-2">
-          <input
-            type="text"
-            className="flex-1 border rounded px-2 py-1"
-            placeholder="유튜브 영상 링크를 입력하세요"
-            value={videoUrl}
-            onChange={(e) => setVideoUrl(e.target.value)}
-            disabled={videoLoading}
-          />
-          <button
-            className="bg-blue-500 text-white px-3 py-1 rounded"
-            onClick={handleVideoCheck}
-            disabled={videoLoading}
-          >
-            확인
-          </button>
-        </div>
-        {videoMsg && <div className="text-sm text-red-500">{videoMsg}</div>}
-        {videoMeta && (
-          <div className="flex items-center gap-2 mb-2">
-            <img src={videoMeta.thumbnail} alt="썸네일" className="w-24 h-14 rounded" />
-            <div>
-              <div className="font-bold">{videoMeta.title}</div>
-              <div className="text-xs text-gray-500">{videoMeta.channel}</div>
-              <div className="text-xs text-gray-500">길이: {videoMeta.duration}초</div>
-            </div>
-            <button
-              className="bg-green-500 text-white px-3 py-1 rounded ml-2"
-              onClick={handleVideoRegister}
-              disabled={videoLoading}
-            >
-              등록
-            </button>
-          </div>
-        )}
-        {/* 영상 리스트 */}
-        {videoList.length === 0 && (
-          <div className="text-sm text-gray-500">아직 등록된 영상이 없습니다.</div>
-        )}
-        <div className="flex flex-col gap-4">
-          {videoList.map((video, idx) => (
-            <div
-              key={video.id}
-              className={`border rounded-lg p-2 bg-white shadow flex items-center gap-4 relative cursor-pointer hover:bg-blue-50`}
-              onClick={() => {
-                setShowVideoPanel(false);
-                setSelectedVideoIdx(idx);
-              }}
-            >
-              <img src={video.thumbnail} alt="썸네일" className="w-32 h-20 object-cover rounded" />
-              <div className="flex-1 min-w-0">
-                <div className="font-bold text-base truncate">{video.title}</div>
-                <div className="text-xs text-gray-500">{video.channel}</div>
-                <div className="text-xs text-gray-400">등록자: {video.registeredBy}</div>
-              </div>
-              {certifiedVideoIds.includes(video.id) ? (
-                <button
-                  className="bg-green-500 text-white px-4 py-2 rounded font-bold cursor-default"
-                  disabled
-                >
-                  시청 완료
-                </button>
-              ) : (
-                <button
-                  className="bg-blue-500 text-white px-4 py-2 rounded font-bold"
-                  onClick={e => { e.stopPropagation(); setSelectedVideoIdx(idx); setShowVideoPanel(false); }}
-                >
-                  시청하기
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      </Modal>
-      {showInfoPanel && (
-        <div className="fixed inset-0 z-60 flex justify-center items-center bg-black bg-opacity-30">
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-lg overflow-hidden animate-slideInUp max-h-[90vh] overflow-y-auto">
-            {/* 상단 */}
-            <div className="flex items-center justify-between px-4 py-4 border-b sticky top-0 bg-white z-10">
-              <button onClick={() => setShowInfoPanel(false)} className="text-2xl text-gray-600 hover:text-blue-600" aria-label="뒤로가기">←</button>
-              <div className="flex-1 text-center font-bold text-lg">채팅방 정보</div>
-              <div style={{ width: 32 }} />
-            </div>
-            {/* 프로필/방이름/참여자 */}
-            <div className="flex flex-col items-center py-6">
-              <img src="https://randomuser.me/api/portraits/women/44.jpg" alt="방 프로필" className="w-20 h-20 rounded-full mb-2 border-2 border-blue-200" />
-              <div className="font-bold text-lg mb-1 flex items-center gap-1">
-                {roomName || "방 이름(더미)"}
-                {isOwner && <span title="방장" className="ml-1 text-yellow-500 text-xl">👑</span>}
-              </div>
-              <div className="text-gray-500 text-sm">참여자 {participants.length}명</div>
-            </div>
-            {/* 메뉴 리스트 */}
-            <div className="divide-y flex items-center justify-between px-6 py-4">
-              {/* 좌측: 시청리스트 버튼 */}
-              {isOwner && (
-                <button
-                  className="bg-blue-500 text-white font-bold py-2 px-3 rounded hover:bg-blue-600 text-sm"
-                  onClick={() => {
-                    setShowInfoPanel(false);
-                    setShowVideoPanel(true);
-                  }}
-                >
-                  시청리스트
-                </button>
-              )}
-              {/* 우측: 방 관리 버튼 */}
-              {isOwner && (
-                <button
-                  className="bg-blue-500 text-white font-bold py-2 px-3 rounded hover:bg-blue-600 text-sm ml-auto"
-                  style={{ minWidth: 0 }}
-                  onClick={() => {
-                    setShowInfoPanel(false);
-                    navigate(`/chat/${roomId}/manage`);
-                  }}
-                >
-                  방 관리
-                </button>
-              )}
-            </div>
-            <div className="divide-y">
-              <MenuItem icon="📢" label="공지" />
-              <MenuItem icon="🗳️" label="투표" />
-              <MenuItem icon="🤖" label="챗봇" />
-              <MenuItem icon="🖼️" label="사진/동영상" />
-              <MenuItem icon="🎬" label="시청하기" onClick={() => { setShowInfoPanel(false); setShowVideoPanel(true); }} />
-              <MenuItem icon="📁" label="파일" />
-              <MenuItem icon="🔗" label="링크" />
-              <MenuItem icon="📅" label="일정" />
-              <MenuItem icon="👥" label="대화상대" />
-            </div>
-            <div className="p-4 flex flex-col gap-2">
-              <button onClick={() => setShowInfoPanel(false)} className="w-full text-blue-600 font-bold py-2 rounded hover:bg-blue-50">💬 채팅방으로 돌아가기</button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* 드래그 가능한 영상 팝업 플레이어 */}
       {selectedVideoIdx !== null && videoList[selectedVideoIdx] && (
         <div
-          className="fixed z-50 bg-white rounded-xl shadow-lg p-4"
+          className="fixed z-20 bg-white rounded-xl shadow-lg p-4"
           style={{
             top: popupPos.y,
             left: popupPos.x,

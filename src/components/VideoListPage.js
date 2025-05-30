@@ -79,7 +79,12 @@ function VideoListPage() {
             {certifiedIds.includes(video.id) ? (
               <span className="bg-green-500 text-white text-xs px-2 py-1 rounded font-bold">시청 완료</span>
             ) : (
-              <span className="bg-gray-300 text-gray-600 text-xs px-2 py-1 rounded font-bold">미인증</span>
+              <button
+                className="bg-blue-500 text-white text-xs px-2 py-1 rounded font-bold hover:bg-blue-600"
+                onClick={() => navigate(`/chat/${roomId}?video=${video.id}`)}
+              >
+                시청하기
+              </button>
             )}
           </div>
         ))}

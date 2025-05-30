@@ -1,16 +1,20 @@
-import MyChannel from "./components/MyChannel";
+import MyChannel from "./MyChannel";
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from "react-router-dom";
-import Home from "./components/Home";
-import ChatList from "./components/ChatList";
-import ChatRoom from "./components/ChatRoom";
-import Report from "./components/Report";
-import AuthForm from "./components/AuthForm";
-import UserProfile from "./components/UserProfile";
-import DMChatRoom from "./components/DMChatRoom"; // 1:1 채팅방 컴포넌트 import
-import VideoListPage from "./components/VideoListPage"; // 새로 만들 파일
-import AddVideoPage from "./components/AddVideoPage"; // 새 파일
-import SearchResult from "./components/SearchResult"; // 검색 결과 페이지 추가
-import ProductDetail from "./components/ProductDetail";
+import Home from "./Home";
+import ChatList from "./ChatList";
+import ChatRoom from "./ChatRoom";
+import Report from "./Report";
+import AuthForm from "./AuthForm";
+import UserProfile from "./UserProfile";
+import DMChatRoom from "./DMChatRoom"; // 1:1 채팅방 컴포넌트 import
+import VideoListPage from "./VideoListPage"; // 새로 만들 파일
+import AddVideoPage from "./AddVideoPage"; // 새 파일
+import SearchResult from "./SearchResult";
+import ChatRoomManage from "./ChatRoomManage";
+import ChatRoomCreate from "./ChatRoomCreate";
+import ProductDetail from "./ProductDetail";
+import AdminPage from "./AdminPage";
+import ChatRoomInfo from "./ChatRoomInfo";
 
 function App() {
   const location = useLocation();
@@ -21,6 +25,10 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/chat" element={<ChatList />} />
         <Route path="/chat/:roomId" element={<ChatRoom />} />
+        <Route path="/chat/:roomId/manage" element={<ChatRoomManage />} />
+        <Route path="/chat/:roomId/info" element={<ChatRoomInfo />} />
+        <Route path="/chat/:roomId/videos" element={<VideoListPage />} />
+        <Route path="/chat/:roomId/add-video" element={<AddVideoPage />} />
         <Route path="/report" element={<Report />} />
         <Route path="/login" element={<AuthForm />} />
         <Route path="/profile/:roomId/:uid" element={<UserProfile />} />
@@ -28,7 +36,9 @@ function App() {
         <Route path="/videos" element={<VideoListPage />} />
         <Route path="/add-video" element={<AddVideoPage />} />
         <Route path="/search" element={<SearchResult />} />
+        <Route path="/chat/create" element={<ChatRoomCreate />} />
         <Route path="/product/:id" element={<ProductDetail />} />
+        <Route path="/admin" element={<AdminPage />} />
       </Routes>
       {/* 하단 네비게이션 바 */}
       <footer className="fixed bottom-0 left-0 w-full bg-white rounded-t-2xl shadow-lg border-t flex justify-around items-center h-16 z-50">

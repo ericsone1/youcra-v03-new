@@ -1,83 +1,24 @@
-import React, { useState } from "react";
+import React from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { db, auth } from "../firebase";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
-
-function getYoutubeId(url) {
-  const regExp = /(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?|shorts)\/|.*[?&]v=)|youtu\.be\/)([\w-]{11})/;
-  const match = url.match(regExp);
-  return match ? match[1] : null;
-}
-
-async function fetchYoutubeMeta(videoId) {
-  const API_KEY = process.env.REACT_APP_YOUTUBE_API_KEY;
-  const res = await fetch(
-    `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}&key=${API_KEY}`
-  );
-  const data = await res.json();
-  if (data.items && data.items.length > 0) {
-    const snippet = data.items[0].snippet;
-    const duration = data.items[0].contentDetails.duration;
-    let seconds = 0;
-    const match = duration.match(/PT(?:(\d+)M)?(?:(\d+)S)?/);
-    if (match) {
-      const min = parseInt(match[1] || "0", 10);
-      const sec = parseInt(match[2] || "0", 10);
-      seconds = min * 60 + sec;
-    }
-    return {
-      title: snippet.title,
-      thumbnail: snippet.thumbnails.medium.url,
-      channel: snippet.channelTitle,
-      videoId,
-      duration: seconds,
-    };
-  }
-  return null;
-}
+import { useVideo } from "../hooks/useVideo";
 
 function AddVideoPage() {
   const { roomId } = useParams();
   const navigate = useNavigate();
-  const [videoUrl, setVideoUrl] = useState("");
-  const [videoMeta, setVideoMeta] = useState(null);
-  const [videoMsg, setVideoMsg] = useState("");
-  const [videoLoading, setVideoLoading] = useState(false);
+  const {
+    videoUrl,
+    setVideoUrl,
+    videoMeta,
+    videoLoading,
+    videoMsg,
+    handleRegister
+  } = useVideo(roomId);
 
-  // 영상 정보 확인
-  const handleVideoCheck = async () => {
-    setVideoMsg("");
-    setVideoMeta(null);
-    const videoId = getYoutubeId(videoUrl);
-    if (!videoId) {
-      setVideoMsg("유효한 유튜브 링크를 입력하세요.");
-      return;
+  const handleSubmit = async () => {
+    const success = await handleRegister();
+    if (success) {
+      setTimeout(() => navigate(-1), 1000);
     }
-    setVideoLoading(true);
-    const meta = await fetchYoutubeMeta(videoId);
-    if (!meta) {
-      setVideoMsg("유튜브 정보를 불러올 수 없습니다.");
-      setVideoLoading(false);
-      return;
-    }
-    setVideoMeta(meta);
-    setVideoLoading(false);
-  };
-
-  // 영상 등록
-  const handleVideoRegister = async () => {
-    if (!videoMeta) return;
-    setVideoLoading(true);
-    await addDoc(collection(db, "chatRooms", roomId, "videos"), {
-      ...videoMeta,
-      registeredBy: auth.currentUser?.uid || "anonymous",
-      registeredAt: serverTimestamp(),
-    });
-    setVideoMsg("영상이 등록되었습니다!");
-    setVideoUrl("");
-    setVideoMeta(null);
-    setVideoLoading(false);
-    setTimeout(() => navigate(-1), 1000); // 1초 후 리스트로 이동
   };
 
   return (
@@ -95,16 +36,13 @@ function AddVideoPage() {
           onChange={(e) => setVideoUrl(e.target.value)}
           disabled={videoLoading}
         />
-        <button
-          className="bg-blue-500 text-white px-3 py-1 rounded"
-          onClick={handleVideoCheck}
-          disabled={videoLoading}
-        >
-          확인
-        </button>
       </div>
-      {videoMsg && <div className="text-sm text-red-500">{videoMsg}</div>}
-      {videoMeta && (
+      {videoMsg && (
+        <div className={`text-sm ${videoMsg === "영상이 등록되었습니다!" ? "text-green-500" : "text-red-500"} mb-2`}>
+          {videoMsg}
+        </div>
+      )}
+      {videoMeta && videoMsg !== "이미 등록된 영상입니다." && (
         <div className="flex items-center gap-2 mb-2">
           <img src={videoMeta.thumbnail} alt="썸네일" className="w-24 h-14 rounded" />
           <div>
@@ -114,7 +52,7 @@ function AddVideoPage() {
           </div>
           <button
             className="bg-green-500 text-white px-3 py-1 rounded ml-2"
-            onClick={handleVideoRegister}
+            onClick={handleSubmit}
             disabled={videoLoading}
           >
             등록
