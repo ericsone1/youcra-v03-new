@@ -78,11 +78,9 @@ function UserProfile() {
     <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6 mt-8">
       {/* 프로필 상단 */}
       <div className="flex flex-col items-center mb-6">
-        <img
-          src={user.photoURL || `https://i.pravatar.cc/100?u=${user.email}`}
-          alt="profile"
-          className="w-24 h-24 rounded-full border mb-2"
-        />
+        <div className="w-24 h-24 rounded-full bg-gradient-to-r from-blue-400 to-purple-500 flex items-center justify-center text-2xl font-bold text-white shadow-lg border-4 border-white mb-2">
+          {user.email?.slice(0, 2).toUpperCase() || 'US'}
+        </div>
         <div className="font-bold text-lg">{user.displayName || user.email}</div>
         <div className="text-gray-500 text-sm">{user.email}</div>
         {/* 상태메시지 등 추가 가능 */}

@@ -291,11 +291,9 @@ function MyChannel() {
                 className="bg-white rounded-xl shadow flex items-center gap-4 p-4 cursor-pointer hover:bg-blue-50 transition"
                 onClick={() => navigate(`/chat/${room.id}`)}
               >
-                <img
-                  src={room.profileImage || "/default-profile.png"}
-                  alt="Room Thumbnail"
-                  className="w-14 h-14 rounded-lg object-cover border"
-                />
+                <div className="w-14 h-14 rounded-lg bg-gradient-to-r from-blue-400 to-purple-500 flex items-center justify-center text-lg font-bold text-white shadow-md">
+                  {room.name?.slice(0, 2).toUpperCase() || 'CH'}
+                </div>
                 <div className="flex-1">
                   <div className="font-bold text-base">{room.name}</div>
                   <div className="text-xs text-gray-500">방 ID: {room.id}</div>

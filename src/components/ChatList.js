@@ -248,7 +248,9 @@ function ChatList() {
             .map(room => (
               <div key={room.id} className="flex items-center bg-white rounded-xl shadow p-3 gap-3 hover:bg-blue-50 transition">
                 {/* 썸네일 */}
-                <img src={room.imageUrl} alt="썸네일" className="w-14 h-14 rounded-lg object-cover" />
+                <div className="w-14 h-14 rounded-lg bg-gradient-to-r from-blue-400 to-purple-500 flex items-center justify-center text-lg font-bold text-white shadow-md mr-3">
+                  {room.name?.slice(0, 2).toUpperCase() || 'CH'}
+                </div>
                 {/* 정보 */}
                 <div className="flex-1 min-w-0">
                   <div className="font-bold text-base truncate mb-1">{room.title}</div>
@@ -308,7 +310,9 @@ function ChatList() {
                   {myRooms.slice(0, myRoomsVisibleCount).map(room => (
                     <div key={room.id} className="flex items-center bg-white rounded-xl shadow p-3 gap-3 hover:bg-blue-50 transition">
                       {/* 썸네일 */}
-                      <img src={room.imageUrl} alt="썸네일" className="w-14 h-14 rounded-lg object-cover" />
+                      <div className="w-14 h-14 rounded-lg bg-gradient-to-r from-blue-400 to-purple-500 flex items-center justify-center text-lg font-bold text-white shadow-md mr-3">
+                        {room.name?.slice(0, 2).toUpperCase() || 'CH'}
+                      </div>
                       {/* 정보 */}
                       <div className="flex-1 min-w-0">
                         <div className="font-bold text-base truncate mb-1">{room.title}</div>
@@ -371,7 +375,9 @@ function ChatList() {
                   {joinedRooms.slice(0, joinedRoomsVisibleCount).map(room => (
                     <div key={room.id} className="flex items-center bg-white rounded-xl shadow p-3 gap-3 hover:bg-blue-50 transition">
                       {/* 썸네일 */}
-                      <img src={room.imageUrl} alt="썸네일" className="w-14 h-14 rounded-lg object-cover" />
+                      <div className="w-14 h-14 rounded-lg bg-gradient-to-r from-blue-400 to-purple-500 flex items-center justify-center text-lg font-bold text-white shadow-md mr-3">
+                        {room.name?.slice(0, 2).toUpperCase() || 'CH'}
+                      </div>
                       {/* 정보 */}
                       <div className="flex-1 min-w-0">
                         <div className="font-bold text-base truncate mb-1">{room.title}</div>

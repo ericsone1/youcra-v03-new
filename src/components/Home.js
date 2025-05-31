@@ -76,7 +76,7 @@ function Home() {
       setLikeCount(video ? Number(video.statistics.likeCount || 0) : 0);
     }
     setWatchSeconds(0);
-  }, [selectedVideoId]);
+  }, [selectedVideoId, filteredVideos]);
 
   // 플레이어 핸들러
   const handleYoutubeReady = (event) => {
@@ -107,218 +107,304 @@ function Home() {
     };
   }, []);
 
-  if (loading) return <div className="p-8 text-center text-gray-500">로딩 중...</div>;
-  if (error) return <div className="p-8 text-center text-red-500">{error}</div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="spinner"></div>
+          <div className="text-gray-600 font-medium">로딩 중...</div>
+        </div>
+      </div>
+    );
+  }
+  
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <div className="card max-w-md w-full p-8 text-center">
+          <div className="w-16 h-16 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
+            <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-semibold text-gray-800 mb-2">오류 발생</h3>
+          <p className="text-red-600 mb-6">{error}</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="btn-primary w-full"
+          >
+            다시 시도
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="max-w-2xl mx-auto p-4">
-      {/* 실시간 검색어 순위 박스 */}
-      <div className="bg-blue-100 rounded-xl p-4 mb-6">
-        <div className="flex items-center mb-2">
-          {searchQuery ? (
-            <button onClick={handleBack} className="mr-2 text-xl text-gray-600 hover:text-blue-600" aria-label="뒤로가기">
-              ←
-            </button>
-          ) : null}
-          <h2 className="text-xl font-bold text-center flex-1">🔥 실시간 검색어 순위</h2>
+    <div className="min-h-screen">
+      <div className="max-w-2xl mx-auto p-4 space-y-6">
+        {/* 헤더 섹션 */}
+        <div className="text-center py-8">
+          <h1 className="text-4xl font-bold gradient-text mb-2">UCRA</h1>
+          <p className="text-gray-600">유튜브 크리에이터들의 공간</p>
         </div>
-        <div className="relative">
-          <input
-            type="text"
-            placeholder="영상 제목, 채널명 검색"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            onKeyDown={handleSearchKeyDown}
-            className="w-full p-2 mb-3 border border-gray-300 rounded"
-          />
-        </div>
-        <ol className="mb-2">
-          {trendingKeywords.map((item, idx) => (
-            <li key={item.keyword} className="flex items-center gap-2 mb-1">
-              <button
-                className="flex items-center flex-1 hover:bg-blue-200 rounded px-2 py-1 transition"
-                onClick={() => handleKeywordClick(item.keyword)}
-                style={{ outline: 'none', border: 'none', background: 'none', cursor: 'pointer' }}
-              >
-                <span className={`font-bold text-lg ${idx === 0 ? 'text-yellow-500' : idx === 1 ? 'text-blue-500' : idx === 2 ? 'text-red-500' : 'text-gray-700'}`}>{idx+1}</span>
-                <span className="flex-1 font-medium text-left ml-2">{item.keyword}</span>
-                {item.change > 0 && <span className="text-green-500 text-xs ml-1">▲{item.change}</span>}
-                {item.change < 0 && <span className="text-red-500 text-xs ml-1">▼{Math.abs(item.change)}</span>}
-                {item.change === 0 && <span className="text-gray-400 text-xs ml-1">-</span>}
-              </button>
-            </li>
-          ))}
-        </ol>
-      </div>
 
-      {/* 실시간 시청순위 리스트 */}
-      <div>
-        <h3 className="text-xl font-bold mb-4 text-blue-700">실시간 UCRA 시청순위</h3>
-        <ul>
-          {filteredVideos.slice(0, visibleCount).map((video, idx) => {
-            const viewCount = Number(video.statistics.viewCount).toLocaleString();
-            const likeCountDisplay = Number(video.statistics.likeCount || 0).toLocaleString();
-            const watching = Math.floor(Math.random()*1000)+100;
-            const rankChange = idx < 3 ? Math.floor(Math.random()*3)+1 : 0;
-            return (
-              <React.Fragment key={video.id}>
-                <li
-                  className="flex gap-4 items-center mb-4 p-3 bg-white rounded-lg shadow hover:bg-blue-50 transition cursor-pointer"
-                  onClick={() => setSelectedVideoId(selectedVideoId === video.id ? null : video.id)}
-                >
-                  {/* 순위 및 상승/하락 */}
-                  <div className="flex flex-col items-center w-14 min-w-[56px]">
-                    <span className={`font-bold text-2xl ${idx === 0 ? 'text-yellow-500' : idx === 1 ? 'text-blue-400' : idx === 2 ? 'text-red-400' : 'text-gray-500'}`}>{idx+1}위</span>
-                    <span className="block mt-1 text-base font-bold" style={{lineHeight:'1'}}>
-                      {idx < 3 ? (
-                        <span className="text-green-400">▲{rankChange}</span>
-                      ) : (
-                        <span className="text-gray-300">-</span>
-                      )}
-                    </span>
-                  </div>
-                  {/* 썸네일 */}
-                  <img
-                    src={video.snippet.thumbnails.medium.url}
-                    alt={video.snippet.title}
-                    className="w-28 h-16 object-cover rounded"
-                  />
-                  {/* 정보 */}
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold truncate text-base mb-1">{video.snippet.title}</div>
-                    <div className="text-xs text-gray-500 mb-1">{video.snippet.channelTitle}</div>
-                    <div className="flex flex-col items-center justify-center mt-1">
-                      <div className="flex gap-6 justify-center items-center text-lg font-bold">
-                        <span className="flex items-center text-pink-400 text-sm">
-                          ❤️ {likeCountDisplay}
-                        </span>
-                        <span className="flex items-center text-blue-400 text-sm">
-                          👁️ {watching}명
-                        </span>
-                      </div>
-                    </div>
-                    <div className="text-xs text-gray-400 mt-1 text-center">
-                      조회수 {viewCount}
-                    </div>
-                  </div>
-                </li>
-                <AnimatePresence>
-                  {selectedVideoId === video.id && (
-                    <motion.div
-                      key={video.id}
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.3 }}
-                      className="overflow-hidden bg-white rounded-xl shadow-lg p-4 mb-4 relative"
-                    >
-                      {/* X 닫기 버튼 */}
-                      <button
-                        className="absolute top-2 right-2 text-xl text-gray-400 hover:text-gray-700 z-10"
-                        onClick={() => setSelectedVideoId(null)}
-                        aria-label="닫기"
-                      >×</button>
-                      {/* 제목 */}
-                      <div className="font-bold text-sm mb-2 pr-6 truncate" title={video.snippet.title}>{video.snippet.title}</div>
-                      {/* 유튜브 플레이어 */}
-                      <div className="mb-2">
-                        <YouTube
-                          videoId={video.id}
-                          opts={{
-                            width: '100%',
-                            height: '220',
-                            playerVars: { autoplay: 1 }
-                          }}
-                          onReady={handleYoutubeReady}
-                          onStateChange={handleYoutubeStateChange}
-                          className="rounded"
-                        />
-                      </div>
-                      {/* 시청 시간/인증 안내 */}
-                      <div className="text-xs text-gray-600 mb-2">
-                        {watchSeconds >= 180
-                          ? "3분 이상 시청 완료! 인증 가능"
-                          : `시청 시간: ${watchSeconds}초 (3분 이상 시 인증 가능)`}
-                      </div>
-                      <button
-                        className={`w-full py-2 rounded font-bold ${
-                          watchSeconds >= 180
-                            ? "bg-green-500 text-white hover:bg-green-600"
-                            : "bg-gray-200 text-gray-400 cursor-not-allowed"
-                        }`}
-                        disabled={watchSeconds < 180}
-                        onClick={() => {
-                          if (watchSeconds >= 180) {
-                            const channelId = video.snippet.channelId;
-                            if (channelId) {
-                              window.open(`https://www.youtube.com/channel/${channelId}`, '_blank');
-                            }
-                          }
-                        }}
-                      >
-                        {watchSeconds >= 180 ? "해당 채널을 구독하러 이동" : "3분 이상 시청해야 인증 가능"}
-                      </button>
-                      {/* 구독 홍보 안내 문구 */}
-                      {watchSeconds >= 180 && (
-                        <div className="mt-2 text-xs text-green-700 font-semibold">
-                          영상을 시청하시고 구독하면  상대방에게도 내채널이 홍보됩니다.
-                        </div>
-                      )}
-                      <div className="flex gap-4 justify-between text-sm mt-2">
-                        <a
-                          href={`https://www.youtube.com/watch?v=${video.id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-blue-500 hover:underline flex items-center"
-                        >
-                          <span className="mr-1">🔔👍💬</span>
-                          구독과 좋아요, 댓글(유튜브로 이동)
-                        </a>
-                        {/* 하트 아이콘 (좋아요) */}
-                        <button
-                          className="ml-auto flex items-center focus:outline-none"
-                          style={{ background: 'none', border: 'none', cursor: 'pointer' }}
-                          onClick={() => {
-                            if (!liked) {
-                              setLiked(true);
-                              setLikeCount((prev) => prev + 1);
-                            } else {
-                              setLiked(false);
-                              setLikeCount((prev) => (prev > 0 ? prev - 1 : 0));
-                            }
-                          }}
-                          aria-label="좋아요"
-                        >
-                          <span style={{ fontSize: 24, color: liked ? 'red' : '#bbb', transition: 'color 0.2s' }}>
-                            {liked ? '♥' : '♡'}
-                          </span>
-                          <span className="ml-1 text-base text-gray-700">{likeCount}</span>
-                        </button>
-                        {/* 시청자수 */}
-                        <span className="ml-4 flex items-center text-blue-400 text-sm">
-                          👁️ {watching}명
-                        </span>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </React.Fragment>
-            );
-          })}
-        </ul>
-        {filteredVideos.length > visibleCount && visibleCount < 20 && (
-          <div className="text-center mt-2">
-            <button
-              className="px-6 py-2 bg-blue-100 text-blue-700 rounded-full font-bold hover:bg-blue-200 transition"
-              onClick={() => setVisibleCount(c => Math.min(c + 5, 20))}
-            >
-              더보기
-            </button>
+        {/* 실시간 검색어 순위 박스 */}
+        <motion.div 
+          className="card card-hover p-6"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6 }}
+        >
+          <div className="flex items-center mb-4">
+            {searchQuery ? (
+              <button 
+                onClick={handleBack} 
+                className="mr-3 p-2 text-gray-600 hover:text-blue-600 rounded-full hover:bg-blue-50 transition-all duration-200" 
+                aria-label="뒤로가기"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+            ) : null}
+            <h2 className="text-2xl font-bold text-center flex-1 flex items-center justify-center">
+              <span className="mr-2">🔥</span>
+              실시간 검색어 순위
+            </h2>
           </div>
-        )}
-        {filteredVideos.length === 0 && (
-          <div className="text-center text-gray-400 py-8">검색 결과가 없습니다.</div>
-        )}
+          
+          {/* 검색창 */}
+          <div className="relative mb-6">
+            <input
+              type="text"
+              placeholder="영상 제목, 채널명 검색..."
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              onKeyDown={handleSearchKeyDown}
+              className="w-full p-4 pr-12 border border-gray-200 rounded-2xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all duration-200 bg-gray-50 focus:bg-white"
+            />
+            <div className="absolute right-4 top-1/2 transform -translate-y-1/2">
+              <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+          </div>
+          
+          {/* 검색어 순위 리스트 */}
+          <div className="space-y-2">
+            {trendingKeywords.map((item, idx) => (
+              <motion.button
+                key={item.keyword}
+                className="w-full flex items-center gap-4 hover:bg-blue-50 rounded-xl px-4 py-3 transition-all duration-200 text-left"
+                onClick={() => handleKeywordClick(item.keyword)}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <span className={`
+                  font-bold text-lg w-8 h-8 rounded-full flex items-center justify-center text-white
+                  ${idx === 0 ? 'bg-gradient-to-r from-yellow-400 to-orange-500' : 
+                    idx === 1 ? 'bg-gradient-to-r from-blue-400 to-blue-600' : 
+                    idx === 2 ? 'bg-gradient-to-r from-red-400 to-red-600' : 
+                    'bg-gradient-to-r from-gray-400 to-gray-600'}
+                `}>
+                  {idx + 1}
+                </span>
+                <span className="flex-1 font-medium text-gray-800">{item.keyword}</span>
+                <div className="flex items-center">
+                  {item.change > 0 && (
+                    <span className="text-green-500 text-sm font-bold flex items-center">
+                      <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M5.293 7.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L10 4.414 6.707 7.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                      </svg>
+                      {item.change}
+                    </span>
+                  )}
+                  {item.change < 0 && (
+                    <span className="text-red-500 text-sm font-bold flex items-center">
+                      <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M14.707 12.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L10 15.586l3.293-3.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      {Math.abs(item.change)}
+                    </span>
+                  )}
+                  {item.change === 0 && (
+                    <span className="text-gray-400 text-sm font-bold">-</span>
+                  )}
+                </div>
+              </motion.button>
+            ))}
+          </div>
+        </motion.div>
+
+        {/* 실시간 시청순위 리스트 */}
+        <motion.div 
+          className="space-y-4"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+        >
+          <h3 className="text-2xl font-bold text-gray-800 mb-6 text-center">
+            📺 실시간 UCRA 시청순위
+          </h3>
+          
+          <div className="space-y-4">
+            {filteredVideos.slice(0, visibleCount).map((video, idx) => {
+              const viewCount = Number(video.statistics.viewCount).toLocaleString();
+              const likeCountDisplay = Number(video.statistics.likeCount || 0).toLocaleString();
+              const watching = Math.floor(Math.random() * 1000) + 100;
+              const rankChange = idx < 3 ? Math.floor(Math.random() * 3) + 1 : 0;
+              
+              return (
+                <motion.div
+                  key={video.id}
+                  className="card card-hover p-4 cursor-pointer"
+                  onClick={() => setSelectedVideoId(selectedVideoId === video.id ? null : video.id)}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.4, delay: idx * 0.1 }}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  <div className="flex gap-4 items-center">
+                    {/* 순위 배지 */}
+                    <div className="flex flex-col items-center min-w-[60px]">
+                      <div className={`
+                        w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg
+                        ${idx === 0 ? 'bg-gradient-to-r from-yellow-400 to-orange-500' : 
+                          idx === 1 ? 'bg-gradient-to-r from-blue-400 to-blue-600' : 
+                          idx === 2 ? 'bg-gradient-to-r from-red-400 to-red-600' : 
+                          'bg-gradient-to-r from-gray-400 to-gray-600'}
+                      `}>
+                        {idx + 1}
+                      </div>
+                      {idx < 3 && (
+                        <span className="text-green-500 text-sm font-bold mt-1 flex items-center">
+                          <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M5.293 7.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L10 4.414 6.707 7.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                          </svg>
+                          {rankChange}
+                        </span>
+                      )}
+                    </div>
+                    
+                    {/* 썸네일 */}
+                    <div className="relative">
+                      <img
+                        src={video.snippet.thumbnails.medium.url}
+                        alt={video.snippet.title}
+                        className="w-32 h-20 object-cover rounded-xl shadow-md"
+                      />
+                      <div className="absolute inset-0 bg-black bg-opacity-20 rounded-xl flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity duration-200">
+                        <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    </div>
+                    
+                    {/* 정보 */}
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold text-gray-800 line-clamp-2 mb-2 leading-snug">
+                        {video.snippet.title}
+                      </h4>
+                      <p className="text-sm text-gray-500 mb-3">{video.snippet.channelTitle}</p>
+                      
+                      {/* 통계 */}
+                      <div className="flex items-center gap-4 text-sm">
+                        <div className="flex items-center text-pink-500">
+                          <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
+                          </svg>
+                          {likeCountDisplay}
+                        </div>
+                        <div className="flex items-center text-blue-500">
+                          <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                            <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
+                          </svg>
+                          {watching}명 시청 중
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* YouTube 플레이어 */}
+                  <AnimatePresence>
+                    {selectedVideoId === video.id && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.3 }}
+                        className="mt-4 overflow-hidden"
+                      >
+                        <div className="rounded-xl overflow-hidden shadow-lg">
+                          <YouTube
+                            videoId={video.id}
+                            onReady={handleYoutubeReady}
+                            onStateChange={handleYoutubeStateChange}
+                            opts={{
+                              width: "100%",
+                              height: "240",
+                              playerVars: {
+                                autoplay: 1,
+                                modestbranding: 1,
+                                rel: 0,
+                              },
+                            }}
+                          />
+                        </div>
+                        
+                        {/* 시청 시간 및 좋아요 */}
+                        <div className="flex items-center justify-between mt-4 p-4 bg-gray-50 rounded-xl">
+                          <div className="text-sm text-gray-600">
+                            시청 시간: <span className="font-bold text-blue-600">{watchSeconds}초</span>
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setLiked(!liked);
+                              setLikeCount(prev => liked ? prev - 1 : prev + 1);
+                            }}
+                            className={`
+                              flex items-center space-x-2 px-4 py-2 rounded-full transition-all duration-200
+                              ${liked 
+                                ? 'bg-pink-500 text-white shadow-lg' 
+                                : 'bg-white text-gray-600 border border-gray-200 hover:bg-pink-50'
+                              }
+                            `}
+                          >
+                            <svg className="w-5 h-5" fill={liked ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                            </svg>
+                            <span className="font-semibold">{likeCount.toLocaleString()}</span>
+                          </button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              );
+            })}
+          </div>
+          
+          {/* 더보기 버튼 */}
+          {visibleCount < filteredVideos.length && (
+            <motion.div 
+              className="text-center pt-6"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.6, delay: 0.4 }}
+            >
+              <button
+                onClick={() => setVisibleCount(prev => prev + 5)}
+                className="btn-secondary"
+              >
+                더 많은 영상 보기 ({filteredVideos.length - visibleCount}개 남음)
+              </button>
+            </motion.div>
+          )}
+        </motion.div>
       </div>
     </div>
   );

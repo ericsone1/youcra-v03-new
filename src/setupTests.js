@@ -2,4 +2,17 @@
 // allows you to do things like:
 // expect(element).toHaveTextContent(/react/i)
 // learn more: https://github.com/testing-library/jest-dom
-import '@testing-library/jest-dom';
+require('@testing-library/jest-dom');
+require('jest-fetch-mock').enableMocks();
+
+global.fetch = require('jest-fetch-mock');
+
+// Mock IntersectionObserver
+class MockIntersectionObserver {
+  constructor() {}
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+global.IntersectionObserver = MockIntersectionObserver;

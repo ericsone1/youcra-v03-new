@@ -19,7 +19,9 @@ export default function ChatRoomInfo() {
         </div>
         {/* 프로필/방이름/참여자 */}
         <div className="flex flex-col items-center py-6">
-          <img src="https://randomuser.me/api/portraits/women/44.jpg" alt="방 프로필" className="w-20 h-20 rounded-full mb-2 border-2 border-blue-200" />
+          <div className="w-20 h-20 rounded-full bg-gradient-to-r from-blue-400 to-purple-500 flex items-center justify-center text-xl font-bold text-white shadow-lg border-4 border-white mb-2">
+            RO
+          </div>
           <div className="font-bold text-lg mb-1 flex items-center gap-1">
             방 이름(더미)
             <span title="방장" className="ml-1 text-yellow-500 text-xl">👑</span>

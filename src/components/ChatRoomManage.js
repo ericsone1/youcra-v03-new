@@ -16,7 +16,9 @@ function ChatRoomManage() {
         {/* 기본 정보 관리 */}
         <section>
           <div className="flex items-center gap-3 mb-2">
-            <img src="https://randomuser.me/api/portraits/women/44.jpg" alt="방 프로필" className="w-14 h-14 rounded-lg object-cover" />
+            <div className="w-14 h-14 rounded-lg bg-gradient-to-r from-blue-400 to-purple-500 flex items-center justify-center text-lg font-bold text-white shadow-md">
+              맛집
+            </div>
             <div>
               <div className="font-bold text-base">맛집,먹방 유튜브 맞구톡방</div>
               <div className="text-xs text-gray-500">그룹채팅 · 자유수다</div>

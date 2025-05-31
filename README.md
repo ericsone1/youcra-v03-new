@@ -1,70 +1,104 @@
-# Getting Started with Create React App
+# YouCra Chat App 🔥
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+실시간 채팅 애플리케이션 with Firebase
 
-## Available Scripts
+## 🚀 Firebase 프로젝트 설정하기
 
-In the project directory, you can run:
+### 1. Firebase 프로젝트 생성
+1. [Firebase Console](https://console.firebase.google.com) 접속
+2. **프로젝트 만들기** 클릭
+3. 프로젝트 이름 입력 (예: `youcra-chat-app`)
+4. Google Analytics 사용 여부 선택
+5. **프로젝트 만들기** 완료
 
-### `npm start`
+### 2. 웹 앱 등록
+1. Firebase Console에서 **</> 웹** 아이콘 클릭
+2. 앱 이름 입력 (예: `YouCra Chat`)
+3. **Firebase Hosting** 체크 (선택사항)
+4. **앱 등록** 클릭
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+### 3. Firebase 서비스 활성화
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+#### 📧 Authentication (인증)
+1. 좌측 메뉴 **Authentication** 클릭
+2. **시작하기** 클릭
+3. **Sign-in method** 탭
+4. **이메일/비밀번호** 활성화
 
-### `npm test`
+#### 🗄️ Firestore Database
+1. 좌측 메뉴 **Firestore Database** 클릭
+2. **데이터베이스 만들기** 클릭
+3. **테스트 모드로 시작** 선택
+4. 지역 선택 (asia-northeast3 - Seoul 권장)
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+#### 📁 Storage
+1. 좌측 메뉴 **Storage** 클릭
+2. **시작하기** 클릭
+3. **테스트 모드로 시작** 선택
 
-### `npm run build`
+### 4. 환경변수 설정
+1. Firebase Console > 프로젝트 설정 (⚙️) > SDK 설정 및 구성
+2. **구성** 복사
+3. 프로젝트 루트에 `.env` 파일의 값들을 실제 값으로 교체:
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+```bash
+REACT_APP_FIREBASE_API_KEY=your_actual_api_key
+REACT_APP_FIREBASE_AUTH_DOMAIN=your-project-id.firebaseapp.com
+REACT_APP_FIREBASE_PROJECT_ID=your-project-id
+REACT_APP_FIREBASE_STORAGE_BUCKET=your-project-id.appspot.com
+REACT_APP_FIREBASE_MESSAGING_SENDER_ID=your_actual_sender_id
+REACT_APP_FIREBASE_APP_ID=your_actual_app_id
+```
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+## 🏗️ 로컬 개발 환경 설정
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+### 설치
+```bash
+npm install
+```
 
-### `npm run eject`
+### 개발 서버 실행
+```bash
+npm start
+```
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+### 빌드
+```bash
+npm run build
+```
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+## 🌐 배포하기
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+### Firebase Hosting으로 배포
+```bash
+# Firebase CLI 설치
+npm install -g firebase-tools
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+# Firebase 로그인
+firebase login
 
-## Learn More
+# 프로젝트 초기화
+firebase init hosting
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+# 배포
+firebase deploy
+```
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+## 📱 주요 기능
 
-### Code Splitting
+- ✅ 실시간 채팅
+- ✅ 사용자 인증 (이메일/비밀번호)
+- ✅ 파일 업로드
+- ✅ 반응형 UI
+- ✅ PWA 지원
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+## 🛠️ 기술 스택
 
-### Analyzing the Bundle Size
+- **Frontend**: React, Tailwind CSS
+- **Backend**: Firebase (Firestore, Auth, Storage)
+- **Deployment**: Firebase Hosting
+- **Testing**: Jest, React Testing Library
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+## 📞 지원
 
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+문제가 있으시면 이슈를 생성해주세요!

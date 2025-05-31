@@ -713,7 +713,9 @@ function ChatRoom() {
                 {!isMine && (
                   <div className="flex flex-col items-start mr-2">
                     <div className="text-xs text-gray-500 mb-1 ml-2">{userNickMap[msg.uid] || '익명'}</div>
-                    <img src={msg.photoURL || '/default-profile.png'} alt="프로필" className="w-8 h-8 rounded-full self-end" />
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-400 to-purple-500 flex items-center justify-center text-sm font-medium text-white shadow-md self-end">
+                      {msg.email?.slice(0, 2).toUpperCase() || 'UN'}
+                    </div>
                   </div>
                 )}
                 <div className={`max-w-[70%] px-3 py-2 rounded-2xl shadow ${isMine ? 'bg-yellow-200 text-right' : 'bg-white text-left'} break-words`}>
@@ -721,7 +723,9 @@ function ChatRoom() {
                   <div className="text-[10px] text-gray-400 mt-1 text-right">{formatTime(msg.createdAt).slice(11, 16)}</div>
                 </div>
                 {isMine && (
-                  <img src={msg.photoURL || '/default-profile.png'} alt="프로필" className="w-8 h-8 rounded-full ml-2 self-end" />
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-r from-green-400 to-blue-500 flex items-center justify-center text-sm font-medium text-white shadow-md ml-2 self-end">
+                    {msg.email?.slice(0, 2).toUpperCase() || 'ME'}
+                  </div>
                 )}
               </div>
             </React.Fragment>

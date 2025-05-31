@@ -52,23 +52,68 @@ export function ChatRoom() {
   }, [leaveRoom]);
 
   if (loading) {
-    return <div className="flex items-center justify-center h-screen">로딩중...</div>;
+    return (
+      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <p className="text-gray-600">채팅방에 연결 중...</p>
+        </div>
+      </div>
+    );
   }
 
   if (error) {
-    return <div className="flex items-center justify-center h-screen text-red-500">{error}</div>;
+    return (
+      <div className="flex flex-col justify-center items-center h-screen bg-gradient-to-br from-red-50 to-pink-100">
+        <div className="bg-white rounded-lg shadow-lg p-8 max-w-md w-full mx-4">
+          <div className="text-center">
+            <div className="w-16 h-16 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
+              <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
+            <h3 className="text-lg font-semibold text-gray-800 mb-2">연결 오류</h3>
+            <p className="text-red-600 mb-6">{error}</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 font-medium"
+            >
+              다시 시도
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50">
-      {/* 상단 바 */}
-      <div className="flex items-center justify-between px-4 py-2 bg-white shadow">
-        <button onClick={() => navigate(-1)} className="text-blue-500 font-bold">
-          ← 뒤로
-        </button>
-        <div className="font-bold text-lg">{roomInfo?.name || "채팅방"}</div>
-        <div className="text-sm text-gray-500">
-          {participants.length}명 참여중
+    <div className="flex flex-col h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      {/* 개선된 상단 바 */}
+      <div className="flex items-center justify-between px-4 py-4 bg-white shadow-lg border-b border-gray-200">
+        <div className="flex items-center space-x-3">
+          <button 
+            onClick={() => navigate(-1)} 
+            className="p-2 text-blue-600 hover:bg-blue-50 rounded-full transition-colors duration-200 flex items-center justify-center"
+            aria-label="뒤로가기"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <div>
+            <h1 className="font-bold text-lg text-gray-800">
+              {roomInfo?.name || "채팅방"}
+            </h1>
+            <p className="text-sm text-gray-500">
+              {participants.length}명이 대화 중
+            </p>
+          </div>
+        </div>
+        
+        {/* 온라인 상태 표시 */}
+        <div className="flex items-center space-x-2">
+          <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+          <span className="text-sm text-gray-600">온라인</span>
         </div>
       </div>
 
@@ -76,10 +121,12 @@ export function ChatRoom() {
       <MessageList messages={messages} myJoinedAt={myJoinedAt} />
 
       {/* 메시지 입력 */}
-      <MessageInput
-        onSend={sendMessage}
-        disabled={loading || !auth.currentUser}
-      />
+      <div className="bg-white border-t border-gray-200 shadow-lg">
+        <MessageInput
+          onSend={sendMessage}
+          disabled={loading || !auth.currentUser}
+        />
+      </div>
     </div>
   );
 } 

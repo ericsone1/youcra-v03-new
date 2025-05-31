@@ -188,7 +188,9 @@ function ChatList() {
             className="flex items-center bg-white rounded-xl shadow p-3 cursor-pointer hover:bg-yellow-50"
             onClick={() => handleEnterRoom(room.id)}
           >
-            <img src={room.profileImage || "/default-profile.png"} className="w-14 h-14 rounded-lg mr-3" alt="썸네일" />
+            <div className="w-14 h-14 rounded-lg bg-gradient-to-r from-blue-400 to-purple-500 flex items-center justify-center text-lg font-bold text-white shadow-md mr-3">
+              {room.name?.slice(0, 2).toUpperCase() || 'CH'}
+            </div>
             <div className="flex-1 min-w-0">
               <div className="font-bold truncate">{room.name}</div>
               <div className="text-xs text-gray-400 truncate">{room.lastMsgText || "메시지가 없습니다."}</div>
