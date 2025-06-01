@@ -1,13 +1,54 @@
 import React, { Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { HashRouter as Router, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ProtectedRoute } from "./components/common/ProtectedRoute";
 import { LoadingSpinner } from "./components/common/LoadingSpinner";
 import Navigation from "./components/common/Navigation";
 
-// 컴포넌트 지연 로딩 (존재하는 파일들만)
+// 컴포넌트 지연 로딩
 const Home = React.lazy(() => import("./components/Home"));
 const AuthForm = React.lazy(() => import("./components/AuthForm"));
+const MyChannel = React.lazy(() => import("./components/MyChannel"));
+const ChatList = React.lazy(() => import("./components/ChatList"));
+const ChatRoom = React.lazy(() => import("./components/ChatRoom"));
+const ChatRoomInfo = React.lazy(() => import("./components/ChatRoomInfo"));
+const ChatRoomHost = React.lazy(() => import("./components/ChatRoomHost"));
+const VideoListPage = React.lazy(() => import("./components/VideoListPage"));
+const AddVideoPage = React.lazy(() => import("./components/AddVideoPage"));
+const UserProfile = React.lazy(() => import("./components/UserProfile"));
+const TestProfile = React.lazy(() => import("./components/TestProfile"));
+const Board = React.lazy(() => import("./components/Board"));
+
+// 간단한 테스트 컴포넌트 - lazy loading 없이
+const SimpleTestProfile = () => (
+  <div style={{ 
+    background: 'red', 
+    color: 'white', 
+    padding: '50px', 
+    textAlign: 'center',
+    minHeight: '100vh',
+    fontSize: '20px'
+  }}>
+    <h1>🎉 성공! 라우팅 작동 중!</h1>
+    <p>현재 URL: {window.location.href}</p>
+    <p>이 페이지가 보이면 라우팅이 정상입니다!</p>
+    <button 
+      onClick={() => window.history.back()}
+      style={{
+        background: 'white',
+        color: 'red',
+        padding: '10px 20px',
+        border: 'none',
+        borderRadius: '5px',
+        fontSize: '16px',
+        cursor: 'pointer',
+        marginTop: '20px'
+      }}
+    >
+      뒤로 가기
+    </button>
+  </div>
+);
 
 // 존재하지 않는 컴포넌트들을 위한 fallback 컴포넌트
 const FallbackComponent = ({ componentName }) => (
@@ -48,13 +89,17 @@ function App() {
                 {/* 공개 라우트 */}
                 <Route path="/" element={<Home />} />
                 <Route path="/login" element={<AuthForm />} />
+                <Route path="/simple-test" element={<SimpleTestProfile />} />
+                {/* 테스트용: UserProfile을 공개 라우트로 임시 설정 */}
+                <Route path="/profile/:uid" element={<SimpleTestProfile />} />
+                <Route path="/test-profile" element={<SimpleTestProfile />} />
 
-                {/* 보호된 라우트 - 임시로 fallback 컴포넌트 사용 */}
+                {/* 보호된 라우트 */}
                 <Route
                   path="/my"
                   element={
                     <ProtectedRoute>
-                      <FallbackComponent componentName="MyChannel" />
+                      <MyChannel />
                     </ProtectedRoute>
                   }
                 />
@@ -62,7 +107,7 @@ function App() {
                   path="/chat"
                   element={
                     <ProtectedRoute>
-                      <FallbackComponent componentName="ChatList" />
+                      <ChatList />
                     </ProtectedRoute>
                   }
                 />
@@ -70,7 +115,31 @@ function App() {
                   path="/chat/:roomId"
                   element={
                     <ProtectedRoute>
-                      <FallbackComponent componentName="ChatRoom" />
+                      <ChatRoom />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/chat/:roomId/info"
+                  element={
+                    <ProtectedRoute>
+                      <ChatRoomInfo />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/chat/:roomId/manage"
+                  element={
+                    <ProtectedRoute>
+                      <ChatRoomHost />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/board"
+                  element={
+                    <ProtectedRoute>
+                      <Board />
                     </ProtectedRoute>
                   }
                 />

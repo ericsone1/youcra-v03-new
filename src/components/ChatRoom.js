@@ -144,6 +144,8 @@ function ChatRoom() {
   const { roomId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  
+  // === 기본 채팅 관련 State ===
   const [messages, setMessages] = useState([]);
   const [newMsg, setNewMsg] = useState("");
   const [participants, setParticipants] = useState([]);
@@ -151,11 +153,16 @@ function ChatRoom() {
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
-  const messagesEndRef = useRef(null);
-  const inputRef = useRef(null);
   const [loading, setLoading] = useState(true);
-
-  // 영상 관련 상태
+  const [userNickMap, setUserNickMap] = useState({});
+  const [myJoinedAt, setMyJoinedAt] = useState(null);
+  
+  // === 채팅방 정보 관련 State ===
+  const [roomData, setRoomData] = useState(null);
+  const [roomLiked, setRoomLiked] = useState(false);
+  const [roomLikesCount, setRoomLikesCount] = useState(0);
+  
+  // === 영상 관련 State ===
   const [videoUrl, setVideoUrl] = useState("");
   const [videoMeta, setVideoMeta] = useState(null);
   const [videoLoading, setVideoLoading] = useState(false);
@@ -165,41 +172,31 @@ function ChatRoom() {
   const [isCertified, setIsCertified] = useState(false);
   const [certLoading, setCertLoading] = useState(false);
   const [certifiedVideoIds, setCertifiedVideoIds] = useState([]);
-  const [popupPos, setPopupPos] = useState({ x: 100, y: 100 });
-  const [dragging, setDragging] = useState(false);
-  const dragOffset = useRef({ x: 0, y: 0 });
   const [watchSeconds, setWatchSeconds] = useState(0);
   const [videoEnded, setVideoEnded] = useState(false);
-  const playerRef = useRef(null);
-  const autoNextTimer = useRef(null);
-  const [showDelete, setShowDelete] = useState(null);
-  const longPressTimer = useRef(null);
   const [countdown, setCountdown] = useState(5);
-
-  const [userNickMap, setUserNickMap] = useState({});
-
-  // 추가 state 선언 (return문 바로 위)
+  const [endCountdown, setEndCountdown] = useState(0);
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [watching, setWatching] = useState(0);
-
-  // 내 joinedAt을 저장할 state 추가
-  const [myJoinedAt, setMyJoinedAt] = useState(null);
-
-  // 채팅방 좋아요 관련 state 추가
-  const [roomLiked, setRoomLiked] = useState(false);
-  const [roomLikesCount, setRoomLikesCount] = useState(0);
-
-  // 파일 업로드 관련 state 추가
+  
+  // === UI 관련 State ===
+  const [popupPos, setPopupPos] = useState({ x: 100, y: 100 });
+  const [dragging, setDragging] = useState(false);
+  const [minimized, setMinimized] = useState(false);
+  const [showDelete, setShowDelete] = useState(null);
   const [showUploadMenu, setShowUploadMenu] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [showUserProfile, setShowUserProfile] = useState(null); // uid를 저장
+  
+  // === Refs ===
+  const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
   const fileInputRef = useRef(null);
-
-  // 영상 플레이어 최소화 state 추가
-  const [minimized, setMinimized] = useState(false);
-
-  // 영상 종료 후 다음 영상 이동 카운트다운 state 추가
-  const [endCountdown, setEndCountdown] = useState(0);
+  const dragOffset = useRef({ x: 0, y: 0 });
+  const playerRef = useRef(null);
+  const autoNextTimer = useRef(null);
+  const longPressTimer = useRef(null);
   const endTimer = useRef(null);
 
   // 비로그인 접근 제한
@@ -253,7 +250,7 @@ function ChatRoom() {
     fetchCurrentUserNick();
   }, [auth.currentUser]);
 
-  // 메시지 실시간 구독 + 닉네임 매핑 (joinedAt 이후 메시지만)
+  // 메시지 실시간 구독 + 닉네임 매핑 (joinedAt 이후 메시지만) - 성능 최적화
   useEffect(() => {
     if (loading) return;
 
@@ -264,6 +261,7 @@ function ChatRoom() {
       collection(db, "chatRooms", roomId, "messages"),
       orderBy("createdAt")
     );
+    
     const unsub = onSnapshot(q, async (snapshot) => {
       let msgs = snapshot.docs.map((doc) => ({
         id: doc.id,
@@ -277,27 +275,47 @@ function ChatRoom() {
       
       setMessages(msgs);
       
-      // 닉네임 매핑
+      // 닉네임 매핑 - 성능 최적화: 이미 매핑된 유저는 제외
       const uids = Array.from(new Set(msgs.map((m) => m.uid).filter(Boolean)));
-      const nickMap = {};
-      await Promise.all(
-        uids.map(async (uid) => {
-          if (!userNickMap[uid]) {
-            const userDoc = await getDoc(doc(db, "users", uid));
-            if (userDoc.exists()) {
-              nickMap[uid] = userDoc.data().nickname || userDoc.data().email?.split("@")[0] || "익명";
-            } else {
-              nickMap[uid] = "익명";
-            }
-          } else {
-            nickMap[uid] = userNickMap[uid];
-          }
-        })
-      );
-      setUserNickMap((prev) => ({ ...prev, ...nickMap }));
+      
+      // 현재 userNickMap 상태를 가져와서 체크
+      setUserNickMap((currentNickMap) => {
+        const unMappedUids = uids.filter(uid => !currentNickMap[uid]);
+        
+        if (unMappedUids.length > 0) {
+          // 비동기로 닉네임 매핑 처리
+          Promise.all(
+            unMappedUids.map(async (uid) => {
+              try {
+                const userDoc = await getDoc(doc(db, "users", uid));
+                if (userDoc.exists()) {
+                  return {
+                    uid,
+                    nickname: userDoc.data().nickname || userDoc.data().email?.split("@")[0] || "익명"
+                  };
+                } else {
+                  return { uid, nickname: "익명" };
+                }
+              } catch (error) {
+                console.error("닉네임 조회 오류:", error);
+                return { uid, nickname: "익명" };
+              }
+            })
+          ).then(results => {
+            const nickMap = {};
+            results.forEach(({ uid, nickname }) => {
+              nickMap[uid] = nickname;
+            });
+            setUserNickMap(prev => ({ ...prev, ...nickMap }));
+          });
+        }
+        
+        return currentNickMap; // 현재 상태 유지
+      });
     });
+    
     return () => unsub && unsub();
-  }, [roomId, loading]);
+  }, [roomId, loading, myJoinedAt]); // userNickMap 의존성 제거
 
   // 실시간 참여자 관리
   useEffect(() => {
@@ -365,9 +383,23 @@ function ChatRoom() {
     setIsCertified(false);
     setWatchSeconds(0);
     setVideoEnded(false);
+    setMinimized(false); // 새 영상 선택 시 최소화 해제
+    setEndCountdown(0); // 영상 종료 카운트다운 초기화
+    
+    // 모든 타이머 정리
     if (playerRef.current && playerRef.current._interval) {
       clearInterval(playerRef.current._interval);
       playerRef.current._interval = null;
+    }
+    
+    if (autoNextTimer.current) {
+      clearInterval(autoNextTimer.current);
+      autoNextTimer.current = null;
+    }
+    
+    if (endTimer.current) {
+      clearInterval(endTimer.current);
+      endTimer.current = null;
     }
   }, [selectedVideoIdx]);
 
@@ -439,9 +471,13 @@ function ChatRoom() {
 
   const myUid = auth.currentUser?.uid;
   const myEmail = auth.currentUser?.email;
-  // 방장 이메일(예시: participants[0]이 방장)
-  const ownerEmail = participants[0];
-  const isOwner = myEmail && ownerEmail && myEmail === ownerEmail;
+  
+  // 방장 확인 로직 - UID 기반으로 올바르게 비교
+  const isOwner = roomData && myUid && (
+    roomData.createdBy === myUid ||      // UID와 createdBy 비교 (핵심)
+    roomData.ownerEmail === myEmail ||   // 이메일 기반 백업
+    roomData.creatorEmail === myEmail    // 이메일 기반 백업
+  );
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -465,32 +501,41 @@ function ChatRoom() {
     inputRef.current?.focus();
   };
 
-  // 파일 업로드 함수들 추가
+  // 파일 업로드 함수들 - React 방식으로 개선
   const handleFileSelect = (type) => {
-    const input = document.createElement('input');
-    input.type = 'file';
+    if (!fileInputRef.current) return;
     
+    // 파일 타입에 따른 accept 속성 설정
     switch(type) {
       case 'image':
-        input.accept = 'image/*';
+        fileInputRef.current.accept = 'image/*';
         break;
       case 'video':
-        input.accept = 'video/*';
+        fileInputRef.current.accept = 'video/*';
         break;
       case 'file':
-        input.accept = '*/*';
+      default:
+        fileInputRef.current.accept = '*/*';
         break;
     }
     
-    input.onchange = (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        handleFileUpload(file, type);
-      }
-    };
+    // 파일 타입을 data attribute로 저장
+    fileInputRef.current.dataset.fileType = type;
     
-    input.click();
+    // 이전 선택 초기화 후 클릭
+    fileInputRef.current.value = '';
+    fileInputRef.current.click();
     setShowUploadMenu(false);
+  };
+
+  // 파일 선택 핸들러
+  const handleFileInputChange = (e) => {
+    const file = e.target.files[0];
+    const fileType = e.target.dataset.fileType || 'file';
+    
+    if (file) {
+      handleFileUpload(file, fileType);
+    }
   };
 
   const handleFileUpload = async (file, type) => {
@@ -596,12 +641,10 @@ function ChatRoom() {
   };
 
   // URL 입력 시 실시간 중복 체크
-  const [isDuplicateVideo, setIsDuplicateVideo] = useState(false);
   useEffect(() => {
     const checkDuplicate = async () => {
       if (!videoUrl) {
         setVideoMsg("");
-        setIsDuplicateVideo(false);
         return;
       }
 
@@ -615,10 +658,8 @@ function ChatRoom() {
 
         if (!duplicateSnapshot.empty) {
           setVideoMsg("이미 등록된 영상입니다.");
-          setIsDuplicateVideo(true);
         } else {
           setVideoMsg("");
-          setIsDuplicateVideo(false);
         }
       } catch (error) {
         console.error("중복 체크 중 오류:", error);
@@ -640,11 +681,6 @@ function ChatRoom() {
         return;
       }
 
-      if (isDuplicateVideo) {
-        setVideoMsg("이미 등록된 영상입니다.");
-        return;
-      }
-
       setVideoLoading(true);
       const meta = await fetchYoutubeMeta(videoId);
       if (!meta) {
@@ -663,7 +699,7 @@ function ChatRoom() {
 
   // 영상 등록
   const handleVideoRegister = async () => {
-    if (!videoMeta || isDuplicateVideo) return;
+    if (!videoMeta) return;
     
     try {
       setVideoLoading(true);
@@ -842,33 +878,49 @@ function ChatRoom() {
     }, 300);
   };
 
-  // selectedVideoIdx가 바뀔 때 interval 무조건 clear
-  useEffect(() => {
-    setWatchSeconds(0);
-    setVideoEnded(false);
-    setMinimized(false); // 새 영상 선택 시 최소화 해제
-    setEndCountdown(0); // 영상 종료 카운트다운 초기화
-    
-    if (playerRef.current && playerRef.current._interval) {
-      clearInterval(playerRef.current._interval);
-      playerRef.current._interval = null;
-    }
-    
-    if (endTimer.current) {
-      clearInterval(endTimer.current);
-      endTimer.current = null;
-    }
-  }, [selectedVideoIdx]);
-
-  // 컴포넌트 언마운트 시 interval 정리
+  // 컴포넌트 언마운트 시 모든 타이머와 리소스 정리
   useEffect(() => {
     return () => {
+      // 모든 타이머 정리
       if (playerRef.current && playerRef.current._interval) {
         clearInterval(playerRef.current._interval);
         playerRef.current._interval = null;
       }
+      
+      if (autoNextTimer.current) {
+        clearInterval(autoNextTimer.current);
+        autoNextTimer.current = null;
+      }
+      
+      if (endTimer.current) {
+        clearInterval(endTimer.current);
+        endTimer.current = null;
+      }
+      
+      if (longPressTimer.current) {
+        clearTimeout(longPressTimer.current);
+        longPressTimer.current = null;
+      }
     };
   }, []);
+
+  // 채팅방 정보 불러오기 (방장 확인용)
+  useEffect(() => {
+    if (!roomId) return;
+
+    const fetchRoomData = async () => {
+      try {
+        const roomDoc = await getDoc(doc(db, "chatRooms", roomId));
+        if (roomDoc.exists()) {
+          setRoomData(roomDoc.data());
+        }
+      } catch (error) {
+        console.error("채팅방 정보 불러오기 오류:", error);
+      }
+    };
+
+    fetchRoomData();
+  }, [roomId]);
 
   // 업로드 메뉴 외부 클릭 시 닫기
   useEffect(() => {
@@ -1005,9 +1057,13 @@ function ChatRoom() {
                 {!isMine && (
                   <div className="flex flex-col items-start mr-2">
                     <div className="text-xs text-gray-500 mb-1 ml-2">{userNickMap[msg.uid] || msg.email?.split('@')[0] || '익명'}</div>
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-r from-green-400 via-blue-500 to-purple-600 flex items-center justify-center text-sm font-medium text-white shadow-md self-end">
+                    <button 
+                      className="w-8 h-8 rounded-full bg-gradient-to-r from-green-400 via-blue-500 to-purple-600 flex items-center justify-center text-sm font-medium text-white shadow-md self-end hover:scale-105 transition-transform cursor-pointer"
+                      onClick={() => navigate(`/profile/${roomId}/${msg.uid}`)}
+                      title={`${userNickMap[msg.uid] || msg.email?.split('@')[0] || '익명'}님의 프로필 보기`}
+                    >
                       {(userNickMap[msg.uid] || msg.email?.split('@')[0] || '익명').slice(0, 2).toUpperCase()}
-                    </div>
+                    </button>
                   </div>
                 )}
                 <div className={`max-w-[70%] px-3 py-2 rounded-2xl shadow ${isMine ? 'bg-blue-500 text-white text-right' : 'bg-white text-left'} break-words`}>
@@ -1021,9 +1077,13 @@ function ChatRoom() {
                   <div className={`text-[10px] mt-1 text-right ${isMine ? 'text-blue-100' : 'text-gray-400'}`}>{formatTime(msg.createdAt).slice(11, 16)}</div>
                 </div>
                 {isMine && (
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center text-sm font-medium text-white shadow-md ml-2 self-end">
+                  <button 
+                    className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center text-sm font-medium text-white shadow-md ml-2 self-end hover:scale-105 transition-transform cursor-pointer"
+                    onClick={() => navigate('/my')}
+                    title="내 프로필 보기"
+                  >
                     {(userNickMap[auth.currentUser?.uid] || auth.currentUser?.email?.split('@')[0] || '나').slice(0, 2).toUpperCase()}
-                  </div>
+                  </button>
                 )}
               </div>
             </React.Fragment>
@@ -1106,7 +1166,7 @@ function ChatRoom() {
       <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md flex justify-around items-center border-t h-16 z-40 bg-white">
         <button className="flex flex-col items-center text-gray-500 hover:text-blue-500 text-sm font-bold focus:outline-none" onClick={() => navigate('/')}>🏠<span>홈</span></button>
         <button className="flex flex-col items-center text-blue-500 text-sm font-bold focus:outline-none" onClick={() => navigate('/chat')}>💬<span>채팅방</span></button>
-        <button className="flex flex-col items-center text-gray-500 hover:text-blue-500 text-sm font-bold focus:outline-none" onClick={() => navigate('/tools')}>🛒<span>UCRA공구</span></button>
+        <button className="flex flex-col items-center text-gray-500 hover:text-blue-500 text-sm font-bold focus:outline-none" onClick={() => navigate('/board')}>📋<span>게시판</span></button>
         <button className="flex flex-col items-center text-gray-500 hover:text-blue-500 text-sm font-bold focus:outline-none" onClick={() => navigate('/my')}>👤<span>마이채널</span></button>
       </nav>
 
@@ -1119,23 +1179,19 @@ function ChatRoom() {
           style={{
             top: popupPos.y,
             left: popupPos.x,
-            cursor: dragging ? 'grabbing' : 'grab',
           }}
-          onMouseDown={handleDragStart}
-          onMouseMove={handleDrag}
-          onMouseUp={handleDragEnd}
-          onMouseLeave={handleDragEnd}
-          onTouchStart={handleDragStart}
-          onTouchMove={handleDrag}
-          onTouchEnd={handleDragEnd}
         >
           {/* 공통 YouTube 플레이어 - 항상 렌더링 */}
           <div 
             className={`absolute transition-all duration-300 ${
               minimized 
-                ? 'w-full h-full top-0 left-0 opacity-20' 
+                ? 'hidden'  // 최소화 시 완전히 숨김
                 : 'w-full top-12 left-0'
             }`}
+            style={{ 
+              pointerEvents: minimized ? 'none' : 'auto',
+              zIndex: 15  // UI 오버레이보다 높게 설정
+            }}
           >
             <YouTube
               key={videoList[selectedVideoIdx].videoId}
@@ -1155,11 +1211,21 @@ function ChatRoom() {
           {/* UI 오버레이 */}
           <div className={`relative z-10 ${minimized ? 'w-full h-full' : 'p-3'}`}>
             {minimized ? (
-              // 최소화된 상태 - 오버레이
-              <div className="w-full h-full relative bg-blue-500 bg-opacity-80 flex items-center justify-center rounded-xl">
+              // 최소화된 상태 - 깔끔한 아이콘만 (드래그 가능)
+              <div 
+                className="w-full h-full relative bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center rounded-xl shadow-lg"
+                style={{ cursor: dragging ? 'grabbing' : 'grab' }}
+                onMouseDown={handleDragStart}
+                onMouseMove={handleDrag}
+                onMouseUp={handleDragEnd}
+                onMouseLeave={handleDragEnd}
+                onTouchStart={handleDragStart}
+                onTouchMove={handleDrag}
+                onTouchEnd={handleDragEnd}
+              >
                 {/* 영상 아이콘 */}
                 <div 
-                  className="text-white text-4xl cursor-pointer hover:scale-110 transition-transform"
+                  className="text-white text-2xl cursor-pointer hover:scale-110 transition-transform"
                   onClick={(e) => {
                     e.stopPropagation();
                     setMinimized(false);
@@ -1187,27 +1253,43 @@ function ChatRoom() {
                 </button>
                 
                 {/* 재생 시간 표시 */}
-                <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white text-xs px-1 py-0.5 text-center rounded-b-xl">
+                <div className="absolute bottom-1 left-1 right-1 bg-black bg-opacity-70 text-white text-xs px-1 py-0.5 text-center rounded">
                   {Math.floor(watchSeconds / 60)}:{(watchSeconds % 60).toString().padStart(2, '0')}
                 </div>
               </div>
             ) : (
               // 확장된 상태
               <div>
-                {/* 상단 버튼들 */}
-                <div className="flex justify-between items-center mb-1">
+                {/* 상단 버튼들 (드래그 핸들 영역) */}
+                <div 
+                  className="flex justify-between items-center mb-1 p-2 -m-2 rounded-t-xl"
+                  style={{ cursor: dragging ? 'grabbing' : 'grab' }}
+                  onMouseDown={handleDragStart}
+                  onMouseMove={handleDrag}
+                  onMouseUp={handleDragEnd}
+                  onMouseLeave={handleDragEnd}
+                  onTouchStart={handleDragStart}
+                  onTouchMove={handleDrag}
+                  onTouchEnd={handleDragEnd}
+                  title="드래그해서 이동"
+                >
                   <button
-                    className="text-lg text-blue-500 hover:text-blue-700 p-1"
+                    className="text-lg text-blue-500 hover:text-blue-700 p-1 z-10"
                     onClick={(e) => {
                       e.stopPropagation();
                       setMinimized(true);
                     }}
                     title="최소화"
+                    style={{ position: 'relative' }}
                   >
                     ➖
                   </button>
+                  
+                  {/* 중앙 여백 (드래그 핸들 영역) */}
+                  <div className="flex-1"></div>
+                  
                   <button
-                    className="text-xl text-gray-400 hover:text-gray-700 p-1"
+                    className="text-xl text-gray-400 hover:text-gray-700 p-1 z-10"
                     onClick={(e) => {
                       e.stopPropagation();
                       setSelectedVideoIdx(null);
@@ -1218,14 +1300,21 @@ function ChatRoom() {
                       }
                     }}
                     title="닫기"
+                    style={{ position: 'relative' }}
                   >
                     ×
                   </button>
                 </div>
                 
-                {/* 영상 공간 */}
-                <div className="mb-2" style={{ height: '200px' }}>
-                  {/* YouTube 플레이어가 여기에 absolute로 위치함 */}
+                {/* 영상 공간 (YouTube 플레이어가 위에 표시됨) */}
+                <div 
+                  className="mb-2" 
+                  style={{ 
+                    height: '200px', 
+                    pointerEvents: 'none'  // 이 영역에서 마우스 이벤트를 YouTube 플레이어로 전달
+                  }}
+                >
+                  {/* YouTube 플레이어가 여기 위에 absolute로 위치함 */}
                 </div>
                 
                 {/* 제목 - 영상 아래로 이동 */}
@@ -1363,6 +1452,24 @@ function ChatRoom() {
           </div>
         </div>
       )}
+
+      {/* 사용자 프로필 모달 */}
+      {showUserProfile && (
+        <UserProfileModal 
+          uid={showUserProfile} 
+          onClose={() => setShowUserProfile(null)} 
+          userNickMap={userNickMap}
+        />
+      )}
+
+      {/* Hidden file input for React-style file upload */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileInputChange}
+        style={{ display: 'none' }}
+        accept="*/*"
+      />
     </div>
   );
 }

@@ -1,17 +1,58 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
-import { db } from "../firebase";
-import { collection, query, orderBy, onSnapshot, deleteDoc, doc, setDoc, getDocs } from "firebase/firestore";
+import { auth, db } from "../firebase";
+import { collection, query, orderBy, onSnapshot, deleteDoc, doc, setDoc, getDocs, getDoc } from "firebase/firestore";
 
 function ChatRoomHost() {
   const navigate = useNavigate();
   const { roomId } = useParams();
   const [videoList, setVideoList] = useState([]);
   const [videoListState, setVideoListState] = useState([]);
+  const [roomData, setRoomData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // 방장 확인 로직
+  const myEmail = auth.currentUser?.email;
+  const isOwner = roomData && roomData.ownerEmail === myEmail;
+
+  // 채팅방 정보 및 권한 확인
+  useEffect(() => {
+    if (!roomId || !auth.currentUser) return;
+
+    const fetchRoomData = async () => {
+      try {
+        const roomDoc = await getDoc(doc(db, "chatRooms", roomId));
+        if (roomDoc.exists()) {
+          const data = roomDoc.data();
+          setRoomData(data);
+          
+          // 방장이 아니면 접근 차단
+          if (data.ownerEmail !== auth.currentUser.email) {
+            alert("방장만 접근할 수 있습니다.");
+            navigate(`/chat/${roomId}`);
+            return;
+          }
+        } else {
+          alert("채팅방을 찾을 수 없습니다.");
+          navigate("/chat");
+          return;
+        }
+      } catch (error) {
+        console.error("방 정보 확인 오류:", error);
+        alert("방 정보를 확인할 수 없습니다.");
+        navigate(`/chat/${roomId}`);
+        return;
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchRoomData();
+  }, [roomId, navigate]);
 
   // 영상 리스트 실시간 구독
   useEffect(() => {
-    if (!roomId) return;
+    if (!roomId || !isOwner) return;
     const q = query(collection(db, "chatRooms", roomId, "videos"), orderBy("registeredAt", "desc"));
     const unsub = onSnapshot(q, (snapshot) => {
       const list = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
@@ -19,7 +60,23 @@ function ChatRoomHost() {
       setVideoListState(list);
     });
     return () => unsub();
-  }, [roomId]);
+  }, [roomId, isOwner]);
+
+  // 로딩 중이거나 방장이 아닌 경우
+  if (loading) {
+    return (
+      <div className="max-w-md mx-auto bg-white min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
+          <div className="text-gray-600">권한 확인 중...</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isOwner) {
+    return null; // 이미 위에서 리다이렉션 처리됨
+  }
 
   // 영상 삭제
   const handleDeleteVideo = async (videoId) => {

@@ -221,11 +221,6 @@ function Home() {
       room.hashtags?.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase().replace('#', '')))
   );
 
-  // 뒤로가기(채팅방으로 이동) 핸들러
-  const handleBack = () => {
-    navigate('/chat');
-  };
-
   // 채팅방 클릭 시 이동
   const handleRoomClick = (roomId) => {
     navigate(`/chat/${roomId}`);
@@ -411,17 +406,6 @@ function Home() {
       <div className="max-w-2xl mx-auto p-2 space-y-4">
         {/* 헤더 섹션 */}
         <div className="text-center py-4 relative">
-          {/* 뒤로가기 버튼 - 왼쪽 상단에 고정 */}
-          <button 
-            onClick={handleBack} 
-            className="absolute left-0 top-4 p-2 text-gray-600 hover:text-blue-600 rounded-full hover:bg-blue-50 transition-all duration-200 shadow-sm" 
-            aria-label="채팅방으로 이동"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          
           <div className="flex items-center justify-center mb-2">
             <div>
               <h1 className="text-3xl font-bold gradient-text mb-1">UCRA</h1>

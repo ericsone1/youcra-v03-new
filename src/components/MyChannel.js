@@ -32,6 +32,8 @@ function MyChannel() {
   const [loading, setLoading] = useState(false);
   const [myMessages, setMyMessages] = useState([]);
   const fileInputRef = useRef();
+  const nicknameInputRef = useRef();
+  const [isEditingNickname, setIsEditingNickname] = useState(false);
   const navigate = useNavigate();
 
   // 유저 정보 불러오기
@@ -174,6 +176,34 @@ function MyChannel() {
     navigate("/");
   };
 
+  // 닉네임 편집 완료 처리
+  const handleNicknameSubmit = async () => {
+    if (!user) return;
+    setLoading(true);
+    
+    const userData = {
+      nickname: newNickname,
+      profileImage: profile.profileImage,
+      email: user.email,
+      uid: user.uid,
+    };
+    
+    await setDoc(doc(db, "users", user.uid), userData, { merge: true });
+    setProfile(prev => ({ ...prev, nickname: newNickname }));
+    setIsEditingNickname(false);
+    setLoading(false);
+  };
+
+  // Enter 키나 포커스 아웃 시 저장
+  const handleNicknameKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      handleNicknameSubmit();
+    } else if (e.key === 'Escape') {
+      setNewNickname(profile.nickname || "");
+      setIsEditingNickname(false);
+    }
+  };
+
   // 시간 포맷
   function formatTime(timestamp) {
     if (!timestamp) return "";
@@ -256,8 +286,54 @@ function MyChannel() {
         >
           사진 변경
         </button>
-        <div className="text-lg font-bold mb-1">{profile.nickname || "닉네임 없음"}</div>
+        <div className="text-lg font-bold mb-1 flex items-center justify-center gap-2">
+          {isEditingNickname ? (
+            <input
+              ref={nicknameInputRef}
+              type="text"
+              value={newNickname}
+              onChange={(e) => setNewNickname(e.target.value)}
+              onKeyDown={handleNicknameKeyDown}
+              onBlur={handleNicknameSubmit}
+              className="text-lg font-bold text-center bg-transparent border-b-2 border-blue-500 outline-none px-2 py-1 min-w-0"
+              placeholder="닉네임 입력"
+              maxLength={20}
+              autoFocus
+            />
+          ) : (
+            <span>{profile.nickname || "닉네임 없음"}</span>
+          )}
+          <button
+            onClick={() => {
+              if (!isEditingNickname) {
+                setIsEditingNickname(true);
+                setTimeout(() => {
+                  nicknameInputRef.current?.focus();
+                  nicknameInputRef.current?.select();
+                }, 0);
+              }
+            }}
+            className="text-gray-400 hover:text-blue-500 transition-colors p-1"
+            title="닉네임 수정"
+          >
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" 
+              className="w-4 h-4" 
+              fill="none" 
+              viewBox="0 0 24 24" 
+              stroke="currentColor"
+            >
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth={2} 
+                d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" 
+              />
+            </svg>
+          </button>
+        </div>
         <div className="text-gray-500 text-sm mb-2">{profile.email}</div>
+        
         <div className="flex gap-4 text-center mb-4">
           <div>
             <div className="font-bold text-blue-600 text-lg">{profile.point || 0}</div>
@@ -340,8 +416,8 @@ function MyChannel() {
           <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2v-8a2 2 0 012-2h2m10 0V6a4 4 0 00-8 0v2" /></svg>
           <span className="text-xs">채팅방</span>
         </Link>
-        <Link to="/report" className="flex flex-col items-center text-gray-500 hover:text-blue-500">
-          <span className="text-xs">UCRA공구</span>
+        <Link to="/board" className="flex flex-col items-center text-gray-500 hover:text-blue-500">
+          <span className="text-xs">게시판</span>
         </Link>
         <Link to="/my" className="flex flex-col items-center text-blue-500">
           <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 15c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
