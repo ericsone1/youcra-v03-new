@@ -48,7 +48,17 @@ REACT_APP_FIREBASE_PROJECT_ID=your-project-id
 REACT_APP_FIREBASE_STORAGE_BUCKET=your-project-id.appspot.com
 REACT_APP_FIREBASE_MESSAGING_SENDER_ID=your_actual_sender_id
 REACT_APP_FIREBASE_APP_ID=your_actual_app_id
+
+# YouTube API 설정
+REACT_APP_YOUTUBE_API_KEY=your_youtube_api_key
+REACT_APP_GOOGLE_CLIENT_ID=your_google_oauth_client_id
 ```
+
+### 5. Google API 설정
+1. [Google Cloud Console](https://console.cloud.google.com/) 접속
+2. YouTube Data API v3 활성화
+3. OAuth 2.0 클라이언트 ID 생성
+4. 승인된 JavaScript 출처에 도메인 추가
 
 ## 🏗️ 로컬 개발 환경 설정
 
@@ -88,14 +98,42 @@ firebase deploy
 
 - ✅ 실시간 채팅
 - ✅ 사용자 인증 (이메일/비밀번호)
-- ✅ 파일 업로드
+- ✅ 파일 업로드 (이미지, 동영상, 문서)
+- ✅ YouTube 영상 공유 및 플레이어
+- ✅ 시청 인증 시스템
 - ✅ 반응형 UI
 - ✅ PWA 지원
 
+### 🎬 YouTube 시청 인증 조건
+
+UCRA에서는 YouTube 영상 시청 후 팬 인증을 받을 수 있습니다.
+
+**인증 조건:**
+- **3분 이상 영상**: 3분(180초) 시청 시 인증 가능
+- **3분 미만 영상**: 영상을 끝까지 시청해야 인증 가능
+
+**적용 범위:**
+- 홈 페이지 YouTube 플레이어
+- 채팅방 내 팝업 영상 플레이어
+
+**구현 로직:**
+```javascript
+// 인증 가능 여부 판단
+const canCertify = videoDuration > 0 
+  ? (videoDuration >= 180 ? watchSeconds >= 180 : videoEnded)
+  : watchSeconds >= 180;
+```
+
+**사용자 경험:**
+- 짧은 영상(쇼츠, 클립): 완주를 통해 충분한 관심도 인정
+- 긴 영상(일반 콘텐츠): 3분 시청으로 적절한 참여도 인정
+
 ## 🛠️ 기술 스택
 
-- **Frontend**: React, Tailwind CSS
+- **Frontend**: React, Tailwind CSS, Framer Motion
 - **Backend**: Firebase (Firestore, Auth, Storage)
+- **API**: YouTube Data API v3, Google Identity Services
+- **UI Library**: React YouTube, React Modal, React Icons
 - **Deployment**: Firebase Hosting
 - **Testing**: Jest, React Testing Library
 

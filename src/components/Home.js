@@ -42,6 +42,9 @@ function Home() {
   const [roomLikes, setRoomLikes] = useState({}); // 좋아요 상태 관리
   const [visibleRoomsCount, setVisibleRoomsCount] = useState(3); // 표시할 채팅방 수
 
+  // 영상 종료 상태 추가
+  const [videoEnded, setVideoEnded] = useState(false);
+
   useEffect(() => {
     async function fetchVideos() {
       setLoading(true);
@@ -246,26 +249,38 @@ function Home() {
   };
 
   // 영상 선택 시 좋아요 상태 초기화
-  useEffect(() => {
-    // 타이머 정리 (변수명 통일)
-    if (playerRef.current?._timer) {
-      clearInterval(playerRef.current._timer);
-      playerRef.current._timer = null;
-    }
-    
-    setLiked(false);
-    setWatchSeconds(0);
-    setVideoCompleted(false);
-    setFanCertified(false);
-    
-    if (selectedVideoId) {
-      const video = videos.find(v => v.id === selectedVideoId);
-      setLikeCount(video ? Number(video.statistics.likeCount || 0) : 0);
-      currentVideoRef.current = selectedVideoId;
+  const handleVideoSelect = (videoId) => {
+    if (videoId === selectedVideoId) {
+      setSelectedVideoId(null);
+      setWatchSeconds(0);
+      setVideoEnded(false);
+      setLiked(false);
+      setLikeCount(0);
+      setFanCertified(false);
+      
+      // 타이머 정리
+      if (playerRef.current?._timer) {
+        clearInterval(playerRef.current._timer);
+        playerRef.current._timer = null;
+      }
     } else {
-      currentVideoRef.current = null;
+      setSelectedVideoId(videoId);
+      setWatchSeconds(0);
+      setVideoEnded(false);
+      setLiked(false);
+      setFanCertified(false);
+      
+      // 선택된 영상의 좋아요 수 설정
+      const video = videos.find(v => v.id === videoId);
+      setLikeCount(video ? Number(video.statistics.likeCount || 0) : 0);
+      
+      // 타이머 정리
+      if (playerRef.current?._timer) {
+        clearInterval(playerRef.current._timer);
+        playerRef.current._timer = null;
+      }
     }
-  }, [selectedVideoId]);
+  };
 
   // 플레이어 핸들러 - 단순화
   const handleYoutubeReady = (event) => {
@@ -315,10 +330,20 @@ function Home() {
     }
   };
 
+  // 영상 종료 핸들러 추가
+  const handleYoutubeEnd = () => {
+    // 영상 종료 시 타이머 정리
+    if (playerRef.current?._timer) {
+      clearInterval(playerRef.current._timer);
+      playerRef.current._timer = null;
+    }
+    setVideoEnded(true);
+  };
+
   // 팬 인증 핸들러
   const handleFanCertification = () => {
     const canCertify = videoDuration > 0 
-      ? (videoDuration >= 180 ? watchSeconds >= 180 : watchSeconds >= videoDuration)
+      ? (videoDuration >= 180 ? watchSeconds >= 180 : videoEnded)
       : watchSeconds >= 180;
       
     if (canCertify && !fanCertified) {
@@ -572,7 +597,7 @@ function Home() {
                 <motion.div
                   key={video.id}
                   className="card card-hover p-2.5 cursor-pointer"
-                  onClick={() => setSelectedVideoId(selectedVideoId === video.id ? null : video.id)}
+                  onClick={() => handleVideoSelect(video.id)}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.4, delay: idx * 0.1 }}
@@ -657,6 +682,7 @@ function Home() {
                             videoId={video.id}
                             onReady={handleYoutubeReady}
                             onStateChange={handleYoutubeStateChange}
+                            onEnd={handleYoutubeEnd}
                             opts={{
                               width: "100%",
                               height: "200",
@@ -712,7 +738,7 @@ function Home() {
                             {/* 시청인증 가능 상태 표시 */}
                             {(() => {
                               const canCertify = videoDuration > 0 
-                                ? (videoDuration >= 180 ? watchSeconds >= 180 : watchSeconds >= videoDuration)
+                                ? (videoDuration >= 180 ? watchSeconds >= 180 : videoEnded)
                                 : watchSeconds >= 180;
                               return canCertify && (
                                 <div className="flex items-center text-green-600 text-sm font-medium">
@@ -770,7 +796,7 @@ function Home() {
                               }}
                               disabled={(() => {
                                 const canCertify = videoDuration > 0 
-                                  ? (videoDuration >= 180 ? watchSeconds >= 180 : watchSeconds >= videoDuration)
+                                  ? (videoDuration >= 180 ? watchSeconds >= 180 : videoEnded)
                                   : watchSeconds >= 180;
                                 return !canCertify || fanCertified;
                               })()}
@@ -780,7 +806,7 @@ function Home() {
                                   ? 'bg-green-500 text-white shadow-lg cursor-default' 
                                   : (() => {
                                       const canCertify = videoDuration > 0 
-                                        ? (videoDuration >= 180 ? watchSeconds >= 180 : watchSeconds >= videoDuration)
+                                        ? (videoDuration >= 180 ? watchSeconds >= 180 : videoEnded)
                                         : watchSeconds >= 180;
                                       return canCertify
                                         ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg hover:shadow-xl transform hover:scale-105'

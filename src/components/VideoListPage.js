@@ -69,23 +69,29 @@ function VideoListPage() {
       )}
       <div className="flex flex-col gap-4">
         {videoList.map((video) => (
-          <div key={video.id} className="border rounded-lg p-2 bg-gray-50 shadow flex items-center gap-4">
+          <div 
+            key={video.id} 
+            className="border rounded-lg p-2 bg-gray-50 shadow flex items-center gap-4 cursor-pointer hover:bg-blue-50 hover:shadow-md transition-all duration-200 hover:scale-[1.02]"
+            onClick={() => navigate(`/chat/${roomId}?video=${video.id}`)}
+          >
             <img src={video.thumbnail} alt="썸네일" className="w-32 h-20 object-cover rounded" />
             <div className="flex-1 min-w-0">
               <div className="font-bold text-base truncate">{video.title}</div>
               <div className="text-xs text-gray-500">{video.channel}</div>
               <div className="text-xs text-gray-400">등록자: {video.registeredBy}</div>
             </div>
-            {certifiedIds.includes(video.id) ? (
-              <span className="bg-green-500 text-white text-xs px-2 py-1 rounded font-bold">시청 완료</span>
-            ) : (
-              <button
-                className="bg-blue-500 text-white text-xs px-2 py-1 rounded font-bold hover:bg-blue-600"
-                onClick={() => navigate(`/chat/${roomId}?video=${video.id}`)}
-              >
-                시청하기
-              </button>
-            )}
+            <div className="flex flex-col items-center gap-1">
+              {certifiedIds.includes(video.id) ? (
+                <div className="bg-green-500 text-white text-xs px-2 py-1 rounded font-bold pointer-events-none">
+                  시청 완료 ✅
+                </div>
+              ) : (
+                <div className="bg-blue-500 text-white text-xs px-2 py-1 rounded font-bold pointer-events-none">
+                  시청하기
+                </div>
+              )}
+              <div className="text-[10px] text-gray-400 text-center">터치해서 재생</div>
+            </div>
           </div>
         ))}
       </div>
