@@ -218,8 +218,10 @@ function Home() {
       room.hashtags?.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase().replace('#', '')))
   );
 
-  // 뒤로가기(검색 초기화) 핸들러
-  const handleBack = () => setSearchQuery("");
+  // 뒤로가기(채팅방으로 이동) 핸들러
+  const handleBack = () => {
+    navigate('/chat');
+  };
 
   // 채팅방 클릭 시 이동
   const handleRoomClick = (roomId) => {
@@ -315,9 +317,13 @@ function Home() {
 
   // 팬 인증 핸들러
   const handleFanCertification = () => {
-    if (videoCompleted && !fanCertified) {
+    const canCertify = videoDuration > 0 
+      ? (videoDuration >= 180 ? watchSeconds >= 180 : watchSeconds >= videoDuration)
+      : watchSeconds >= 180;
+      
+    if (canCertify && !fanCertified) {
       setFanCertified(true);
-      alert('🎉 팬 인증이 완료되었습니다! 크리에이터를 응원해주셔서 감사합니다.');
+      alert('🎉 시청인증이 완료되었습니다! 크리에이터를 응원해주셔서 감사합니다.');
     }
   };
 
@@ -377,55 +383,55 @@ function Home() {
           display: none;
         }
       `}</style>
-      <div className="max-w-2xl mx-auto p-4 space-y-6">
+      <div className="max-w-2xl mx-auto p-2 space-y-4">
         {/* 헤더 섹션 */}
-        <div className="text-center py-8">
-          <div className="flex items-center justify-center mb-4">
+        <div className="text-center py-4 relative">
+          {/* 뒤로가기 버튼 - 왼쪽 상단에 고정 */}
+          <button 
+            onClick={handleBack} 
+            className="absolute left-0 top-4 p-2 text-gray-600 hover:text-blue-600 rounded-full hover:bg-blue-50 transition-all duration-200 shadow-sm" 
+            aria-label="채팅방으로 이동"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          
+          <div className="flex items-center justify-center mb-2">
             <div>
-              <h1 className="text-4xl font-bold gradient-text mb-2">UCRA</h1>
-              <p className="text-gray-600">유튜브 크리에이터들의 공간</p>
+              <h1 className="text-3xl font-bold gradient-text mb-1">UCRA</h1>
+              <p className="text-gray-600 text-sm">유튜브 크리에이터들의 공간</p>
             </div>
           </div>
         </div>
 
         {/* 실시간 인기 채팅방 순위 박스 */}
         <motion.div 
-          className="card card-hover p-6"
+          className="card card-hover p-4"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
         >
-          <div className="flex items-center mb-4">
-            {searchQuery ? (
-              <button 
-                onClick={handleBack} 
-                className="mr-3 p-2 text-gray-600 hover:text-blue-600 rounded-full hover:bg-blue-50 transition-all duration-200" 
-                aria-label="뒤로가기"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-            ) : null}
-            <h2 className="text-2xl font-bold text-center flex-1 flex items-center justify-center">
+          <div className="flex items-center mb-3 justify-center">
+            <h2 className="text-xl font-bold text-center flex items-center justify-center">
               <span className="mr-2">🔥</span>
               실시간 인기 채팅방
             </h2>
           </div>
           
           {/* 검색창 */}
-          <div className="relative mb-6">
+          <div className="relative mb-4">
             <input
               type="text"
               placeholder="채팅방 이름, 키워드, #해시태그 검색..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               onKeyDown={handleSearchKeyDown}
-              className="w-full p-4 pr-12 border border-gray-200 rounded-2xl focus:ring-4 focus:ring-blue-100 focus:border-blue-500 transition-all duration-200 bg-gray-50 focus:bg-white"
+              className="w-full p-3 pr-12 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all duration-200 bg-gray-50 focus:bg-white text-sm"
             />
             <button 
               onClick={handleSearch}
-              className="absolute right-4 top-1/2 transform -translate-y-1/2 hover:text-blue-600 transition-colors duration-200"
+              className="absolute right-3 top-1/2 transform -translate-y-1/2 hover:text-blue-600 transition-colors duration-200 p-1"
               aria-label="검색"
             >
               <svg className="w-5 h-5 text-gray-400 hover:text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -441,18 +447,18 @@ function Home() {
               <p className="text-gray-500">채팅방 불러오는 중...</p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {(searchQuery ? filteredChatRooms : chatRooms).slice(0, visibleRoomsCount).map((room, idx) => (
                 <motion.button
                   key={room.id}
-                  className="w-full flex items-center gap-4 hover:bg-blue-50 rounded-xl px-4 py-3 transition-all duration-200 text-left"
+                  className="w-full flex items-center gap-3 hover:bg-blue-50 rounded-lg px-3 py-2 transition-all duration-200 text-left"
                   onClick={() => handleRoomClick(room.id)}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                 >
-                  <div className="flex flex-col items-center min-w-[60px]">
+                  <div className="flex flex-col items-center min-w-[50px]">
                     <span className={`
-                      font-bold text-sm w-10 h-8 rounded-full flex items-center justify-center text-white shadow-md
+                      font-bold text-xs w-8 h-6 rounded-full flex items-center justify-center text-white shadow-md
                       ${idx === 0 ? 'bg-gradient-to-r from-amber-400 to-orange-500' : 
                         idx === 1 ? 'bg-gradient-to-r from-blue-400 to-indigo-500' : 
                         idx === 2 ? 'bg-gradient-to-r from-emerald-400 to-teal-500' : 
@@ -546,16 +552,16 @@ function Home() {
 
         {/* 실시간 시청순위 리스트 */}
         <motion.div 
-          className="space-y-4"
+          className="space-y-3"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.2 }}
         >
-          <h3 className="text-xl font-bold text-gray-800 mb-4 text-center">
+          <h3 className="text-lg font-bold text-gray-800 mb-3 text-center">
             📺 실시간 UCRA 시청순위
           </h3>
           
-          <div className="space-y-4">
+          <div className="space-y-3">
             {filteredVideos.slice(0, visibleCount).map((video, idx) => {
               const viewCount = Number(video.statistics.viewCount).toLocaleString();
               const likeCountDisplay = Number(video.statistics.likeCount || 0).toLocaleString();
@@ -565,7 +571,7 @@ function Home() {
               return (
                 <motion.div
                   key={video.id}
-                  className="card card-hover p-3 cursor-pointer"
+                  className="card card-hover p-2.5 cursor-pointer"
                   onClick={() => setSelectedVideoId(selectedVideoId === video.id ? null : video.id)}
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -573,11 +579,11 @@ function Home() {
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                 >
-                  <div className="flex gap-3 items-start">
-                    {/* 순위 배지 - 작고 세련되게 */}
-                    <div className="flex flex-col items-center min-w-[40px] mt-1">
+                  <div className="flex gap-2.5 items-start">
+                    {/* 순위 배지 - 더 작게 */}
+                    <div className="flex flex-col items-center min-w-[35px] mt-1">
                       <div className={`
-                        w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-md
+                        w-6 h-6 rounded-full flex items-center justify-center text-white font-bold text-xs shadow-md
                         ${idx === 0 ? 'bg-gradient-to-br from-amber-400 to-orange-500' : 
                           idx === 1 ? 'bg-gradient-to-br from-blue-400 to-indigo-500' : 
                           idx === 2 ? 'bg-gradient-to-br from-emerald-400 to-teal-500' : 
@@ -595,37 +601,37 @@ function Home() {
                       )}
                     </div>
                     
-                    {/* 썸네일 - 크게 키우기 */}
+                    {/* 썸네일 - 조금 작게 */}
                     <div className="relative">
                       <img
                         src={video.snippet.thumbnails.medium.url}
                         alt={video.snippet.title}
-                        className="w-36 h-20 object-cover rounded-xl shadow-lg"
+                        className="w-32 h-18 object-cover rounded-lg shadow-lg"
                       />
-                      <div className="absolute inset-0 bg-black bg-opacity-20 rounded-xl flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity duration-200">
-                        <svg className="w-8 h-8 text-white drop-shadow-lg" fill="currentColor" viewBox="0 0 20 20">
+                      <div className="absolute inset-0 bg-black bg-opacity-20 rounded-lg flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity duration-200">
+                        <svg className="w-6 h-6 text-white drop-shadow-lg" fill="currentColor" viewBox="0 0 20 20">
                           <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
                         </svg>
                       </div>
                     </div>
                     
-                    {/* 정보 - 제목을 더 강조 */}
+                    {/* 정보 - 더 컴팩트하게 */}
                     <div className="flex-1 min-w-0">
-                      <h4 className="font-semibold text-gray-900 line-clamp-2 mb-1 leading-snug text-base">
+                      <h4 className="font-semibold text-gray-900 line-clamp-2 mb-1 leading-tight text-sm">
                         {video.snippet.title}
                       </h4>
-                      <p className="text-xs text-gray-500 mb-2 truncate font-medium">{video.snippet.channelTitle}</p>
+                      <p className="text-xs text-gray-500 mb-1.5 truncate font-medium">{video.snippet.channelTitle}</p>
                       
                       {/* 통계 - 더 컴팩트하게 */}
-                      <div className="flex items-center gap-3 text-xs">
+                      <div className="flex items-center gap-2.5 text-xs">
                         <div className="flex items-center text-red-500">
-                          <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                          <svg className="w-3 h-3 mr-0.5" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd" />
                           </svg>
                           <span className="font-semibold">{likeCountDisplay}</span>
                         </div>
                         <div className="flex items-center text-indigo-500">
-                          <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                          <svg className="w-3 h-3 mr-0.5" fill="currentColor" viewBox="0 0 20 20">
                             <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
                             <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
                           </svg>
@@ -643,9 +649,9 @@ function Home() {
                         animate={{ opacity: 1, height: "auto" }}
                         exit={{ opacity: 0, height: 0 }}
                         transition={{ duration: 0.3 }}
-                        className="mt-4"
+                        className="mt-3"
                       >
-                        <div className="rounded-xl shadow-lg">
+                        <div className="rounded-lg shadow-lg">
                           <YouTube
                             key={video.id}
                             videoId={video.id}
@@ -653,7 +659,7 @@ function Home() {
                             onStateChange={handleYoutubeStateChange}
                             opts={{
                               width: "100%",
-                              height: "270",
+                              height: "200",
                               playerVars: {
                                 autoplay: 1,
                                 controls: 1,
@@ -664,10 +670,19 @@ function Home() {
                           />
                         </div>
                         
+                        {/* 안내 문구 */}
+                        <div className="mt-1 text-center">
+                          <p className="text-xs text-gray-500">
+                            💡 {videoDuration > 0 && videoDuration < 180 
+                              ? `영상을 끝까지 시청하면 버튼이 활성화됩니다.` 
+                              : `3분 이상 시청하면 버튼이 활성화됩니다.`}
+                          </p>
+                        </div>
+                        
                         {/* 시청 시간 및 좋아요 */}
-                        <div className="mt-4 p-4 bg-gray-50 rounded-xl space-y-4">
+                        <div className="mt-2 p-3 bg-gray-50 rounded-lg space-y-2">
                           {/* 시청 진행률 */}
-                          <div className="space-y-2">
+                          <div className="space-y-1.5">
                             <div className="flex items-center justify-between text-sm">
                               <span className="text-gray-600">
                                 시청 시간: <span className="font-bold text-blue-600">{watchSeconds}초</span>
@@ -694,15 +709,20 @@ function Home() {
                               </div>
                             )}
                             
-                            {/* 완시청 상태 표시 */}
-                            {videoCompleted && (
-                              <div className="flex items-center text-green-600 text-sm font-medium">
-                                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                                </svg>
-                                완시청 완료!
-                              </div>
-                            )}
+                            {/* 시청인증 가능 상태 표시 */}
+                            {(() => {
+                              const canCertify = videoDuration > 0 
+                                ? (videoDuration >= 180 ? watchSeconds >= 180 : watchSeconds >= videoDuration)
+                                : watchSeconds >= 180;
+                              return canCertify && (
+                                <div className="flex items-center text-green-600 text-sm font-medium">
+                                  <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                  </svg>
+                                  시청인증 가능!
+                                </div>
+                              );
+                            })()}
                           </div>
                           
                           {/* 버튼들 */}
@@ -742,20 +762,30 @@ function Home() {
                               <span className="font-semibold">{likeCount.toLocaleString()}</span>
                             </button>
                             
-                            {/* 팬 인증 버튼 */}
+                            {/* 시청인증 버튼 */}
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleFanCertification();
                               }}
-                              disabled={!videoCompleted || fanCertified}
+                              disabled={(() => {
+                                const canCertify = videoDuration > 0 
+                                  ? (videoDuration >= 180 ? watchSeconds >= 180 : watchSeconds >= videoDuration)
+                                  : watchSeconds >= 180;
+                                return !canCertify || fanCertified;
+                              })()}
                               className={`
                                 flex items-center space-x-2 px-4 py-2 rounded-full transition-all duration-200 flex-1
                                 ${fanCertified 
                                   ? 'bg-green-500 text-white shadow-lg cursor-default' 
-                                  : videoCompleted 
-                                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg hover:shadow-xl transform hover:scale-105' 
-                                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                  : (() => {
+                                      const canCertify = videoDuration > 0 
+                                        ? (videoDuration >= 180 ? watchSeconds >= 180 : watchSeconds >= videoDuration)
+                                        : watchSeconds >= 180;
+                                      return canCertify
+                                        ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg hover:shadow-xl transform hover:scale-105'
+                                        : 'bg-gray-200 text-gray-400 cursor-not-allowed';
+                                    })()
                                 }
                               `}
                             >
@@ -771,9 +801,7 @@ function Home() {
                                   <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                                     <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                                   </svg>
-                                  <span className="font-semibold">
-                                    {videoCompleted ? '팬 인증' : '완시청 필요'}
-                                  </span>
+                                  <span className="font-semibold">시청인증 좋아요</span>
                                 </>
                               )}
                             </button>
@@ -790,14 +818,14 @@ function Home() {
           {/* 더보기 버튼 */}
           {visibleCount < filteredVideos.length && (
             <motion.div 
-              className="text-center pt-6"
+              className="text-center pt-4"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.6, delay: 0.4 }}
             >
               <button
                 onClick={() => setVisibleCount(prev => prev + 5)}
-                className="btn-secondary"
+                className="btn-secondary text-sm py-2 px-4"
               >
                 더 많은 영상 보기 ({filteredVideos.length - visibleCount}개 남음)
               </button>

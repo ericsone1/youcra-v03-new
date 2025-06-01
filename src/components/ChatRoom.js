@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { auth, db } from "../firebase";
+import { auth, db, storage } from "../firebase";
 import {
   collection,
   addDoc,
@@ -15,6 +15,7 @@ import {
   getDocs,
   where,
 } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 // import Picker from '@emoji-mart/react';
 // import data from '@emoji-mart/data';
 import YouTube from 'react-youtube';
@@ -189,6 +190,11 @@ function ChatRoom() {
   const [roomLiked, setRoomLiked] = useState(false);
   const [roomLikesCount, setRoomLikesCount] = useState(0);
 
+  // 파일 업로드 관련 state 추가
+  const [showUploadMenu, setShowUploadMenu] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
+
   // 비로그인 접근 제한
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
@@ -223,6 +229,22 @@ function ChatRoom() {
       }
     });
   }, [roomId, auth.currentUser]);
+
+  // 현재 사용자 닉네임 가져오기
+  useEffect(() => {
+    if (!auth.currentUser) return;
+    const fetchCurrentUserNick = async () => {
+      const userDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
+      if (userDoc.exists()) {
+        const nickname = userDoc.data().nickname || auth.currentUser.email?.split("@")[0] || "나";
+        setUserNickMap(prev => ({
+          ...prev,
+          [auth.currentUser.uid]: nickname
+        }));
+      }
+    };
+    fetchCurrentUserNick();
+  }, [auth.currentUser]);
 
   // 메시지 실시간 구독 + 닉네임 매핑 (joinedAt 이후 메시지만)
   useEffect(() => {
@@ -434,6 +456,136 @@ function ChatRoom() {
     setNewMsg((prev) => prev + emoji.native);
     setShowEmoji(false);
     inputRef.current?.focus();
+  };
+
+  // 파일 업로드 함수들 추가
+  const handleFileSelect = (type) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    
+    switch(type) {
+      case 'image':
+        input.accept = 'image/*';
+        break;
+      case 'video':
+        input.accept = 'video/*';
+        break;
+      case 'file':
+        input.accept = '*/*';
+        break;
+    }
+    
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        handleFileUpload(file, type);
+      }
+    };
+    
+    input.click();
+    setShowUploadMenu(false);
+  };
+
+  const handleFileUpload = async (file, type) => {
+    if (!file) return;
+    
+    // 파일 크기 제한 (10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      alert('파일 크기는 10MB 이하만 업로드 가능합니다.');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      // Firebase Storage에 파일 업로드
+      const timestamp = Date.now();
+      const fileName = `${timestamp}_${file.name}`;
+      const storageRef = ref(storage, `chatrooms/${roomId}/${fileName}`);
+      
+      const snapshot = await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      
+      // 메시지로 파일 정보 저장
+      await addDoc(collection(db, "chatRooms", roomId, "messages"), {
+        fileType: type,
+        fileName: file.name,
+        fileUrl: downloadURL,
+        fileSize: file.size,
+        email: auth.currentUser.email,
+        createdAt: serverTimestamp(),
+        uid: auth.currentUser.uid,
+        photoURL: auth.currentUser.photoURL || "",
+      });
+      
+    } catch (error) {
+      console.error('파일 업로드 중 오류:', error);
+      alert('파일 업로드 중 오류가 발생했습니다.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // 파일 크기를 읽기 쉽게 변환하는 함수
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  // 메시지 렌더링 함수 수정
+  const renderMessage = (msg) => {
+    if (msg.fileType) {
+      // 파일 메시지 렌더링
+      switch (msg.fileType) {
+        case 'image':
+          return (
+            <div className="max-w-xs">
+              <img 
+                src={msg.fileUrl} 
+                alt={msg.fileName}
+                className="rounded-lg max-w-full h-auto cursor-pointer"
+                onClick={() => window.open(msg.fileUrl, '_blank')}
+              />
+              <div className="text-xs text-gray-500 mt-1">{msg.fileName}</div>
+            </div>
+          );
+        case 'video':
+          return (
+            <div className="max-w-xs">
+              <video 
+                src={msg.fileUrl} 
+                controls 
+                className="rounded-lg max-w-full h-auto"
+                style={{ maxHeight: '200px' }}
+              />
+              <div className="text-xs text-gray-500 mt-1">{msg.fileName}</div>
+            </div>
+          );
+        case 'file':
+        default:
+          return (
+            <div className="flex items-center gap-2 p-2 bg-gray-100 rounded-lg max-w-xs">
+              <div className="text-2xl">📎</div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium truncate">{msg.fileName}</div>
+                <div className="text-xs text-gray-500">{formatFileSize(msg.fileSize)}</div>
+              </div>
+              <a 
+                href={msg.fileUrl} 
+                download={msg.fileName}
+                className="text-blue-500 text-sm hover:underline"
+              >
+                다운로드
+              </a>
+            </div>
+          );
+      }
+    } else {
+      // 텍스트 메시지 렌더링
+      return renderMessageWithPreview(msg.text);
+    }
   };
 
   // URL 입력 시 실시간 중복 체크
@@ -669,6 +821,20 @@ function ChatRoom() {
     }
   }, [selectedVideoIdx]);
 
+  // 업로드 메뉴 외부 클릭 시 닫기
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showUploadMenu && !event.target.closest('.upload-menu-container')) {
+        setShowUploadMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showUploadMenu]);
+
   React.useEffect(() => {
     const params = new URLSearchParams(location.search);
     const videoId = params.get('video');
@@ -789,19 +955,25 @@ function ChatRoom() {
               <div className={`flex ${isMine ? 'justify-end' : 'justify-start'} mb-2`}>
                 {!isMine && (
                   <div className="flex flex-col items-start mr-2">
-                    <div className="text-xs text-gray-500 mb-1 ml-2">{userNickMap[msg.uid] || '익명'}</div>
+                    <div className="text-xs text-gray-500 mb-1 ml-2">{userNickMap[msg.uid] || msg.email?.split('@')[0] || '익명'}</div>
                     <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-400 to-purple-500 flex items-center justify-center text-sm font-medium text-white shadow-md self-end">
-                      {msg.email?.slice(0, 2).toUpperCase() || 'UN'}
+                      {(userNickMap[msg.uid] || msg.email?.split('@')[0] || '익명').slice(0, 2).toUpperCase()}
                     </div>
                   </div>
                 )}
                 <div className={`max-w-[70%] px-3 py-2 rounded-2xl shadow ${isMine ? 'bg-yellow-200 text-right' : 'bg-white text-left'} break-words`}>
-                  <div className="text-sm">{msg.text}</div>
+                  {msg.fileType ? (
+                    <div className="text-left">
+                      {renderMessage(msg)}
+                    </div>
+                  ) : (
+                    <div className="text-sm">{renderMessageWithPreview(msg.text)}</div>
+                  )}
                   <div className="text-[10px] text-gray-400 mt-1 text-right">{formatTime(msg.createdAt).slice(11, 16)}</div>
                 </div>
                 {isMine && (
                   <div className="w-8 h-8 rounded-full bg-gradient-to-r from-green-400 to-blue-500 flex items-center justify-center text-sm font-medium text-white shadow-md ml-2 self-end">
-                    {msg.email?.slice(0, 2).toUpperCase() || 'ME'}
+                    {(userNickMap[auth.currentUser?.uid] || auth.currentUser?.email?.split('@')[0] || '나').slice(0, 2).toUpperCase()}
                   </div>
                 )}
               </div>
@@ -813,7 +985,55 @@ function ChatRoom() {
 
       {/* 메시지 입력창 */}
       <form className="flex items-center px-2 py-2 border-t gap-2 w-full max-w-md mx-auto" style={{ minHeight: 56, position: 'fixed', bottom: 64, left: '50%', transform: 'translateX(-50%)', zIndex: 30, background: '#ccccff' }} onSubmit={handleSend}>
-        <button type="button" className="text-2xl" onClick={() => setShowEmoji(!showEmoji)} aria-label="이모지">😊</button>
+        <div className="relative upload-menu-container">
+          <button 
+            type="button" 
+            className="text-2xl w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center hover:bg-gray-300" 
+            onClick={() => setShowUploadMenu(!showUploadMenu)} 
+            aria-label="파일 업로드"
+            disabled={uploading}
+          >
+            {uploading ? "⏳" : "+"}
+          </button>
+          
+          {/* 업로드 메뉴 */}
+          {showUploadMenu && (
+            <div className="absolute bottom-full left-0 mb-2 bg-white rounded-lg shadow-lg border py-2 z-50">
+              <button
+                type="button"
+                className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 w-full text-left"
+                onClick={() => handleFileSelect('image')}
+              >
+                <span className="text-lg">🖼️</span>
+                <span className="text-sm">사진</span>
+              </button>
+              <button
+                type="button"
+                className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 w-full text-left"
+                onClick={() => handleFileSelect('video')}
+              >
+                <span className="text-lg">🎬</span>
+                <span className="text-sm">동영상</span>
+              </button>
+              <button
+                type="button"
+                className="flex items-center gap-2 px-4 py-2 hover:bg-gray-100 w-full text-left"
+                onClick={() => handleFileSelect('file')}
+              >
+                <span className="text-lg">📎</span>
+                <span className="text-sm">파일</span>
+              </button>
+            </div>
+          )}
+          
+          {/* 업로드 중 안내 */}
+          {uploading && (
+            <div className="absolute bottom-full left-0 mb-2 bg-blue-500 text-white px-3 py-1 rounded text-xs whitespace-nowrap">
+              파일 업로드 중...
+            </div>
+          )}
+        </div>
+        
         <input
           ref={inputRef}
           className="flex-1 border rounded-2xl px-3 py-2 text-base outline-none bg-gray-100"
@@ -827,7 +1047,7 @@ function ChatRoom() {
         <button
           type="submit"
           className="bg-blue-500 text-white px-4 py-2 rounded-2xl font-bold shadow disabled:opacity-50"
-          disabled={sending || !newMsg.trim()}
+          disabled={sending || (!newMsg.trim() && !uploading)}
         >
           전송
         </button>
@@ -840,13 +1060,6 @@ function ChatRoom() {
         <button className="flex flex-col items-center text-gray-500 hover:text-blue-500 text-sm font-bold focus:outline-none" onClick={() => navigate('/tools')}>🛒<span>UCRA공구</span></button>
         <button className="flex flex-col items-center text-gray-500 hover:text-blue-500 text-sm font-bold focus:outline-none" onClick={() => navigate('/my')}>👤<span>마이채널</span></button>
       </nav>
-
-      {/* 이모지 패널이 있다면 절대 위치로 */}
-      {showEmoji && (
-        <div className="absolute bottom-32 left-0 right-0 max-w-md mx-auto z-50">
-          {/* 이모지 패널 내용 */}
-        </div>
-      )}
 
       {/* 드래그 가능한 영상 팝업 플레이어 */}
       {selectedVideoIdx !== null && videoList[selectedVideoIdx] && (
