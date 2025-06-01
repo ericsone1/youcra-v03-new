@@ -7,11 +7,31 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 function ChatRoomCreate() {
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
+  const [hashtags, setHashtags] = useState("");
   const [thumbnail, setThumbnail] = useState(null);
   const [thumbnailPreview, setThumbnailPreview] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const navigate = useNavigate();
+
+  // 해시태그 파싱 함수
+  const parseHashtags = (text) => {
+    const hashtagRegex = /#[\w가-힣]+/g;
+    const matches = text.match(hashtagRegex);
+    return matches ? matches.map(tag => tag.substring(1).toLowerCase()) : [];
+  };
+
+  // 해시태그 입력 처리
+  const handleHashtagChange = (e) => {
+    const value = e.target.value;
+    setHashtags(value);
+  };
+
+  // 해시태그 추천 목록
+  const popularHashtags = [
+    "게임", "음악", "영화", "드라마", "애니", "먹방", "여행", "일상", 
+    "스포츠", "공부", "취업", "연애", "친구", "힐링", "수다", "토론"
+  ];
 
   // 썸네일 이미지 업로드 핸들러
   const handleThumbnailChange = (e) => {
@@ -19,6 +39,15 @@ function ChatRoomCreate() {
     if (file) {
       setThumbnail(file);
       setThumbnailPreview(URL.createObjectURL(file));
+    }
+  };
+
+  // 추천 해시태그 클릭 시 추가
+  const addRecommendedHashtag = (tag) => {
+    const currentTags = parseHashtags(hashtags);
+    if (!currentTags.includes(tag.toLowerCase())) {
+      const newHashtags = hashtags + (hashtags ? " " : "") + "#" + tag;
+      setHashtags(newHashtags);
     }
   };
 
@@ -34,9 +63,14 @@ function ChatRoomCreate() {
         await uploadBytes(storageRef, thumbnail);
         thumbnailUrl = await getDownloadURL(storageRef);
       }
+
+      // 해시태그 파싱
+      const parsedHashtags = parseHashtags(hashtags);
+
       const docRef = await addDoc(collection(db, "chatRooms"), {
         name: name.trim(),
         desc: desc.trim(),
+        hashtags: parsedHashtags, // 해시태그 배열 추가
         profileImage: thumbnailUrl,
         createdAt: serverTimestamp(),
         createdBy: auth.currentUser?.uid || "anonymous",
@@ -91,18 +125,68 @@ function ChatRoomCreate() {
           />
           <div className="text-xs text-gray-400 text-right">{name.length}/30</div>
         </div>
+        
         <div>
           <textarea
             className="w-full border rounded-lg px-3 py-2 text-base mb-1"
-            placeholder={"어떤 사람과 대화하고 싶으신가요?\n지켜야 할 규칙, 공지 사항 등을 안내해 주세요.\n#태그를 입력하면 관심사가 비슷한 사람에게 발견돼요."}
+            placeholder={"어떤 사람과 대화하고 싶으신가요?\n지켜야 할 규칙, 공지 사항 등을 안내해 주세요."}
             value={desc}
             onChange={e => setDesc(e.target.value)}
             maxLength={200}
-            rows={4}
+            rows={3}
             disabled={loading}
           />
           <div className="text-xs text-gray-400 text-right">{desc.length}/200</div>
         </div>
+
+        {/* 해시태그 입력 필드 */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            🏷️ 해시태그 (관심사나 주제를 입력해주세요)
+          </label>
+          <input
+            className="w-full border rounded-lg px-3 py-2 text-base mb-2"
+            placeholder="#게임 #음악 #일상 (띄어쓰기로 구분)"
+            value={hashtags}
+            onChange={handleHashtagChange}
+            maxLength={100}
+            disabled={loading}
+          />
+          <div className="text-xs text-gray-400 text-right mb-3">{hashtags.length}/100</div>
+          
+          {/* 현재 입력된 해시태그 미리보기 */}
+          {hashtags && (
+            <div className="mb-3">
+              <div className="text-xs text-gray-600 mb-1">입력된 태그:</div>
+              <div className="flex flex-wrap gap-1">
+                {parseHashtags(hashtags).map((tag, idx) => (
+                  <span key={idx} className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 추천 해시태그 */}
+          <div>
+            <div className="text-xs text-gray-600 mb-2">인기 태그:</div>
+            <div className="flex flex-wrap gap-1">
+              {popularHashtags.map((tag, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => addRecommendedHashtag(tag)}
+                  className="bg-gray-100 hover:bg-blue-100 text-gray-700 hover:text-blue-800 px-2 py-1 rounded-full text-xs transition-colors duration-200"
+                  disabled={loading}
+                >
+                  #{tag}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
         {error && <div className="text-red-500 text-sm mb-2">{error}</div>}
         <button
           type="submit"

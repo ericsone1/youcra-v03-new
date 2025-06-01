@@ -11,6 +11,7 @@ import {
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { Link, useNavigate } from "react-router-dom";
+import GoogleAuth from "./GoogleAuth";
 
 function MyChannel() {
   const user = auth.currentUser;
@@ -195,12 +196,37 @@ function MyChannel() {
   if (!user) {
     return (
       <div className="max-w-sm mx-auto p-8 flex flex-col items-center bg-white rounded-2xl shadow mt-8">
-        <h2 className="text-2xl font-bold mb-4">마이채널</h2>
+        <h2 className="text-2xl font-bold mb-6">마이채널</h2>
+        
+        <div className="mb-4 text-center">
+          <p className="text-gray-600 mb-4">
+            마이채널을 이용하려면 로그인이 필요합니다
+          </p>
+        </div>
+
+        {/* Google 로그인 */}
+        <div className="mb-4">
+          <GoogleAuth onAuthChange={(isSignedIn, userData) => {
+            if (isSignedIn) {
+              console.log('Google 로그인 성공:', userData);
+              // 필요시 추가 처리
+            }
+          }} />
+        </div>
+
+        {/* 또는 구분선 */}
+        <div className="flex items-center w-full my-4">
+          <hr className="flex-1 border-gray-300" />
+          <span className="px-3 text-gray-500 text-sm">또는</span>
+          <hr className="flex-1 border-gray-300" />
+        </div>
+
+        {/* 기존 로그인 링크 */}
         <Link
           to="/login"
-          className="bg-blue-500 text-white px-4 py-2 rounded font-bold hover:bg-blue-600 shadow"
+          className="bg-blue-500 text-white px-6 py-3 rounded-lg font-bold hover:bg-blue-600 shadow transition-all duration-200"
         >
-          로그인
+          이메일로 로그인
         </Link>
       </div>
     );

@@ -1,22 +1,17 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../../hooks/useAuth';
+import { useAuth } from '../../contexts/AuthContext';
 import { LoadingSpinner } from './LoadingSpinner';
-import { ErrorMessage } from './ErrorMessage';
 
 export function ProtectedRoute({ children }) {
-  const { user, loading, error } = useAuth();
+  const { currentUser, loading } = useAuth();
   const location = useLocation();
 
   if (loading) {
     return <LoadingSpinner fullScreen />;
   }
 
-  if (error) {
-    return <ErrorMessage message={error} fullScreen />;
-  }
-
-  if (!user) {
+  if (!currentUser) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 

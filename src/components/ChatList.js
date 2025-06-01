@@ -24,11 +24,19 @@ function ChatList() {
   const [activeTab, setActiveTab] = useState("내 채팅방");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newRoomName, setNewRoomName] = useState("");
+  const [newRoomHashtags, setNewRoomHashtags] = useState("");
   const [creating, setCreating] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(5);
+  const [visibleCount, setVisibleCount] = useState(10);
   const [myRoomsVisibleCount, setMyRoomsVisibleCount] = useState(5);
   const [joinedRoomsVisibleCount, setJoinedRoomsVisibleCount] = useState(5);
   const navigate = useNavigate();
+
+  // 해시태그 파싱 함수
+  const parseHashtags = (text) => {
+    const hashtagRegex = /#[\w가-힣]+/g;
+    const matches = text.match(hashtagRegex);
+    return matches ? matches.map(tag => tag.substring(1).toLowerCase()) : [];
+  };
 
   useEffect(() => {
     const q = query(collection(db, "chatRooms"), orderBy("createdAt", "desc"));
@@ -39,6 +47,24 @@ function ChatList() {
         console.log("Processing room:", room.id);
 
         try {
+          // 더미 해시태그 추가 (기존 해시태그가 없는 경우)
+          if (!room.hashtags || room.hashtags.length === 0) {
+            const dummyHashtags = [
+              ["게임", "롤", "팀원모집"],
+              ["음악", "힙합", "수다"],
+              ["먹방", "맛집", "일상"],
+              ["영화", "드라마", "토론"],
+              ["스포츠", "축구", "응원"],
+              ["공부", "취업", "정보공유"],
+              ["여행", "맛집", "추천"],
+              ["애니", "웹툰", "덕후"],
+              ["연애", "고민", "상담"],
+              ["힐링", "일상", "소통"]
+            ];
+            const randomIndex = Math.floor(Math.random() * dummyHashtags.length);
+            room.hashtags = dummyHashtags[randomIndex];
+          }
+
           // 1. 메시지 정보 가져오기
           const msgQ = query(
             collection(db, "chatRooms", room.id, "messages"),
@@ -86,7 +112,8 @@ function ChatList() {
           // 5. UI 관련 속성 설정
           room.likes = Math.floor(Math.random() * 100) + 10;
           room.title = room.name || room.title || "";
-          room.desc = room.lastMsgText || "채팅방에 참여해보세요!";
+          room.desc = room.desc || "새로운 채팅방입니다. 함께 이야기해요!";
+          room.lastMsgDisplay = room.lastMsgText || "아직 메시지가 없습니다.";
           room.imageUrl = `https://picsum.photos/seed/${room.id}/48`;
           room.members = room.participantCount;
           room.buttonText = "입장하기";
@@ -131,7 +158,10 @@ function ChatList() {
           room.isJoined = room.participantUids?.includes(auth.currentUser?.uid);
           room.isAll = true;
           room.isVisible = (activeTab === "전체") || (activeTab === "내 채팅방" && (room.isMine || room.isJoined));
-          room.isSearched = !search || room.title.includes(search) || room.desc.includes(search);
+          room.isSearched = !search || 
+            room.title.includes(search) || 
+            room.desc.includes(search) ||
+            (room.hashtags && room.hashtags.some(tag => tag.toLowerCase().includes(search.toLowerCase().replace('#', ''))));
           room.isFiltered = true;
           room.showFinal = room.isVisible && room.isSearched && room.isFiltered;
           room.show = room.showFinal;
@@ -166,14 +196,20 @@ function ChatList() {
   const handleCreateRoom = async () => {
     if (!newRoomName.trim()) return;
     setCreating(true);
+    
+    // 해시태그 파싱
+    const parsedHashtags = parseHashtags(newRoomHashtags);
+    
     const docRef = await addDoc(collection(db, "chatRooms"), {
       name: newRoomName,
+      hashtags: parsedHashtags, // 해시태그 배열 추가
       createdAt: serverTimestamp(),
       createdBy: auth.currentUser?.uid || "anonymous",
       profileImage: "",
       maxParticipants: 10,
     });
     setNewRoomName("");
+    setNewRoomHashtags("");
     setCreating(false);
     setShowCreateModal(false);
     navigate(`/chat/${docRef.id}`); // 방 생성 후 곧바로 입장
@@ -195,7 +231,7 @@ function ChatList() {
       {/* 검색창 */}
       <input
         className="w-full rounded-lg border px-3 py-2 mb-2 text-sm"
-        placeholder="채팅방 이름, 키워드 검색"
+        placeholder="채팅방 이름, 키워드, #해시태그 검색"
         value={searchInput}
         onChange={e => setSearchInput(e.target.value)}
         onKeyDown={e => {
@@ -247,33 +283,38 @@ function ChatList() {
             .slice(0, visibleCount)
             .map(room => (
               <div key={room.id} className="flex items-center bg-white rounded-xl shadow p-3 gap-3 hover:bg-blue-50 transition">
-                {/* 썸네일 */}
-                <div className="w-14 h-14 rounded-lg bg-gradient-to-r from-blue-400 to-purple-500 flex items-center justify-center text-lg font-bold text-white shadow-md mr-3">
+                {/* 썸네일 - 더 크게 */}
+                <div className="w-16 h-16 rounded-lg bg-gradient-to-r from-blue-400 to-purple-500 flex items-center justify-center text-xl font-bold text-white shadow-md">
                   {room.name?.slice(0, 2).toUpperCase() || 'CH'}
                 </div>
                 {/* 정보 */}
                 <div className="flex-1 min-w-0">
                   <div className="font-bold text-base truncate mb-1">{room.title}</div>
-                  <div className="text-xs text-gray-500 truncate mb-1">{room.desc}</div>
-                  <div className="flex gap-4 text-xs text-gray-400 mt-1 items-center">
+                  <div className="text-xs text-gray-500 truncate mb-2">{room.desc}</div>
+                  
+                  {/* 사람수, 좋아요 수 */}
+                  <div className="flex gap-4 text-xs text-gray-400 mb-2 items-center">
                     <span className="flex items-center"><span className="mr-1">👥</span>{room.members}명</span>
                     <span className="flex items-center"><span className="mr-1">❤️</span>{room.likes}</span>
-                    {/* 해시태그 노출 */}
-                    {(() => {
-                      const hashtags = (room.desc || "").match(/#[^#\s]+/g);
-                      return hashtags && hashtags.length > 0 ? (
-                        <span className="flex flex-wrap gap-1">
-                          {hashtags.map((tag, i) => (
-                            <span key={i} className="bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full text-xs font-semibold">{tag}</span>
-                          ))}
-                        </span>
-                      ) : null;
-                    })()}
                   </div>
+                  
+                  {/* 해시태그 표시 (별도 줄) */}
+                  {room.hashtags && room.hashtags.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {room.hashtags.slice(0, 3).map((tag, i) => (
+                        <span key={i} className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                          #{tag}
+                        </span>
+                      ))}
+                      {room.hashtags.length > 3 && (
+                        <span className="text-xs text-gray-400">+{room.hashtags.length - 3}</span>
+                      )}
+                    </div>
+                  )}
                 </div>
-                {/* 입장 버튼 */}
+                {/* 입장 버튼 - 더 크게 */}
                 <button
-                  className="bg-blue-500 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-blue-600 transition"
+                  className="bg-blue-500 text-white px-6 py-3 rounded-lg font-bold text-base hover:bg-blue-600 transition shadow-md"
                   onClick={room.onEnter}
                 >
                   입장하기
@@ -309,33 +350,38 @@ function ChatList() {
                 <>
                   {myRooms.slice(0, myRoomsVisibleCount).map(room => (
                     <div key={room.id} className="flex items-center bg-white rounded-xl shadow p-3 gap-3 hover:bg-blue-50 transition">
-                      {/* 썸네일 */}
-                      <div className="w-14 h-14 rounded-lg bg-gradient-to-r from-blue-400 to-purple-500 flex items-center justify-center text-lg font-bold text-white shadow-md mr-3">
+                      {/* 썸네일 - 더 크게 */}
+                      <div className="w-16 h-16 rounded-lg bg-gradient-to-r from-blue-400 to-purple-500 flex items-center justify-center text-xl font-bold text-white shadow-md">
                         {room.name?.slice(0, 2).toUpperCase() || 'CH'}
                       </div>
                       {/* 정보 */}
                       <div className="flex-1 min-w-0">
                         <div className="font-bold text-base truncate mb-1">{room.title}</div>
-                        <div className="text-xs text-gray-500 truncate mb-1">{room.desc}</div>
-                        <div className="flex gap-4 text-xs text-gray-400 mt-1 items-center">
+                        <div className="text-xs text-gray-500 truncate mb-2">{room.desc}</div>
+                        
+                        {/* 사람수, 좋아요 수 */}
+                        <div className="flex gap-4 text-xs text-gray-400 mb-2 items-center">
                           <span className="flex items-center"><span className="mr-1">👥</span>{room.members}명</span>
                           <span className="flex items-center"><span className="mr-1">❤️</span>{room.likes}</span>
-                          {/* 해시태그 노출 */}
-                          {(() => {
-                            const hashtags = (room.desc || "").match(/#[^#\s]+/g);
-                            return hashtags && hashtags.length > 0 ? (
-                              <span className="flex flex-wrap gap-1">
-                                {hashtags.map((tag, i) => (
-                                  <span key={i} className="bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full text-xs font-semibold">{tag}</span>
-                                ))}
-                              </span>
-                            ) : null;
-                          })()}
                         </div>
+                        
+                        {/* 해시태그 표시 (별도 줄) */}
+                        {room.hashtags && room.hashtags.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {room.hashtags.slice(0, 3).map((tag, i) => (
+                              <span key={i} className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                                #{tag}
+                              </span>
+                            ))}
+                            {room.hashtags.length > 3 && (
+                              <span className="text-xs text-gray-400">+{room.hashtags.length - 3}</span>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      {/* 입장 버튼 */}
+                      {/* 입장 버튼 - 더 크게 */}
                       <button
-                        className="bg-blue-500 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-blue-600 transition"
+                        className="bg-blue-500 text-white px-6 py-3 rounded-lg font-bold text-base hover:bg-blue-600 transition shadow-md"
                         onClick={room.onEnter}
                       >
                         입장하기
@@ -374,33 +420,38 @@ function ChatList() {
                 <>
                   {joinedRooms.slice(0, joinedRoomsVisibleCount).map(room => (
                     <div key={room.id} className="flex items-center bg-white rounded-xl shadow p-3 gap-3 hover:bg-blue-50 transition">
-                      {/* 썸네일 */}
-                      <div className="w-14 h-14 rounded-lg bg-gradient-to-r from-blue-400 to-purple-500 flex items-center justify-center text-lg font-bold text-white shadow-md mr-3">
+                      {/* 썸네일 - 더 크게 */}
+                      <div className="w-16 h-16 rounded-lg bg-gradient-to-r from-blue-400 to-purple-500 flex items-center justify-center text-xl font-bold text-white shadow-md">
                         {room.name?.slice(0, 2).toUpperCase() || 'CH'}
                       </div>
                       {/* 정보 */}
                       <div className="flex-1 min-w-0">
                         <div className="font-bold text-base truncate mb-1">{room.title}</div>
-                        <div className="text-xs text-gray-500 truncate mb-1">{room.desc}</div>
-                        <div className="flex gap-4 text-xs text-gray-400 mt-1 items-center">
+                        <div className="text-xs text-gray-500 truncate mb-2">{room.desc}</div>
+                        
+                        {/* 사람수, 좋아요 수 */}
+                        <div className="flex gap-4 text-xs text-gray-400 mb-2 items-center">
                           <span className="flex items-center"><span className="mr-1">👥</span>{room.members}명</span>
                           <span className="flex items-center"><span className="mr-1">❤️</span>{room.likes}</span>
-                          {/* 해시태그 노출 */}
-                          {(() => {
-                            const hashtags = (room.desc || "").match(/#[^#\s]+/g);
-                            return hashtags && hashtags.length > 0 ? (
-                              <span className="flex flex-wrap gap-1">
-                                {hashtags.map((tag, i) => (
-                                  <span key={i} className="bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full text-xs font-semibold">{tag}</span>
-                                ))}
-                              </span>
-                            ) : null;
-                          })()}
                         </div>
+                        
+                        {/* 해시태그 표시 (별도 줄) */}
+                        {room.hashtags && room.hashtags.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {room.hashtags.slice(0, 3).map((tag, i) => (
+                              <span key={i} className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                                #{tag}
+                              </span>
+                            ))}
+                            {room.hashtags.length > 3 && (
+                              <span className="text-xs text-gray-400">+{room.hashtags.length - 3}</span>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      {/* 입장 버튼 */}
+                      {/* 입장 버튼 - 더 크게 */}
                       <button
-                        className="bg-blue-500 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-blue-600 transition"
+                        className="bg-blue-500 text-white px-6 py-3 rounded-lg font-bold text-base hover:bg-blue-600 transition shadow-md"
                         onClick={room.onEnter}
                       >
                         입장하기
@@ -452,6 +503,26 @@ function ChatList() {
             maxLength={30}
             autoFocus
           />
+          <input
+            className="w-full border rounded-lg px-3 py-2 mb-4 text-base"
+            placeholder="#게임 #음악 #일상 (띄어쓰기로 구분)"
+            value={newRoomHashtags}
+            onChange={e => setNewRoomHashtags(e.target.value)}
+            maxLength={50}
+          />
+          {/* 해시태그 미리보기 */}
+          {newRoomHashtags && (
+            <div className="mb-4">
+              <div className="text-xs text-gray-600 mb-1">입력된 태그:</div>
+              <div className="flex flex-wrap gap-1">
+                {parseHashtags(newRoomHashtags).map((tag, idx) => (
+                  <span key={idx} className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
+                    #{tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
           <button
             className="w-full bg-blue-500 text-white py-2 rounded-lg font-bold text-base hover:bg-blue-600 transition mb-2"
             onClick={handleCreateRoom}

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Google Auth Test</title>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+    <h1>Google OAuth 테스트</h1>
+    <div id="g_id_onload"
+         data-client_id="234134940808-em6kib7867qk70tfjbg5qaq55kcb1vdg.apps.googleusercontent.com"
+         data-callback="handleCredentialResponse">
+    </div>
+    <div class="g_id_signin" data-type="standard"></div>
+
+    <script>
+        function handleCredentialResponse(response) {
+            console.log("Encoded JWT ID token: " + response.credential);
+            alert("로그인 성공! Console을 확인하세요.");
+        }
+        
+        console.log('현재 Origin:', window.location.origin);
+        console.log('Client ID:', '234134940808-em6kib7867qk70tfjbg5qaq55kcb1vdg.apps.googleusercontent.com');
+    </script>
+</body>
+</html> 

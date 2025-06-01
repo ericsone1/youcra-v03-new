@@ -185,6 +185,10 @@ function ChatRoom() {
   // 내 joinedAt을 저장할 state 추가
   const [myJoinedAt, setMyJoinedAt] = useState(null);
 
+  // 채팅방 좋아요 관련 state 추가
+  const [roomLiked, setRoomLiked] = useState(false);
+  const [roomLikesCount, setRoomLikesCount] = useState(0);
+
   // 비로그인 접근 제한
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
@@ -679,13 +683,86 @@ function ChatRoom() {
     }
   }, [location.search, videoList]);
 
+  // 채팅방 좋아요 상태 확인
+  useEffect(() => {
+    if (!auth.currentUser || !roomId) return;
+
+    const fetchRoomLikes = async () => {
+      try {
+        // 좋아요 수 가져오기
+        const likesQ = query(collection(db, "chatRooms", roomId, "likes"));
+        const likesSnap = await getDocs(likesQ);
+        setRoomLikesCount(likesSnap.size);
+
+        // 사용자의 좋아요 상태 확인
+        const userLikeDoc = await getDoc(doc(db, "chatRooms", roomId, "likes", auth.currentUser.uid));
+        setRoomLiked(userLikeDoc.exists());
+      } catch (error) {
+        console.error("좋아요 상태 확인 오류:", error);
+      }
+    };
+
+    fetchRoomLikes();
+  }, [roomId, auth.currentUser]);
+
+  // 채팅방 좋아요 토글 함수
+  const handleRoomLikeToggle = async () => {
+    if (!auth.currentUser) {
+      alert("로그인 후 좋아요를 누를 수 있습니다.");
+      return;
+    }
+
+    try {
+      const likeDocRef = doc(db, "chatRooms", roomId, "likes", auth.currentUser.uid);
+      
+      if (roomLiked) {
+        // 좋아요 취소
+        await deleteDoc(likeDocRef);
+        setRoomLiked(false);
+        setRoomLikesCount(prev => prev - 1);
+      } else {
+        // 좋아요 추가
+        await setDoc(likeDocRef, {
+          userId: auth.currentUser.uid,
+          userName: auth.currentUser.displayName || auth.currentUser.email,
+          createdAt: new Date()
+        });
+        setRoomLiked(true);
+        setRoomLikesCount(prev => prev + 1);
+      }
+    } catch (error) {
+      console.error("좋아요 처리 오류:", error);
+      alert("좋아요 처리 중 오류가 발생했습니다.");
+    }
+  };
+
   // ---------------------- return문 시작 ----------------------
   return (
     <div className="flex flex-col h-screen max-w-md mx-auto bg-white relative">
       {/* 헤더 */}
       <header className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md flex-shrink-0 flex items-center justify-between px-4 py-3 border-b z-30" style={{height: 56, minHeight: 56, background: '#ffcccc'}}>
         <button onClick={() => navigate(-1)} className="text-2xl text-gray-600 hover:text-blue-600" aria-label="뒤로가기">←</button>
-        <div className="flex-1 text-center font-bold text-lg truncate">{roomName}</div>
+        <div className="flex-1 text-center">
+          <div className="font-bold text-lg truncate">{roomName}</div>
+          <div className="flex items-center justify-center gap-2 text-xs text-gray-600">
+            <span>👥 {participants.length}명</span>
+            <button
+              onClick={handleRoomLikeToggle}
+              className={`
+                flex items-center gap-1 px-2 py-1 rounded-full transition-all duration-200 font-semibold
+                ${roomLiked 
+                  ? 'bg-red-500 text-white shadow-md' 
+                  : 'bg-white text-gray-600 hover:bg-red-50 hover:text-red-500 border border-gray-200'
+                }
+              `}
+            >
+              <svg className="w-3 h-3" fill={roomLiked ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+              </svg>
+              {roomLikesCount}
+            </button>
+          </div>
+        </div>
         <button onClick={() => navigate(`/chat/${roomId}/info`)} className="text-2xl text-gray-600 hover:text-blue-600" aria-label="메뉴">≡</button>
       </header>
 
