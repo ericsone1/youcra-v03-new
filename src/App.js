@@ -1,5 +1,12 @@
 import React, { Suspense } from 'react';
-import { HashRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
+
+// 현재 위치를 표시하는 디버그 컴포넌트
+const LocationDisplay = () => {
+  const location = useLocation();
+  console.log('🔍 현재 라우트:', location.pathname);
+  return null;
+};
 import { AuthProvider } from "./contexts/AuthContext";
 import { ProtectedRoute } from "./components/common/ProtectedRoute";
 import { LoadingSpinner } from "./components/common/LoadingSpinner";
@@ -7,8 +14,13 @@ import Navigation from "./components/common/Navigation";
 
 // 컴포넌트 지연 로딩
 const Home = React.lazy(() => import("./components/Home"));
-const AuthForm = React.lazy(() => import("./components/AuthForm"));
+const Login = React.lazy(() => import("./components/Login"));
 const MyChannel = React.lazy(() => import("./components/MyChannel"));
+const MyBlog = React.lazy(() => import("./components/MyBlog"));
+const TestBlog = React.lazy(() => import("./components/TestBlog"));
+const MyChannelMenu = React.lazy(() => import("./components/MyChannel/MyChannelMenu"));
+const MyVideosPage = React.lazy(() => import("./components/MyVideosPage"));
+const TestVideos = React.lazy(() => import("./components/TestVideos"));
 const ChatList = React.lazy(() => import("./components/ChatList"));
 const ChatRoom = React.lazy(() => import("./components/ChatRoom"));
 const ChatRoomInfo = React.lazy(() => import("./components/ChatRoomInfo"));
@@ -19,36 +31,7 @@ const UserProfile = React.lazy(() => import("./components/UserProfile"));
 const TestProfile = React.lazy(() => import("./components/TestProfile"));
 const Board = React.lazy(() => import("./components/Board"));
 
-// 간단한 테스트 컴포넌트 - lazy loading 없이
-const SimpleTestProfile = () => (
-  <div style={{ 
-    background: 'red', 
-    color: 'white', 
-    padding: '50px', 
-    textAlign: 'center',
-    minHeight: '100vh',
-    fontSize: '20px'
-  }}>
-    <h1>🎉 성공! 라우팅 작동 중!</h1>
-    <p>현재 URL: {window.location.href}</p>
-    <p>이 페이지가 보이면 라우팅이 정상입니다!</p>
-    <button 
-      onClick={() => window.history.back()}
-      style={{
-        background: 'white',
-        color: 'red',
-        padding: '10px 20px',
-        border: 'none',
-        borderRadius: '5px',
-        fontSize: '16px',
-        cursor: 'pointer',
-        marginTop: '20px'
-      }}
-    >
-      뒤로 가기
-    </button>
-  </div>
-);
+// Fallback 컴포넌트만 유지
 
 // 존재하지 않는 컴포넌트들을 위한 fallback 컴포넌트
 const FallbackComponent = ({ componentName }) => (
@@ -74,6 +57,7 @@ function App() {
 
           {/* 메인 콘텐츠 */}
           <div className="relative z-10 pb-20">
+            <LocationDisplay />
             <Suspense 
               fallback={
                 <div className="flex items-center justify-center min-h-screen">
@@ -88,18 +72,71 @@ function App() {
               <Routes>
                 {/* 공개 라우트 */}
                 <Route path="/" element={<Home />} />
-                <Route path="/login" element={<AuthForm />} />
-                <Route path="/simple-test" element={<SimpleTestProfile />} />
-                {/* 테스트용: UserProfile을 공개 라우트로 임시 설정 */}
-                <Route path="/profile/:uid" element={<SimpleTestProfile />} />
-                <Route path="/test-profile" element={<SimpleTestProfile />} />
-
+                <Route path="/login" element={<Login />} />
+                <Route path="/test" element={<div style={{padding: '50px', textAlign: 'center', background: 'red', color: 'white', fontSize: '20px'}}>🎉 테스트 성공! 라우팅 작동 중!</div>} />
+                
                 {/* 보호된 라우트 */}
                 <Route
                   path="/my"
                   element={
                     <ProtectedRoute>
                       <MyChannel />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/my/videos"
+                  element={
+                    <ProtectedRoute>
+                      <MyVideosPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/my/menu"
+                  element={
+                    <ProtectedRoute>
+                      <MyChannelMenu />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/my/blog"
+                  element={
+                    <ProtectedRoute>
+                      <TestBlog />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/my/chatrooms"
+                  element={
+                    <ProtectedRoute>
+                      <FallbackComponent componentName="내 채팅방" />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/my/stats"
+                  element={
+                    <ProtectedRoute>
+                      <FallbackComponent componentName="통계" />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/my/channels"
+                  element={
+                    <ProtectedRoute>
+                      <FallbackComponent componentName="채널관리" />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/my/settings"
+                  element={
+                    <ProtectedRoute>
+                      <FallbackComponent componentName="설정" />
                     </ProtectedRoute>
                   }
                 />

@@ -7,13 +7,7 @@ export function ProtectedRoute({ children }) {
   const { currentUser, loading } = useAuth();
   const location = useLocation();
 
-  if (loading) {
-    return <LoadingSpinner fullScreen />;
-  }
-
-  if (!currentUser) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-
+  // 임시로 모든 라우트 접근 허용 (Google OAuth 제거됨)
+  console.log('🔄 임시 모드: 모든 라우트 접근 허용');
   return children;
 } 

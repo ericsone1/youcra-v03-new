@@ -58,7 +58,7 @@ export const MessageInput = React.memo(function MessageInput({ onSend, disabled 
               lineHeight: '1.5',
             }}
             aria-label="메시지 입력창"
-            aria-required="true"
+            aria-required={true}
             aria-invalid={message.trim().length === 0}
           />
           

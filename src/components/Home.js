@@ -392,17 +392,9 @@ function Home() {
 
   return (
     <div 
-      className="min-h-screen overflow-y-auto"
-      style={{
-        scrollbarWidth: 'none',
-        msOverflowStyle: 'none'
-      }}
+      className="min-h-screen overflow-y-auto hide-scrollbar"
     >
-      <style jsx>{`
-        div::-webkit-scrollbar {
-          display: none;
-        }
-      `}</style>
+
       <div className="max-w-2xl mx-auto p-2 space-y-4">
         {/* 헤더 섹션 */}
         <div className="text-center py-4 relative">

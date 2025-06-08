@@ -173,6 +173,8 @@ function ChatRoom() {
   const [certLoading, setCertLoading] = useState(false);
   const [certifiedVideoIds, setCertifiedVideoIds] = useState([]);
   const [watchSeconds, setWatchSeconds] = useState(0);
+  const [actualWatchSeconds, setActualWatchSeconds] = useState(0);
+  const [lastPlayerTime, setLastPlayerTime] = useState(0);
   const [videoEnded, setVideoEnded] = useState(false);
   const [countdown, setCountdown] = useState(5);
   const [endCountdown, setEndCountdown] = useState(0);
@@ -187,7 +189,8 @@ function ChatRoom() {
   const [showDelete, setShowDelete] = useState(null);
   const [showUploadMenu, setShowUploadMenu] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [showUserProfile, setShowUserProfile] = useState(null); // uid를 저장
+  const [showUserProfile, setShowUserProfile] = useState(null);
+  const [playerHovered, setPlayerHovered] = useState(false);
   
   // === Refs ===
   const messagesEndRef = useRef(null);
@@ -382,9 +385,11 @@ function ChatRoom() {
   useEffect(() => {
     setIsCertified(false);
     setWatchSeconds(0);
+    setActualWatchSeconds(0);
+    setLastPlayerTime(0);
     setVideoEnded(false);
-    setMinimized(false); // 새 영상 선택 시 최소화 해제
-    setEndCountdown(0); // 영상 종료 카운트다운 초기화
+    setMinimized(false);
+    setEndCountdown(0);
     
     // 모든 타이머 정리
     if (playerRef.current && playerRef.current._interval) {
@@ -722,25 +727,37 @@ function ChatRoom() {
     }
   };
 
-  // 드래그 핸들러
+  // 드래그 핸들러 - 간단하고 빠른 방식
   const handleDragStart = (e) => {
     setDragging(true);
-    const startX = e.type === "touchstart" ? e.touches[0].clientX : e.clientX;
-    const startY = e.type === "touchstart" ? e.touches[0].clientY : e.clientY;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    
     dragOffset.current = {
-      x: startX - popupPos.x,
-      y: startY - popupPos.y,
+      x: clientX - popupPos.x,
+      y: clientY - popupPos.y,
     };
   };
+  
   const handleDrag = (e) => {
     if (!dragging) return;
-    const clientX = e.type === "touchmove" ? e.touches[0].clientX : e.clientX;
-    const clientY = e.type === "touchmove" ? e.touches[0].clientY : e.clientY;
+    
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    
+    const newX = clientX - dragOffset.current.x;
+    const newY = clientY - dragOffset.current.y;
+    
+    // 화면 경계 체크
+    const maxX = window.innerWidth - (minimized ? 80 : 400);
+    const maxY = window.innerHeight - (minimized ? 80 : 500);
+    
     setPopupPos({
-      x: clientX - dragOffset.current.x,
-      y: clientY - dragOffset.current.y,
+      x: Math.max(10, Math.min(newX, maxX)),
+      y: Math.max(10, Math.min(newY, maxY)),
     });
   };
+  
   const handleDragEnd = () => {
     setDragging(false);
   };
@@ -749,6 +766,8 @@ function ChatRoom() {
   const handleYoutubeReady = (event) => {
     playerRef.current = event.target;
     setWatchSeconds(0);
+    setActualWatchSeconds(0);
+    setLastPlayerTime(0);
     setVideoEnded(false);
   };
   
@@ -762,7 +781,29 @@ function ChatRoom() {
     // 재생 중일 때만 새로운 interval 생성
     if (event.data === 1) { // YT.PlayerState.PLAYING
       playerRef.current._interval = setInterval(() => {
-        setWatchSeconds((prev) => prev + 1);
+        if (playerRef.current && playerRef.current.getCurrentTime) {
+          const currentTime = playerRef.current.getCurrentTime();
+          const timeDiff = currentTime - lastPlayerTime;
+          
+          // 정상적인 재생 (1초 전후 차이)인지 확인
+          if (timeDiff >= 0.8 && timeDiff <= 1.5) {
+            // 연속 시청으로 인정
+            setActualWatchSeconds(prev => prev + 1);
+          } else if (Math.abs(timeDiff) > 2) {
+            // 시크바 조작 감지 (2초 이상 점프)
+            console.log('🔍 시크바 조작 감지:', {
+              lastTime: lastPlayerTime,
+              currentTime: currentTime,
+              diff: timeDiff
+            });
+          }
+          
+          setLastPlayerTime(currentTime);
+          setWatchSeconds(Math.floor(currentTime));
+        } else {
+          // 기본 카운터 (플레이어 API 접근 불가 시)
+          setWatchSeconds((prev) => prev + 1);
+        }
       }, 1000);
     }
   };
@@ -773,6 +814,8 @@ function ChatRoom() {
       clearInterval(playerRef.current._interval);
       playerRef.current._interval = null;
     }
+    
+    // 영상 종료 시 videoEnded 상태 설정
     setVideoEnded(true);
     
     // 다음 영상이 있을 때만 카운트다운 시작
@@ -807,7 +850,7 @@ function ChatRoom() {
     setCertLoading(false);
   };
 
-  // certAvailable 선언 (return문 바로 위)
+  // certAvailable 선언 - README 기본 조건에 맞게 단순화
   let certAvailable = false;
   if (
     selectedVideoIdx !== null &&
@@ -816,8 +859,8 @@ function ChatRoom() {
   ) {
     certAvailable =
       videoList[selectedVideoIdx].duration >= 180
-        ? watchSeconds >= 180
-        : videoEnded;
+        ? watchSeconds >= 180  // 3분 이상 영상: 3분 시청
+        : videoEnded;          // 3분 미만 영상: 완시청
   }
 
   // 카운트다운 자동 이동 useEffect
@@ -1213,7 +1256,7 @@ function ChatRoom() {
             {minimized ? (
               // 최소화된 상태 - 깔끔한 아이콘만 (드래그 가능)
               <div 
-                className="w-full h-full relative bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center rounded-xl shadow-lg"
+                className="w-full h-full relative bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center rounded-xl shadow-lg select-none"
                 style={{ cursor: dragging ? 'grabbing' : 'grab' }}
                 onMouseDown={handleDragStart}
                 onMouseMove={handleDrag}
@@ -1260,9 +1303,9 @@ function ChatRoom() {
             ) : (
               // 확장된 상태
               <div>
-                {/* 상단 버튼들 (드래그 핸들 영역) */}
+                {/* 상단 헤더 - 드래그 가능 영역 */}
                 <div 
-                  className="flex justify-between items-center mb-1 p-2 -m-2 rounded-t-xl"
+                  className="flex justify-between items-center mb-1 p-3 -m-3 rounded-t-xl bg-gray-50 select-none"
                   style={{ cursor: dragging ? 'grabbing' : 'grab' }}
                   onMouseDown={handleDragStart}
                   onMouseMove={handleDrag}
@@ -1274,22 +1317,23 @@ function ChatRoom() {
                   title="드래그해서 이동"
                 >
                   <button
-                    className="text-lg text-blue-500 hover:text-blue-700 p-1 z-10"
+                    className="text-lg text-blue-500 hover:text-blue-700 p-1"
                     onClick={(e) => {
                       e.stopPropagation();
                       setMinimized(true);
                     }}
                     title="최소화"
-                    style={{ position: 'relative' }}
                   >
                     ➖
                   </button>
                   
-                  {/* 중앙 여백 (드래그 핸들 영역) */}
-                  <div className="flex-1"></div>
+                  {/* 중앙 드래그 핸들 */}
+                  <div className="flex-1 text-center text-xs text-gray-500 font-medium">
+                    영상 플레이어 (드래그 가능)
+                  </div>
                   
                   <button
-                    className="text-xl text-gray-400 hover:text-gray-700 p-1 z-10"
+                    className="text-xl text-gray-400 hover:text-gray-700 p-1"
                     onClick={(e) => {
                       e.stopPropagation();
                       setSelectedVideoIdx(null);
@@ -1300,7 +1344,6 @@ function ChatRoom() {
                       }
                     }}
                     title="닫기"
-                    style={{ position: 'relative' }}
                   >
                     ×
                   </button>
@@ -1317,21 +1360,26 @@ function ChatRoom() {
                   {/* YouTube 플레이어가 여기 위에 absolute로 위치함 */}
                 </div>
                 
-                {/* 제목 - 영상 아래로 이동 */}
+                {/* 제목 - 일반 텍스트로 변경 */}
                 <div className="font-bold text-sm mb-2 px-1 leading-tight" title={videoList[selectedVideoIdx].title}>
                   {videoList[selectedVideoIdx].title}
                 </div>
                 
                 {/* 시청 시간과 인증 정보를 한 줄로 */}
-                <div className="flex justify-between items-center text-xs text-gray-600 mb-2 px-1">
-                  <span>
-                    시청: {Math.floor(watchSeconds / 60)}:{(watchSeconds % 60).toString().padStart(2, '0')}
-                  </span>
-                  <span className="text-blue-600 font-medium">
+                <div className="flex flex-col gap-1 text-xs text-gray-600 mb-2 px-1">
+                  <div className="flex justify-between items-center">
+                    <span>
+                      현재: {Math.floor(watchSeconds / 60)}:{(watchSeconds % 60).toString().padStart(2, '0')}
+                    </span>
+                    <span className="text-green-600 font-medium">
+                      실제 시청: {Math.floor(actualWatchSeconds / 60)}:{(actualWatchSeconds % 60).toString().padStart(2, '0')}
+                    </span>
+                  </div>
+                  <div className="text-center text-blue-600 font-medium">
                     {videoList[selectedVideoIdx]?.duration >= 180
-                      ? `3분 이상 시청 시 인증`
+                      ? `연속 3분 시청 시 인증 (${Math.max(0, 180 - watchSeconds)}초 남음)`
                       : `끝까지 시청 시 인증`}
-                  </span>
+                  </div>
                 </div>
                 
                 {/* 인증 버튼 */}
@@ -1339,11 +1387,11 @@ function ChatRoom() {
                   className={`w-full py-2 mb-2 rounded-lg font-bold text-sm ${
                     certifiedVideoIds.includes(videoList[selectedVideoIdx]?.id)
                       ? "bg-green-500 text-white hover:bg-green-600 cursor-pointer"
-                      : (videoList[selectedVideoIdx]?.duration >= 180 ? watchSeconds >= 180 : certAvailable) && !certLoading
+                      : certAvailable && !certLoading
                       ? "bg-green-500 text-white hover:bg-green-600"
                       : "bg-gray-200 text-gray-500 cursor-not-allowed"
                   }`}
-                  disabled={!certifiedVideoIds.includes(videoList[selectedVideoIdx]?.id) && (videoList[selectedVideoIdx]?.duration >= 180 ? watchSeconds < 180 : !certAvailable || certLoading)}
+                  disabled={!certifiedVideoIds.includes(videoList[selectedVideoIdx]?.id) && (!certAvailable || certLoading)}
                   onClick={() => {
                     if (certifiedVideoIds.includes(videoList[selectedVideoIdx]?.id)) {
                       // 이미 인증된 영상이면
@@ -1375,31 +1423,25 @@ function ChatRoom() {
                       : "✅ 시청인증 완료 (마지막 영상)"
                     : certLoading 
                     ? "인증 중..." 
-                    : (videoList[selectedVideoIdx]?.duration >= 180 ? watchSeconds >= 180 : certAvailable) 
+                    : certAvailable 
                     ? "시청인증 완료" 
                     : "시청인증 대기"}
                 </button>
                 
-                {/* 구독 홍보 안내 문구 */}
-                {(videoList[selectedVideoIdx]?.duration >= 180 ? watchSeconds >= 180 : certAvailable) && (
-                  <div className="mb-2 text-xs text-green-700 font-medium text-center bg-green-50 rounded px-2 py-1">
-                    💡 구독하면 상대방에게도 내 채널이 홍보됩니다
-                  </div>
-                )}
-                
-                {/* 하단: 액션 버튼들 */}
-                <div className="flex gap-2 justify-between text-xs items-center">
+                {/* 간단한 하단 버튼들 */}
+                <div className="flex gap-2 text-xs items-center">
+                  {/* YouTube 이동 */}
                   <a
                     href={getYoutubeUrl(videoList[selectedVideoIdx].videoId)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex-1 text-center bg-red-500 text-white py-2 rounded-lg hover:bg-red-600 transition-colors"
-                    title="유튜브에서 구독/좋아요/댓글"
+                    title="YouTube에 이동"
                   >
-                    🔔 YouTube로 이동
+                    ⚠️ YouTube에 이동
                   </a>
                   
-                  {/* 하트 버튼 */}
+                  {/* 좋아요 */}
                   <button
                     className="flex items-center gap-1 px-3 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
                     onClick={() => {
@@ -1411,42 +1453,19 @@ function ChatRoom() {
                         setLikeCount((prev) => (prev > 0 ? prev - 1 : 0));
                       }
                     }}
-                    aria-label="좋아요"
                   >
-                    <span style={{ fontSize: 16, color: liked ? 'red' : '#999' }}>
+                    <span style={{ color: liked ? '#ec4899' : '#6b7280' }}>
                       {liked ? '♥' : '♡'}
                     </span>
-                    <span className="text-xs text-gray-700">{likeCount}</span>
+                    <span className="text-gray-600">{likeCount}</span>
                   </button>
                   
                   {/* 시청자수 */}
-                  <div className="flex items-center gap-1 px-2 py-1 bg-blue-50 rounded-lg">
+                  <div className="flex items-center gap-1 px-3 py-2 bg-blue-50 rounded-lg">
                     <span className="text-blue-500">👁️</span>
-                    <span className="text-xs text-blue-600 font-medium">{watching}</span>
+                    <span className="text-blue-600">{watching}</span>
                   </div>
                 </div>
-                
-                {/* 자동 이동 카운트다운 */}
-                {(() => {
-                  const currentVideo = videoList[selectedVideoIdx];
-                  const isAlreadyCertified = currentVideo && certifiedVideoIds.includes(currentVideo.id);
-                  
-                  // 영상 종료 후 다음 영상으로 이동 카운트다운
-                  if (endCountdown > 0 && selectedVideoIdx < videoList.length - 1) {
-                    return (
-                      <div className="mt-2 text-xs text-orange-600 text-center bg-orange-50 rounded px-2 py-1 font-semibold">
-                        🎬 {endCountdown}초 후 다음 영상으로 이동
-                      </div>
-                    );
-                  }
-                  
-                  // 일반 인증 카운트다운
-                  return certAvailable && selectedVideoIdx < videoList.length - 1 && !isAlreadyCertified && (
-                    <div className="mt-2 text-xs text-blue-500 text-center bg-blue-50 rounded px-2 py-1">
-                      ⏱️ {countdown}초 후 다음 영상으로 이동
-                    </div>
-                  );
-                })()}
               </div>
             )}
           </div>
