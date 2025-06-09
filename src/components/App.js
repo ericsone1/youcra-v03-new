@@ -35,7 +35,7 @@ function App() {
   const [touchEnd, setTouchEnd] = useState(null);
   const [swipeDirection, setSwipeDirection] = useState(null);
   
-  // 디버깅 상태
+  // 디버깅 상태 (개발 모드에서만)
   const [debugInfo, setDebugInfo] = useState({
     touching: false,
     startX: 0,
@@ -43,6 +43,7 @@ function App() {
     distance: 0,
     lastEvent: ''
   });
+  const isDev = process.env.NODE_ENV === 'development';
 
   // 현재 탭 인덱스 찾기
   const getCurrentTabIndex = () => {
@@ -205,16 +206,18 @@ function App() {
           <Route path="/admin" element={<AdminPage />} />
         </Routes>
         
-        {/* 디버깅 정보 패널 */}
-        <div className="fixed top-4 left-4 bg-black bg-opacity-80 text-white text-xs p-3 rounded-lg z-[9999] pointer-events-none font-mono">
-          <div>🔍 <strong>터치 디버깅</strong></div>
-          <div>상태: {debugInfo.touching ? '🟢 터치중' : '🔴 대기'}</div>
-          <div>시작X: {debugInfo.startX.toFixed(0)}</div>
-          <div>현재X: {debugInfo.currentX.toFixed(0)}</div>
-          <div>거리: {debugInfo.distance.toFixed(0)}px</div>
-          <div>마지막: {debugInfo.lastEvent}</div>
-          <div>임계값: ±60px</div>
-        </div>
+        {/* 디버깅 정보 패널 (개발 모드에서만) */}
+        {isDev && (
+          <div className="fixed top-4 left-4 bg-black bg-opacity-80 text-white text-xs p-3 rounded-lg z-[9999] pointer-events-none font-mono">
+            <div>🔍 <strong>터치 디버깅</strong></div>
+            <div>상태: {debugInfo.touching ? '🟢 터치중' : '🔴 대기'}</div>
+            <div>시작X: {debugInfo.startX.toFixed(0)}</div>
+            <div>현재X: {debugInfo.currentX.toFixed(0)}</div>
+            <div>거리: {debugInfo.distance.toFixed(0)}px</div>
+            <div>마지막: {debugInfo.lastEvent}</div>
+            <div>임계값: ±60px</div>
+          </div>
+        )}
 
         {/* 스와이프 피드백 */}
         {swipeDirection && (
