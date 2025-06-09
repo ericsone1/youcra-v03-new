@@ -34,6 +34,15 @@ function App() {
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
   const [swipeDirection, setSwipeDirection] = useState(null);
+  
+  // 디버깅 상태
+  const [debugInfo, setDebugInfo] = useState({
+    touching: false,
+    startX: 0,
+    currentX: 0,
+    distance: 0,
+    lastEvent: ''
+  });
 
   // 현재 탭 인덱스 찾기
   const getCurrentTabIndex = () => {
@@ -67,8 +76,20 @@ function App() {
 
   // 터치 시작
   const handleTouchStart = (e) => {
+    const startX = e.touches[0].clientX;
     setTouchEnd(null);
-    setTouchStart(e.touches[0].clientX);
+    setTouchStart(startX);
+    
+    // 디버깅 정보 업데이트
+    setDebugInfo({
+      touching: true,
+      startX: startX,
+      currentX: startX,
+      distance: 0,
+      lastEvent: 'touchStart'
+    });
+    
+    console.log('🔍 TouchStart:', startX);
   };
 
   // 터치 이동 
@@ -76,19 +97,50 @@ function App() {
     if (!touchStart) return;
     
     const currentX = e.touches[0].clientX;
-    const distance = Math.abs(touchStart - currentX);
+    const distance = touchStart - currentX; // 부호 포함 거리
+    const absDistance = Math.abs(distance);
+    
+    // 디버깅 정보 업데이트
+    setDebugInfo(prev => ({
+      ...prev,
+      currentX: currentX,
+      distance: distance,
+      lastEvent: 'touchMove'
+    }));
     
     // 가로 스와이프가 감지되면 세로 스크롤 방지
-    if (distance > 20) {
+    if (absDistance > 20) {
       e.preventDefault();
     }
     
     setTouchEnd(currentX);
+    console.log('🔍 TouchMove:', currentX, 'Distance:', distance);
   };
 
   // 터치 종료
   const handleTouchEnd = (e) => {
-    if (!touchStart || !touchEnd) return;
+    const finalDistance = touchStart && touchEnd ? touchStart - touchEnd : 0;
+    
+    // 디버깅 정보 업데이트
+    setDebugInfo(prev => ({
+      ...prev,
+      touching: false,
+      distance: finalDistance,
+      lastEvent: `touchEnd (${finalDistance > 60 ? 'LEFT' : finalDistance < -60 ? 'RIGHT' : 'NONE'})`
+    }));
+    
+    console.log('🔍 TouchEnd:', {
+      touchStart,
+      touchEnd, 
+      distance: finalDistance,
+      leftSwipe: finalDistance > 60,
+      rightSwipe: finalDistance < -60
+    });
+    
+    if (!touchStart || !touchEnd) {
+      console.log('❌ No start/end coordinates');
+      return;
+    }
     
     const distance = touchStart - touchEnd;
     const isLeftSwipe = distance > 60; // 임계값 증가
@@ -97,6 +149,7 @@ function App() {
     // 스와이프 감지시 기본 동작 방지
     if (isLeftSwipe || isRightSwipe) {
       e.preventDefault();
+      console.log('✅ Swipe detected!', isLeftSwipe ? 'LEFT' : 'RIGHT');
       
       if (isLeftSwipe) {
         setSwipeDirection('left');
@@ -107,6 +160,8 @@ function App() {
         setTimeout(() => setSwipeDirection(null), 500);
         handleSwipe('right'); // 오른쪽으로 스와이프 = 이전 탭
       }
+    } else {
+      console.log('❌ Swipe distance too small:', distance);
     }
     
     // 상태 초기화
@@ -150,6 +205,17 @@ function App() {
           <Route path="/admin" element={<AdminPage />} />
         </Routes>
         
+        {/* 디버깅 정보 패널 */}
+        <div className="fixed top-4 left-4 bg-black bg-opacity-80 text-white text-xs p-3 rounded-lg z-[9999] pointer-events-none font-mono">
+          <div>🔍 <strong>터치 디버깅</strong></div>
+          <div>상태: {debugInfo.touching ? '🟢 터치중' : '🔴 대기'}</div>
+          <div>시작X: {debugInfo.startX.toFixed(0)}</div>
+          <div>현재X: {debugInfo.currentX.toFixed(0)}</div>
+          <div>거리: {debugInfo.distance.toFixed(0)}px</div>
+          <div>마지막: {debugInfo.lastEvent}</div>
+          <div>임계값: ±60px</div>
+        </div>
+
         {/* 스와이프 피드백 */}
         {swipeDirection && (
           <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black bg-opacity-70 text-white px-4 py-2 rounded-lg z-[9999] pointer-events-none">
