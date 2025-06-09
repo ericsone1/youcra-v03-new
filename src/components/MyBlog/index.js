@@ -1,5 +1,5 @@
 import React from 'react';
-import BottomTabBar from './MyChannel/BottomTabBar';
+import BottomTabBar from '../MyChannel/BottomTabBar';
 import BlogHeader from './MyBlog/components/BlogHeader';
 import BlogStats from './MyBlog/components/BlogStats';
 import PostList from './MyBlog/components/PostList';

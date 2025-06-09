@@ -1,5 +1,6 @@
 import MyChannel from "./MyChannel";
-import { BrowserRouter as Router, Routes, Route, Link, useLocation } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
+import { motion } from "framer-motion";
 import { AuthProvider } from "../contexts/AuthContext";
 import Home from "./Home";
 import ChatList from "./ChatList";
@@ -19,9 +20,72 @@ import ChatRoomInfo from "./ChatRoomInfo";
 
 function App() {
   const location = useLocation();
+  const navigate = useNavigate();
+
+  // 탭 순서 정의
+  const tabs = [
+    { path: '/', name: '홈' },
+    { path: '/chat', name: '채팅방' },
+    { path: '/board', name: '게시판' },
+    { path: '/my', name: '마이채널' }
+  ];
+
+  // 현재 탭 인덱스 찾기
+  const getCurrentTabIndex = () => {
+    const currentPath = location.pathname;
+    const index = tabs.findIndex(tab => {
+      if (tab.path === '/') {
+        return currentPath === '/';
+      }
+      return currentPath.startsWith(tab.path);
+    });
+    return index >= 0 ? index : 0;
+  };
+
+  // 스와이프 핸들러
+  const handleSwipe = (direction) => {
+    const currentIndex = getCurrentTabIndex();
+    let newIndex;
+
+    if (direction === 'left') {
+      // 왼쪽 스와이프 = 다음 탭
+      newIndex = (currentIndex + 1) % tabs.length;
+    } else if (direction === 'right') {
+      // 오른쪽 스와이프 = 이전 탭
+      newIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+    } else {
+      return;
+    }
+
+    navigate(tabs[newIndex].path);
+  };
+
+  // 드래그 종료 핸들러
+  const handleDragEnd = (event, info) => {
+    const swipeThreshold = 100; // 스와이프 감도 조절
+    const velocity = Math.abs(info.velocity.x);
+    const offset = info.offset.x;
+
+    // 충분한 거리나 속도로 스와이프했을 때만 동작
+    if (Math.abs(offset) > swipeThreshold || velocity > 500) {
+      if (offset > 0) {
+        handleSwipe('right'); // 오른쪽으로 드래그 = 이전 탭
+      } else {
+        handleSwipe('left'); // 왼쪽으로 드래그 = 다음 탭
+      }
+    }
+  };
+
   return (
     <AuthProvider>
-      <div className="bg-blue-100 min-h-screen pb-24">
+      <motion.div 
+        className="bg-blue-100 min-h-screen pb-24"
+        drag="x"
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={0.1}
+        onDragEnd={handleDragEnd}
+        whileDrag={{ scale: 0.98 }}
+      >
         <Routes>
           <Route path="/my" element={<MyChannel />} />
           <Route path="/" element={<Home />} />
@@ -61,7 +125,7 @@ function App() {
             <span className="text-xs">마이채널</span>
           </Link>
         </footer>
-      </div>
+      </motion.div>
     </AuthProvider>
   );
 }

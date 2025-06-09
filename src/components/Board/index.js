@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 // Components
-import BoardHeader from './Board/components/BoardHeader';
-import PostForm from './Board/components/PostForm';
-import PostList from './Board/components/PostList';
+import BoardHeader from './components/BoardHeader';
+import PostForm from './components/PostForm';
+import PostList from './components/PostList';
 
 // Hooks
-import usePosts from './Board/hooks/usePosts';
+import usePosts from './hooks/usePosts';
 
 function Board() {
   const navigate = useNavigate();
