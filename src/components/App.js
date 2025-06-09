@@ -1,6 +1,6 @@
 import MyChannel from "./MyChannel";
 import { BrowserRouter as Router, Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
+import { useState } from "react";
 import { AuthProvider } from "../contexts/AuthContext";
 import Home from "./Home";
 import ChatList from "./ChatList";
@@ -29,6 +29,11 @@ function App() {
     { path: '/board', name: '게시판' },
     { path: '/my', name: '마이채널' }
   ];
+
+  // 터치 이벤트 상태
+  const [touchStart, setTouchStart] = useState(null);
+  const [touchEnd, setTouchEnd] = useState(null);
+  const [swipeDirection, setSwipeDirection] = useState(null);
 
   // 현재 탭 인덱스 찾기
   const getCurrentTabIndex = () => {
@@ -60,31 +65,69 @@ function App() {
     navigate(tabs[newIndex].path);
   };
 
-  // 드래그 종료 핸들러
-  const handleDragEnd = (event, info) => {
-    const swipeThreshold = 100; // 스와이프 감도 조절
-    const velocity = Math.abs(info.velocity.x);
-    const offset = info.offset.x;
+  // 터치 시작
+  const handleTouchStart = (e) => {
+    setTouchEnd(null);
+    setTouchStart(e.touches[0].clientX);
+  };
 
-    // 충분한 거리나 속도로 스와이프했을 때만 동작
-    if (Math.abs(offset) > swipeThreshold || velocity > 500) {
-      if (offset > 0) {
-        handleSwipe('right'); // 오른쪽으로 드래그 = 이전 탭
-      } else {
-        handleSwipe('left'); // 왼쪽으로 드래그 = 다음 탭
+  // 터치 이동 
+  const handleTouchMove = (e) => {
+    if (!touchStart) return;
+    
+    const currentX = e.touches[0].clientX;
+    const distance = Math.abs(touchStart - currentX);
+    
+    // 가로 스와이프가 감지되면 세로 스크롤 방지
+    if (distance > 20) {
+      e.preventDefault();
+    }
+    
+    setTouchEnd(currentX);
+  };
+
+  // 터치 종료
+  const handleTouchEnd = (e) => {
+    if (!touchStart || !touchEnd) return;
+    
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > 60; // 임계값 증가
+    const isRightSwipe = distance < -60;
+
+    // 스와이프 감지시 기본 동작 방지
+    if (isLeftSwipe || isRightSwipe) {
+      e.preventDefault();
+      
+      if (isLeftSwipe) {
+        setSwipeDirection('left');
+        setTimeout(() => setSwipeDirection(null), 500);
+        handleSwipe('left'); // 왼쪽으로 스와이프 = 다음 탭
+      } else if (isRightSwipe) {
+        setSwipeDirection('right');
+        setTimeout(() => setSwipeDirection(null), 500);
+        handleSwipe('right'); // 오른쪽으로 스와이프 = 이전 탭
       }
     }
+    
+    // 상태 초기화
+    setTouchStart(null);
+    setTouchEnd(null);
   };
 
   return (
     <AuthProvider>
-      <motion.div 
+      <div 
         className="bg-blue-100 min-h-screen pb-24"
-        drag="x"
-        dragConstraints={{ left: 0, right: 0 }}
-        dragElastic={0.1}
-        onDragEnd={handleDragEnd}
-        whileDrag={{ scale: 0.98 }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        style={{ 
+          touchAction: 'pan-y', // 세로 스크롤만 허용
+          userSelect: 'none', // 텍스트 선택 방지
+          WebkitUserSelect: 'none',
+          MozUserSelect: 'none',
+          msUserSelect: 'none'
+        }}
       >
         <Routes>
           <Route path="/my" element={<MyChannel />} />
@@ -106,6 +149,13 @@ function App() {
           <Route path="/product/:id" element={<ProductDetail />} />
           <Route path="/admin" element={<AdminPage />} />
         </Routes>
+        
+        {/* 스와이프 피드백 */}
+        {swipeDirection && (
+          <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black bg-opacity-70 text-white px-4 py-2 rounded-lg z-[9999] pointer-events-none">
+            {swipeDirection === 'left' ? '➡️ 다음 탭' : '⬅️ 이전 탭'}
+          </div>
+        )}
         {/* 하단 네비게이션 바 */}
         <footer className="fixed bottom-0 left-0 w-full bg-white rounded-t-2xl shadow-lg border-t flex justify-around items-center h-16 z-50">
           <Link to="/" className={`flex flex-col items-center ${location.pathname === "/" ? "text-blue-500 font-bold" : "text-gray-400"}`}>
@@ -125,7 +175,7 @@ function App() {
             <span className="text-xs">마이채널</span>
           </Link>
         </footer>
-      </motion.div>
+      </div>
     </AuthProvider>
   );
 }
