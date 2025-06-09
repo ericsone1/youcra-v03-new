@@ -905,20 +905,21 @@ function ChatRoom() {
     };
   }, []);
 
-  // 메시지 영역 스크롤 항상 마지막으로
+  // 메시지 영역 스크롤 마지막으로 (즉시 이동)
   useEffect(() => {
     if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+      messagesEndRef.current.scrollIntoView({ behavior: "instant" }); // smooth → instant로 변경
     }
   }, [messages]);
 
-  // 입력창 포커스 시 스크롤 보정 (모바일 대응)
+  // 입력창 포커스 시 스크롤 보정 (모바일 대응) - 부드러운 스크롤 제거
   const handleInputFocus = () => {
-    setTimeout(() => {
-      if (messagesEndRef.current) {
-        messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
-      }
-    }, 300);
+    // 키보드 자동 열림 방지를 위해 포커스 시 스크롤 동작 제거
+    // setTimeout(() => {
+    //   if (messagesEndRef.current) {
+    //     messagesEndRef.current.scrollIntoView({ behavior: "instant" });
+    //   }
+    // }, 300);
   };
 
   // 컴포넌트 언마운트 시 모든 타이머와 리소스 정리
@@ -1079,7 +1080,7 @@ function ChatRoom() {
       {/* 채팅메시지 패널 */}
       <main className="flex-1 min-h-0 overflow-y-auto px-2 py-3 hide-scrollbar bg-blue-25" style={{
         background: 'linear-gradient(180deg, #f0f9ff 0%, #f8fafc 100%)',
-        paddingBottom: 200, 
+        paddingBottom: 150, // 원래 구조로 되돌리고 적절한 값 설정
         paddingTop: 140,
         position: 'relative',
         zIndex: 10,
@@ -1136,7 +1137,7 @@ function ChatRoom() {
       </main>
 
       {/* 메시지 입력창 */}
-      <form className="flex items-center px-2 py-2 border-t gap-2 w-full max-w-md mx-auto bg-white" style={{ minHeight: 56, position: 'fixed', bottom: 64, left: '50%', transform: 'translateX(-50%)', zIndex: 30 }} onSubmit={handleSend}>
+      <form className="flex items-center px-3 py-3 border-t gap-2 w-full max-w-md mx-auto bg-white" style={{ minHeight: 60, position: 'fixed', bottom: 72, left: '50%', transform: 'translateX(-50%)', zIndex: 50, boxSizing: 'border-box' }} onSubmit={handleSend}>
         <div className="relative upload-menu-container">
           <button 
             type="button" 
@@ -1188,17 +1189,16 @@ function ChatRoom() {
         
         <input
           ref={inputRef}
-          className="flex-1 border rounded-2xl px-3 py-2 text-base outline-none bg-gray-100"
+          className="flex-1 border rounded-2xl px-3 py-2 text-base outline-none bg-gray-100 min-w-0"
           value={newMsg}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
-          onFocus={handleInputFocus}
           maxLength={MAX_LENGTH}
           placeholder="메시지 입력"
         />
         <button
           type="submit"
-          className="bg-blue-500 text-white px-4 py-2 rounded-2xl font-bold shadow disabled:opacity-50"
+          className="bg-blue-500 text-white px-3 py-2 rounded-2xl font-bold shadow disabled:opacity-50 shrink-0"
           disabled={sending || (!newMsg.trim() && !uploading)}
         >
           전송
