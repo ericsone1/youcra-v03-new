@@ -421,10 +421,6 @@ function ChatRoom() {
     }, 0);
   }, [messages, loading, error]);
 
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, [loading, messages, error]);
-
   // 메시지 전송
   const handleSend = async (e) => {
     e.preventDefault();
@@ -503,7 +499,7 @@ function ChatRoom() {
     if (newMsg.length + emoji.native.length > MAX_LENGTH) return;
     setNewMsg((prev) => prev + emoji.native);
     setShowEmoji(false);
-    inputRef.current?.focus();
+    // inputRef.current?.focus(); // 키보드 자동 열림 방지를 위해 주석 처리
   };
 
   // 파일 업로드 함수들 - React 방식으로 개선
@@ -1046,6 +1042,19 @@ function ChatRoom() {
       alert("좋아요 처리 중 오류가 발생했습니다.");
     }
   };
+
+  // 컴포넌트 언마운트 시 스크롤 이벤트 리스너 정리
+  useEffect(() => {
+    // 메시지가 업데이트되면 스크롤
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 0);
+  }, [messages, loading, error]);
+
+  // 자동 포커스 제거됨 - 키보드 자동 열림 방지
+  // useEffect(() => {
+  //   inputRef.current?.focus();
+  // }, [loading, messages, error]);
 
   // ---------------------- return문 시작 ----------------------
   return (
