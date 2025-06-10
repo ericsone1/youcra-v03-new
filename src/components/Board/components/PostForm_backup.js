@@ -9,7 +9,7 @@ const COLLABORATION_TYPES = [
   { id: 'commission', label: '컨텐츠의뢰', color: 'green' }
 ];
 
-function PostForm({ show, category, editingPost, onSubmit, onCancel }) {
+function PostForm({ show, category, onSubmit, onCancel }) {
   const [newPost, setNewPost] = useState({
     title: '',
     content: '',
@@ -22,37 +22,6 @@ function PostForm({ show, category, editingPost, onSubmit, onCancel }) {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
   const fileInputRef = useRef(null);
-
-  // 수정 모드일 때 기존 데이터로 폼 채우기
-  useEffect(() => {
-    if (editingPost) {
-      setNewPost({
-        title: editingPost.title || '',
-        content: editingPost.content || '',
-        type: editingPost.type || 'text',
-        linkUrl: editingPost.linkUrl || '',
-        collaborationType: editingPost.collaborationType || 'channel',
-        channelUrl: editingPost.channelUrl || ''
-      });
-      
-      // 기존 이미지가 있으면 미리보기로 설정
-      if (editingPost.imageUrl) {
-        setPreviewUrl(editingPost.imageUrl);
-      }
-    } else {
-      // 새 게시글 작성 모드일 때 초기화
-      setNewPost({
-        title: '',
-        content: '',
-        type: 'text',
-        linkUrl: '',
-        collaborationType: 'channel',
-        channelUrl: ''
-      });
-      setSelectedFile(null);
-      setPreviewUrl('');
-    }
-  }, [editingPost]);
 
   // 파일 선택 핸들러
   const handleFileSelect = (event) => {
@@ -132,13 +101,6 @@ function PostForm({ show, category, editingPost, onSubmit, onCancel }) {
 
   // 카테고리별 제목 및 설명
   const getCategoryInfo = () => {
-    if (editingPost) {
-      return {
-        title: '✏️ 게시글 수정',
-        description: '게시글을 수정하고 저장하세요.'
-      };
-    }
-    
     switch(category) {
       case 'promotion':
         return {
@@ -325,7 +287,7 @@ function PostForm({ show, category, editingPost, onSubmit, onCancel }) {
                 disabled={submitting}
                 className="flex-1 bg-blue-500 text-white py-2 rounded-lg font-semibold hover:bg-blue-600 transition-colors disabled:bg-gray-400"
               >
-                {submitting ? '업로드 중...' : editingPost ? '게시글 수정' : '게시글 작성'}
+                {submitting ? '업로드 중...' : '게시글 작성'}
               </button>
               <button
                 type="button"

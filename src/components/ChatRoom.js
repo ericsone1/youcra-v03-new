@@ -173,7 +173,6 @@ function ChatRoom() {
   const [certLoading, setCertLoading] = useState(false);
   const [certifiedVideoIds, setCertifiedVideoIds] = useState([]);
   const [watchSeconds, setWatchSeconds] = useState(0);
-  const [actualWatchSeconds, setActualWatchSeconds] = useState(0);
   const [lastPlayerTime, setLastPlayerTime] = useState(0);
   const [videoEnded, setVideoEnded] = useState(false);
   const [countdown, setCountdown] = useState(5);
@@ -395,11 +394,10 @@ function ChatRoom() {
     return () => unsubscribes.forEach((unsub) => unsub());
   }, [roomId, videoList, auth.currentUser]);
 
-  // 팝업 플레이어 인증 상태
+  // 팝업 플레이어 인증 상태 초기화 (영상 변경 시)
   useEffect(() => {
     setIsCertified(false);
     setWatchSeconds(0);
-    setActualWatchSeconds(0);
     setLastPlayerTime(0);
     setVideoEnded(false);
     setMinimized(false);
@@ -776,7 +774,6 @@ function ChatRoom() {
   const handleYoutubeReady = (event) => {
     playerRef.current = event.target;
     setWatchSeconds(0);
-    setActualWatchSeconds(0);
     setLastPlayerTime(0);
     setVideoEnded(false);
   };
@@ -790,22 +787,9 @@ function ChatRoom() {
 
     // 재생 중일 때만 새로운 interval 생성
     if (event.data === 1) { // YT.PlayerState.PLAYING
-      let localLastTime = lastPlayerTime; // 로컬 변수로 즉시 업데이트
-      
       playerRef.current._interval = setInterval(() => {
         if (playerRef.current && playerRef.current.getCurrentTime) {
           const currentTime = playerRef.current.getCurrentTime();
-          const timeDiff = currentTime - localLastTime;
-          
-          // 정상적인 재생인지 확인 (더 관대한 범위)
-          if (timeDiff >= 0.5 && timeDiff <= 2.0) {
-            // 연속 시청으로 인정
-            setActualWatchSeconds(prev => prev + 1);
-          }
-          // 시크바 조작 감지 로그 제거 (프로덕션에서 불필요)
-          
-          localLastTime = currentTime; // 로컬 변수 즉시 업데이트
-          setLastPlayerTime(currentTime);
           setWatchSeconds(Math.floor(currentTime));
         } else {
           // 기본 카운터 (플레이어 API 접근 불가 시)
@@ -816,6 +800,12 @@ function ChatRoom() {
   };
   
   const handleYoutubeEnd = () => {
+    console.log('🎬 영상 끝남 감지:', {
+      selectedVideoIdx,
+      videoListLength: videoList.length,
+      hasNext: selectedVideoIdx < videoList.length - 1
+    });
+    
     // 영상 종료 시 interval 정리
     if (playerRef.current && playerRef.current._interval) {
       clearInterval(playerRef.current._interval);
@@ -827,17 +817,21 @@ function ChatRoom() {
     
     // 다음 영상이 있을 때만 카운트다운 시작
     if (selectedVideoIdx < videoList.length - 1) {
+      console.log('⏰ 다음 영상 카운트다운 시작');
       setEndCountdown(3);
       endTimer.current = setInterval(() => {
         setEndCountdown((prev) => {
           if (prev <= 1) {
             clearInterval(endTimer.current);
+            console.log('➡️ 다음 영상으로 이동:', selectedVideoIdx + 1);
             setSelectedVideoIdx(selectedVideoIdx + 1);
             return 0;
           }
           return prev - 1;
         });
       }, 1000);
+    } else {
+      console.log('📺 마지막 영상 완료');
     }
   };
 
@@ -990,11 +984,8 @@ function ChatRoom() {
   React.useEffect(() => {
     const params = new URLSearchParams(location.search);
     const videoId = params.get('video');
-    console.log('쿼리 videoId:', videoId);
-    console.log('videoList:', videoList.map(v => v.id));
     if (videoId && videoList.length > 0) {
       const idx = videoList.findIndex(v => v.id === videoId);
-      console.log('찾은 idx:', idx);
       if (idx !== -1) {
         setSelectedVideoIdx(idx);
       }
@@ -1098,9 +1089,9 @@ function ChatRoom() {
       </header>
 
       {/* 채팅메시지 패널 */}
-      <main className="flex-1 min-h-0 overflow-y-auto px-2 py-3 hide-scrollbar bg-blue-25" style={{
-        background: 'linear-gradient(180deg, #f0f9ff 0%, #f8fafc 100%)',
-        paddingBottom: 150, // 원래 구조로 되돌리고 적절한 값 설정
+      <main className="flex-1 min-h-0 overflow-y-auto px-3 py-4 hide-scrollbar" style={{
+        background: 'linear-gradient(180deg, #FFFEF7 0%, #FEFDF6 50%, #FDF9F0 100%)',
+        paddingBottom: 160, // 입력창 공간 확보
         paddingTop: 140,
         position: 'relative',
         zIndex: 10,
@@ -1113,41 +1104,99 @@ function ChatRoom() {
           return (
             <React.Fragment key={msg.id}>
               {showDate && (
-                <div className="text-center text-xs text-gray-400 my-4">
-                  {formatTime(msg.createdAt).slice(0, 10)} {getDayOfWeek(msg.createdAt)}
+                <div className="text-center my-4">
+                  <div className="inline-block text-xs text-gray-500 bg-white/80 backdrop-blur-sm px-4 py-2 rounded-full mx-auto shadow-sm border border-gray-200 font-medium">
+                    {formatTime(msg.createdAt).slice(0, 10)} {getDayOfWeek(msg.createdAt)}
+                  </div>
                 </div>
               )}
-              <div className={`flex ${isMine ? 'justify-end' : 'justify-start'} mb-2`}>
+              <div className={`flex ${isMine ? 'justify-end' : 'justify-start'} mb-3`}>
                 {!isMine && (
-                  <div className="flex flex-col items-start mr-2">
-                    <div className="text-xs text-gray-500 mb-1 ml-2">{userNickMap[msg.uid] || msg.email?.split('@')[0] || '익명'}</div>
+                  <div className="flex flex-col items-start mr-3">
+                    {/* 닉네임을 프로필 이미지 위에 표시 */}
+                    <div className="text-xs text-gray-600 mb-1 ml-1 font-medium max-w-24 truncate">
+                      {userNickMap[msg.uid] || msg.email?.split('@')[0] || '익명'}
+                    </div>
                     <button 
-                      className="w-8 h-8 rounded-full bg-gradient-to-r from-green-400 via-blue-500 to-purple-600 flex items-center justify-center text-sm font-medium text-white shadow-md self-end hover:scale-105 transition-transform cursor-pointer"
+                      className="w-12 h-12 rounded-xl overflow-hidden bg-gray-200 shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-white relative group"
                       onClick={() => navigate(`/profile/${roomId}/${msg.uid}`)}
                       title={`${userNickMap[msg.uid] || msg.email?.split('@')[0] || '익명'}님의 프로필 보기`}
                     >
-                      {(userNickMap[msg.uid] || msg.email?.split('@')[0] || '익명').slice(0, 2).toUpperCase()}
+                      <img 
+                        src={`https://picsum.photos/seed/${msg.uid || 'anonymous'}/100/100`}
+                        alt="프로필"
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-200"
+                        onError={(e) => {
+                          // 이미지 로딩 실패 시 폴백
+                          e.target.style.display = 'none';
+                          e.target.parentElement.innerHTML = `
+                            <div class="w-full h-full bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500 flex items-center justify-center text-sm font-bold text-white">
+                              ${(userNickMap[msg.uid] || msg.email?.split('@')[0] || '익명').slice(0, 2).toUpperCase()}
+                            </div>
+                          `;
+                        }}
+                      />
                     </button>
                   </div>
                 )}
-                <div className={`max-w-[70%] px-3 py-2 rounded-2xl shadow ${isMine ? 'bg-blue-500 text-white text-right' : 'bg-white text-left'} break-words`}>
-                  {msg.fileType ? (
-                    <div className="text-left">
-                      {renderMessage(msg)}
-                    </div>
-                  ) : (
-                    <div className="text-sm">{renderMessageWithPreview(msg.text)}</div>
-                  )}
-                  <div className={`text-[10px] mt-1 text-right ${isMine ? 'text-blue-100' : 'text-gray-400'}`}>{formatTime(msg.createdAt).slice(11, 16)}</div>
+                <div className="flex flex-col max-w-[75%]">
+                  {/* 메시지 말풍선 */}
+                  <div className={`relative px-4 py-3 rounded-2xl ${
+                    isMine 
+                      ? 'bg-yellow-300 text-gray-800 rounded-br-sm ml-2 shadow-md' 
+                      : 'bg-white text-gray-800 rounded-bl-sm mr-2 border border-gray-200 shadow-md'
+                  } break-words`}>
+                    {/* 말풍선 꼬리 - 카톡 스타일 */}
+                    {isMine ? (
+                      <div className="absolute -right-2 bottom-3 w-0 h-0 border-l-8 border-l-yellow-300 border-t-4 border-t-transparent border-b-4 border-b-transparent drop-shadow-sm"></div>
+                    ) : (
+                      <div className="absolute -left-2 bottom-3 w-0 h-0 border-r-8 border-r-white border-t-4 border-t-transparent border-b-4 border-b-transparent drop-shadow-sm"></div>
+                    )}
+                    
+                    {msg.fileType ? (
+                      <div className="text-left">
+                        {renderMessage(msg)}
+                      </div>
+                    ) : (
+                      <div className="text-sm leading-relaxed text-left whitespace-pre-wrap font-normal">
+                        {renderMessageWithPreview(msg.text)}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* 타임스탬프 */}
+                  <div className={`text-[11px] mt-1 text-gray-500 ${isMine ? 'text-right mr-2' : 'text-left ml-2'} px-1`}>
+                    {formatTime(msg.createdAt).slice(11, 16)}
+                  </div>
                 </div>
+                
                 {isMine && (
-                  <button 
-                    className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 flex items-center justify-center text-sm font-medium text-white shadow-md ml-2 self-end hover:scale-105 transition-transform cursor-pointer"
-                    onClick={() => navigate('/my')}
-                    title="내 프로필 보기"
-                  >
-                    {(userNickMap[auth.currentUser?.uid] || auth.currentUser?.email?.split('@')[0] || '나').slice(0, 2).toUpperCase()}
-                  </button>
+                  <div className="flex flex-col items-end ml-3">
+                    {/* 내 닉네임 */}
+                    <div className="text-xs text-gray-600 mb-1 mr-1 font-medium max-w-24 truncate text-right">
+                      {userNickMap[auth.currentUser?.uid] || auth.currentUser?.email?.split('@')[0] || '나'}
+                    </div>
+                    <button 
+                      className="w-12 h-12 rounded-xl overflow-hidden bg-gray-200 shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-white relative group"
+                      onClick={() => navigate('/my')}
+                      title="내 프로필 보기"
+                    >
+                      <img 
+                        src={`https://picsum.photos/seed/${auth.currentUser?.uid || 'me'}/100/100`}
+                        alt="내 프로필"
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-200"
+                        onError={(e) => {
+                          // 이미지 로딩 실패 시 폴백
+                          e.target.style.display = 'none';
+                          e.target.parentElement.innerHTML = `
+                            <div class="w-full h-full bg-gradient-to-br from-indigo-500 via-blue-600 to-cyan-500 flex items-center justify-center text-sm font-bold text-white">
+                              ${(userNickMap[auth.currentUser?.uid] || auth.currentUser?.email?.split('@')[0] || '나').slice(0, 2).toUpperCase()}
+                            </div>
+                          `;
+                        }}
+                      />
+                    </button>
+                  </div>
                 )}
               </div>
             </React.Fragment>
@@ -1157,11 +1206,11 @@ function ChatRoom() {
       </main>
 
       {/* 메시지 입력창 */}
-      <form className="flex items-center px-3 py-3 border-t gap-2 w-full max-w-md mx-auto bg-white" style={{ minHeight: 60, position: 'fixed', bottom: 72, left: '50%', transform: 'translateX(-50%)', zIndex: 50, boxSizing: 'border-box' }} onSubmit={handleSend}>
+      <form className="flex items-center px-4 py-4 border-t gap-3 w-full max-w-md mx-auto bg-white/95 backdrop-blur-sm shadow-lg rounded-t-2xl" style={{ minHeight: 70, position: 'fixed', bottom: 72, left: '50%', transform: 'translateX(-50%)', zIndex: 50, boxSizing: 'border-box' }} onSubmit={handleSend}>
         <div className="relative upload-menu-container">
           <button 
             type="button" 
-            className="text-xl w-9 h-9 rounded-full bg-blue-500 text-white flex items-center justify-center hover:bg-blue-600 transition-all duration-200 hover:scale-105 shadow-md" 
+            className="text-lg w-12 h-12 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white flex items-center justify-center hover:from-purple-600 hover:to-pink-600 transition-all duration-200 hover:scale-105 shadow-lg font-bold" 
             onClick={() => setShowUploadMenu(!showUploadMenu)} 
             aria-label="파일 업로드"
             disabled={uploading}
@@ -1171,37 +1220,37 @@ function ChatRoom() {
           
           {/* 업로드 메뉴 */}
           {showUploadMenu && (
-            <div className="absolute bottom-full left-0 mb-2 bg-white rounded-xl shadow-xl border border-gray-200 px-3 py-3 z-50 flex gap-3">
+            <div className="absolute bottom-full left-0 mb-3 bg-white rounded-2xl shadow-2xl border border-gray-100 px-4 py-4 z-50 flex gap-4">
               <button
                 type="button"
-                className="flex flex-col items-center justify-center w-16 h-16 hover:bg-gray-50 rounded-xl transition-all duration-200 hover:scale-105"
+                className="flex flex-col items-center justify-center w-18 h-18 hover:bg-gradient-to-br hover:from-blue-50 hover:to-purple-50 rounded-2xl transition-all duration-200 hover:scale-105 border-2 border-transparent hover:border-blue-200"
                 onClick={() => handleFileSelect('image')}
               >
-                <span className="text-2xl mb-1">🖼️</span>
-                <span className="text-xs text-gray-600 font-medium">사진</span>
+                <span className="text-3xl mb-1">🖼️</span>
+                <span className="text-xs text-gray-700 font-semibold">사진</span>
               </button>
               <button
                 type="button"
-                className="flex flex-col items-center justify-center w-16 h-16 hover:bg-gray-50 rounded-xl transition-all duration-200 hover:scale-105"
+                className="flex flex-col items-center justify-center w-18 h-18 hover:bg-gradient-to-br hover:from-red-50 hover:to-pink-50 rounded-2xl transition-all duration-200 hover:scale-105 border-2 border-transparent hover:border-red-200"
                 onClick={() => handleFileSelect('video')}
               >
-                <span className="text-2xl mb-1">🎬</span>
-                <span className="text-xs text-gray-600 font-medium">동영상</span>
+                <span className="text-3xl mb-1">🎬</span>
+                <span className="text-xs text-gray-700 font-semibold">동영상</span>
               </button>
               <button
                 type="button"
-                className="flex flex-col items-center justify-center w-16 h-16 hover:bg-gray-50 rounded-xl transition-all duration-200 hover:scale-105"
+                className="flex flex-col items-center justify-center w-18 h-18 hover:bg-gradient-to-br hover:from-green-50 hover:to-emerald-50 rounded-2xl transition-all duration-200 hover:scale-105 border-2 border-transparent hover:border-green-200"
                 onClick={() => handleFileSelect('file')}
               >
-                <span className="text-2xl mb-1">📎</span>
-                <span className="text-xs text-gray-600 font-medium">파일</span>
+                <span className="text-3xl mb-1">📎</span>
+                <span className="text-xs text-gray-700 font-semibold">파일</span>
               </button>
             </div>
           )}
           
           {/* 업로드 중 안내 */}
           {uploading && (
-            <div className="absolute bottom-full left-0 mb-2 bg-blue-500 text-white px-3 py-2 rounded-lg text-xs whitespace-nowrap shadow-lg">
+            <div className="absolute bottom-full left-0 mb-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-4 py-3 rounded-2xl text-sm whitespace-nowrap shadow-xl font-medium">
               📤 파일 업로드 중...
             </div>
           )}
@@ -1209,19 +1258,19 @@ function ChatRoom() {
         
         <input
           ref={inputRef}
-          className="flex-1 border rounded-2xl px-3 py-2 text-base outline-none bg-gray-100 min-w-0"
+          className="flex-1 border-2 border-gray-200 rounded-2xl px-4 py-3 text-base outline-none bg-white/90 backdrop-blur-sm min-w-0 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all duration-200 placeholder-gray-500"
           value={newMsg}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
           maxLength={MAX_LENGTH}
-          placeholder="메시지 입력"
+          placeholder="메시지를 입력하세요..."
         />
         <button
           type="submit"
-          className="bg-blue-500 text-white px-3 py-2 rounded-2xl font-bold shadow disabled:opacity-50 shrink-0"
+          className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-6 py-3 rounded-2xl font-bold shadow-lg hover:from-blue-600 hover:to-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed shrink-0 transition-all duration-200 hover:scale-105 hover:shadow-xl"
           disabled={sending || (!newMsg.trim() && !uploading)}
         >
-          전송
+          {sending ? "전송중..." : "전송"}
         </button>
       </form>
 
@@ -1321,9 +1370,23 @@ function ChatRoom() {
                   ×
                 </button>
                 
-                {/* 재생 시간 표시 */}
-                <div className="absolute bottom-1 left-1 right-1 bg-black bg-opacity-70 text-white text-xs px-1 py-0.5 text-center rounded">
-                  {Math.floor(watchSeconds / 60)}:{(watchSeconds % 60).toString().padStart(2, '0')}
+                {/* 재생 시간 표시 (단일 타이머로 통일) */}
+                <div className="flex flex-col gap-1 text-xs text-gray-600 mb-2 px-1">
+                  <div className="flex justify-between items-center">
+                    <span className="text-blue-600 font-medium">
+                      시청 시간: {Math.floor(watchSeconds / 60)}:{(watchSeconds % 60).toString().padStart(2, '0')}
+                    </span>
+                    <span className="text-gray-500">
+                      {videoList[selectedVideoIdx]?.duration ? 
+                        `전체: ${Math.floor(videoList[selectedVideoIdx].duration / 60)}:${(videoList[selectedVideoIdx].duration % 60).toString().padStart(2, '0')}` 
+                        : ''}
+                    </span>
+                  </div>
+                  <div className="text-center text-blue-600 font-medium">
+                    {videoList[selectedVideoIdx]?.duration >= 180
+                      ? `연속 3분 시청 시 인증 (${Math.max(0, 180 - watchSeconds)}초 남음)`
+                      : `3분이상 시청시 인증가능`}
+                  </div>
                 </div>
               </div>
             ) : (
@@ -1394,17 +1457,19 @@ function ChatRoom() {
                 {/* 시청 시간과 인증 정보를 한 줄로 */}
                 <div className="flex flex-col gap-1 text-xs text-gray-600 mb-2 px-1">
                   <div className="flex justify-between items-center">
-                    <span>
-                      현재: {Math.floor(watchSeconds / 60)}:{(watchSeconds % 60).toString().padStart(2, '0')}
+                    <span className="text-blue-600 font-medium">
+                      시청 시간: {Math.floor(watchSeconds / 60)}:{(watchSeconds % 60).toString().padStart(2, '0')}
                     </span>
-                    <span className="text-green-600 font-medium">
-                      실제 시청: {Math.floor(actualWatchSeconds / 60)}:{(actualWatchSeconds % 60).toString().padStart(2, '0')}
+                    <span className="text-gray-500">
+                      {videoList[selectedVideoIdx]?.duration ? 
+                        `전체: ${Math.floor(videoList[selectedVideoIdx].duration / 60)}:${(videoList[selectedVideoIdx].duration % 60).toString().padStart(2, '0')}` 
+                        : ''}
                     </span>
                   </div>
                   <div className="text-center text-blue-600 font-medium">
                     {videoList[selectedVideoIdx]?.duration >= 180
                       ? `연속 3분 시청 시 인증 (${Math.max(0, 180 - watchSeconds)}초 남음)`
-                      : `끝까지 시청 시 인증`}
+                      : `3분이상 시청시 인증가능`}
                   </div>
                 </div>
                 

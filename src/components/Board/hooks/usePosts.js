@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
-import { auth, db } from '../../../firebase';
+import { auth, db, storage } from '../../../firebase';
 import { 
   collection, 
   addDoc, 
   onSnapshot, 
   query, 
   orderBy, 
+  where,
   serverTimestamp,
   doc,
   deleteDoc,
@@ -13,36 +14,58 @@ import {
   getDoc,
   setDoc
 } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
-export default function usePosts() {
+export default function usePosts(category = null) {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // 게시글 목록 실시간 구독
+  // 게시글 목록 실시간 구독 (임시로 클라이언트 사이드 필터링)
   useEffect(() => {
+    // 모든 게시글을 가져온 후 클라이언트에서 필터링
     const q = query(collection(db, "posts"), orderBy("createdAt", "desc"));
+    
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const postList = snapshot.docs.map(doc => ({
+      const allPosts = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
-      setPosts(postList);
+      
+      // 카테고리 필터링 (클라이언트 사이드)
+      const filteredPosts = category 
+        ? allPosts.filter(post => post.category === category)
+        : allPosts;
+      
+      setPosts(filteredPosts);
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [category]);
 
   // 게시글 작성
-  const createPost = async (postData, fileUrl = '') => {
+  const createPost = async (postData, file = null) => {
     if (!auth.currentUser) {
       throw new Error('로그인이 필요합니다.');
+    }
+
+    let fileUrl = '';
+    
+    // 파일 업로드 (이미지/영상인 경우)
+    if (file && (postData.type === 'image' || postData.type === 'video')) {
+      const timestamp = Date.now();
+      const fileName = `${timestamp}_${file.name}`;
+      const storageRef = ref(storage, `posts/${fileName}`);
+      
+      const snapshot = await uploadBytes(storageRef, file);
+      fileUrl = await getDownloadURL(snapshot.ref);
     }
 
     const newPostData = {
       title: postData.title.trim(),
       content: postData.content.trim(),
       type: postData.type,
+      category: postData.category || 'free',
       author: {
         uid: auth.currentUser.uid,
         email: auth.currentUser.email,
@@ -54,6 +77,16 @@ export default function usePosts() {
       comments: 0,
       views: 0
     };
+
+    // 협업모집 게시판인 경우 말머리 추가
+    if (postData.category === 'collaboration' && postData.collaborationType) {
+      newPostData.collaborationType = postData.collaborationType;
+    }
+
+    // 홍보게시판인 경우 채널 URL 추가
+    if (postData.category === 'promotion' && postData.channelUrl) {
+      newPostData.channelUrl = postData.channelUrl;
+    }
 
     // 파일 URL 추가
     if (fileUrl) {
@@ -71,6 +104,60 @@ export default function usePosts() {
 
     // Firestore에 저장
     await addDoc(collection(db, "posts"), newPostData);
+  };
+
+  // 게시글 수정
+  const updatePost = async (postId, updatedData, file = null) => {
+    if (!auth.currentUser) {
+      throw new Error('로그인이 필요합니다.');
+    }
+
+    let fileUrl = '';
+    
+    // 새 파일이 있는 경우 업로드
+    if (file && (updatedData.type === 'image' || updatedData.type === 'video')) {
+      const timestamp = Date.now();
+      const fileName = `${timestamp}_${file.name}`;
+      const storageRef = ref(storage, `posts/${fileName}`);
+      
+      const snapshot = await uploadBytes(storageRef, file);
+      fileUrl = await getDownloadURL(snapshot.ref);
+    }
+
+    const updateData = {
+      title: updatedData.title.trim(),
+      content: updatedData.content.trim(),
+      type: updatedData.type,
+      category: updatedData.category,
+      updatedAt: serverTimestamp()
+    };
+
+    // 협업모집 게시판인 경우 말머리 업데이트
+    if (updatedData.category === 'collaboration' && updatedData.collaborationType) {
+      updateData.collaborationType = updatedData.collaborationType;
+    }
+
+    // 홍보게시판인 경우 채널 URL 업데이트
+    if (updatedData.category === 'promotion' && updatedData.channelUrl) {
+      updateData.channelUrl = updatedData.channelUrl;
+    }
+
+    // 새 파일 URL 추가
+    if (fileUrl) {
+      if (updatedData.type === 'image') {
+        updateData.imageUrl = fileUrl;
+      } else if (updatedData.type === 'video') {
+        updateData.videoUrl = fileUrl;
+      }
+    }
+
+    // 링크 타입인 경우 링크 URL 업데이트
+    if (updatedData.type === 'link' && updatedData.linkUrl) {
+      updateData.linkUrl = updatedData.linkUrl;
+    }
+
+    // Firestore에서 업데이트
+    await updateDoc(doc(db, "posts", postId), updateData);
   };
 
   // 게시글 좋아요 토글
@@ -126,6 +213,7 @@ export default function usePosts() {
     posts,
     loading,
     createPost,
+    updatePost,
     toggleLike,
     deletePost
   };

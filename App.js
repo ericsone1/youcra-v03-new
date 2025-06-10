@@ -9,6 +9,7 @@ import UserProfile from "./components/UserProfile";
 import DMChatRoom from "./components/DMChatRoom"; // 1:1 채팅방 컴포넌트 import
 import VideoListPage from "./components/VideoListPage"; // 새로 만들 파일
 import AddVideoPage from "./components/AddVideoPage"; // 새 파일
+import Board from "./components/Board/index"; // 게시판 컴포넌트 import (카테고리 시스템 포함)
 
 function App() {
   const location = useLocation();
@@ -19,6 +20,7 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/chat" element={<ChatList />} />
         <Route path="/chat/:roomId" element={<ChatRoom />} />
+        <Route path="/board" element={<Board />} />
         <Route path="/report" element={<Report />} />
         <Route path="/login" element={<AuthForm />} />
         <Route path="/profile/:roomId/:uid" element={<UserProfile />} />
@@ -35,6 +37,10 @@ function App() {
         <Link to="/chat" className={`flex flex-col items-center ${location.pathname.startsWith("/chat") ? "text-blue-500 font-bold" : "text-gray-400"}`}>
           <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2v-8a2 2 0 012-2h2m10 0V6a4 4 0 00-8 0v2" /></svg>
           <span className="text-xs">채팅방</span>
+        </Link>
+        <Link to="/board" className={`flex flex-col items-center ${location.pathname === "/board" ? "text-blue-500 font-bold" : "text-gray-400"}`}>
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" /></svg>
+          <span className="text-xs">게시판</span>
         </Link>
         <Link to="/report" className={`flex flex-col items-center ${location.pathname === "/report" ? "text-blue-500 font-bold" : "text-gray-400"}`}>
           <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6 6 0 10-12 0v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
