@@ -428,7 +428,8 @@ code {
   }
 }
 
-/* 다크모드 지원 */
+/* 다크모드 지원 - 임시 비활성화 */
+/*
 @media (prefers-color-scheme: dark) {
   .card {
     background: rgba(31, 41, 55, 0.95);
@@ -440,6 +441,7 @@ code {
     border-color: rgba(75, 85, 99, 0.3);
   }
 }
+*/
 
 /* 스크롤바 숨김 유틸리티 */
 .scrollbar-hide {

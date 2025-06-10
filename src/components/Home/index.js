@@ -35,7 +35,7 @@ function Home() {
   // 로딩 상태
   if (youtubeLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-white">
         <div className="flex flex-col items-center space-y-4">
           <div className="spinner"></div>
           <div className="text-gray-600 font-medium">로딩 중...</div>
@@ -47,7 +47,7 @@ function Home() {
   // 에러 상태
   if (youtubeError) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4">
+      <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-blue-50 to-white">
         <div className="card max-w-md w-full p-8 text-center">
           <div className="w-16 h-16 mx-auto mb-4 bg-red-100 rounded-full flex items-center justify-center">
             <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -68,7 +68,7 @@ function Home() {
   }
 
   return (
-    <div className="min-h-screen overflow-y-auto hide-scrollbar">
+    <div className="min-h-screen overflow-y-auto hide-scrollbar bg-gradient-to-br from-blue-50 to-white">
       <div className="max-w-2xl mx-auto p-2 space-y-4">
         <Header />
         

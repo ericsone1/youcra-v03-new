@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { auth } from '../../../firebase';
 import { formatTime, getTypeIcon } from '../utils/formatters';
+import CommentSection from './CommentSection';
 
 // 협업 타입 라벨
 const COLLABORATION_LABELS = {
@@ -11,6 +12,8 @@ const COLLABORATION_LABELS = {
 };
 
 function PostCard({ post, onLike, onDelete, onEdit }) {
+  const [showComments, setShowComments] = useState(false);
+
   const handleLike = () => {
     try {
       onLike(post.id);
@@ -33,6 +36,11 @@ function PostCard({ post, onLike, onDelete, onEdit }) {
     } catch (error) {
       alert(error.message);
     }
+  };
+
+  // 댓글 토글
+  const handleToggleComments = () => {
+    setShowComments(!showComments);
   };
 
   // 말머리 색상 가져오기
@@ -149,7 +157,12 @@ function PostCard({ post, onLike, onDelete, onEdit }) {
           <span>{post.likes || 0}</span>
         </button>
         
-        <button className="flex items-center gap-2 text-gray-600 hover:text-blue-500 transition-colors">
+        <button 
+          onClick={handleToggleComments}
+          className={`flex items-center gap-2 transition-colors ${
+            showComments ? 'text-blue-500' : 'text-gray-600 hover:text-blue-500'
+          }`}
+        >
           <span>💬</span>
           <span>{post.comments || 0}</span>
         </button>
@@ -159,6 +172,13 @@ function PostCard({ post, onLike, onDelete, onEdit }) {
           <span>{post.views || 0}</span>
         </span>
       </div>
+
+      {/* 댓글 섹션 */}
+      <CommentSection 
+        postId={post.id}
+        isOpen={showComments}
+        onToggle={handleToggleComments}
+      />
     </motion.div>
   );
 }
