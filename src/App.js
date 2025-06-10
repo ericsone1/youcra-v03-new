@@ -26,7 +26,7 @@ const ChatRoom = React.lazy(() => import("./components/ChatRoom"));
 const ChatRoomInfo = React.lazy(() => import("./components/ChatRoomInfo"));
 const ChatRoomHost = React.lazy(() => import("./components/ChatRoomHost"));
 const VideoListPage = React.lazy(() => import("./components/VideoListPage"));
-const AddVideoPage = React.lazy(() => import("./components/AddVideoPage"));
+
 const UserProfile = React.lazy(() => import("./components/UserProfile"));
 const TestProfile = React.lazy(() => import("./components/TestProfile"));
 const Board = React.lazy(() => import("./components/Board"));
@@ -169,6 +169,14 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <ChatRoomHost />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/chat/:roomId/videos"
+                  element={
+                    <ProtectedRoute>
+                      <VideoListPage />
                     </ProtectedRoute>
                   }
                 />

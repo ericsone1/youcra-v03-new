@@ -349,7 +349,21 @@ function ChatRoom() {
     if (!roomId) return;
     const q = query(collection(db, "chatRooms", roomId, "videos"), orderBy("registeredAt", "desc"));
     const unsub = onSnapshot(q, (snapshot) => {
-      setVideoList(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+      const videos = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      setVideoList(videos);
+      
+      // URL 쿼리 파라미터에서 비디오 ID 확인하고 자동 선택
+      const urlParams = new URLSearchParams(window.location.search);
+      const videoId = urlParams.get('video');
+      // URL 쿼리 파라미터에서 비디오 ID 확인하고 자동 선택
+      if (videoId && videos.length > 0) {
+        const videoIndex = videos.findIndex(v => v.id === videoId);
+        if (videoIndex !== -1) {
+          setSelectedVideoIdx(videoIndex);
+          // URL에서 쿼리 파라미터 제거 (깔끔하게)
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+      }
     });
     return () => unsub();
   }, [roomId]);
@@ -776,24 +790,21 @@ function ChatRoom() {
 
     // 재생 중일 때만 새로운 interval 생성
     if (event.data === 1) { // YT.PlayerState.PLAYING
+      let localLastTime = lastPlayerTime; // 로컬 변수로 즉시 업데이트
+      
       playerRef.current._interval = setInterval(() => {
         if (playerRef.current && playerRef.current.getCurrentTime) {
           const currentTime = playerRef.current.getCurrentTime();
-          const timeDiff = currentTime - lastPlayerTime;
+          const timeDiff = currentTime - localLastTime;
           
-          // 정상적인 재생 (1초 전후 차이)인지 확인
-          if (timeDiff >= 0.8 && timeDiff <= 1.5) {
+          // 정상적인 재생인지 확인 (더 관대한 범위)
+          if (timeDiff >= 0.5 && timeDiff <= 2.0) {
             // 연속 시청으로 인정
             setActualWatchSeconds(prev => prev + 1);
-          } else if (Math.abs(timeDiff) > 2) {
-            // 시크바 조작 감지 (2초 이상 점프)
-            console.log('🔍 시크바 조작 감지:', {
-              lastTime: lastPlayerTime,
-              currentTime: currentTime,
-              diff: timeDiff
-            });
           }
+          // 시크바 조작 감지 로그 제거 (프로덕션에서 불필요)
           
+          localLastTime = currentTime; // 로컬 변수 즉시 업데이트
           setLastPlayerTime(currentTime);
           setWatchSeconds(Math.floor(currentTime));
         } else {
@@ -1245,19 +1256,25 @@ function ChatRoom() {
               zIndex: 15  // UI 오버레이보다 높게 설정
             }}
           >
-            <YouTube
-              key={videoList[selectedVideoIdx].videoId}
-              videoId={videoList[selectedVideoIdx].videoId}
-              opts={{
-                width: '100%',
-                height: minimized ? '64' : '200',
-                playerVars: { autoplay: 1 }
-              }}
-              onReady={handleYoutubeReady}
-              onStateChange={handleYoutubeStateChange}
-              onEnd={handleYoutubeEnd}
-              className="rounded"
-            />
+            {videoList[selectedVideoIdx]?.videoId ? (
+              <YouTube
+                key={videoList[selectedVideoIdx].videoId}
+                videoId={videoList[selectedVideoIdx].videoId}
+                opts={{
+                  width: '100%',
+                  height: minimized ? '64' : '200',
+                  playerVars: { autoplay: 1 }
+                }}
+                onReady={handleYoutubeReady}
+                onStateChange={handleYoutubeStateChange}
+                onEnd={handleYoutubeEnd}
+                className="rounded"
+              />
+            ) : (
+              <div className="w-full h-48 bg-gray-200 flex items-center justify-center text-gray-500">
+                ⚠️ 영상 로딩 중...
+              </div>
+            )}
           </div>
 
           {/* UI 오버레이 */}
