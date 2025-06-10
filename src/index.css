@@ -17,6 +17,11 @@ html, body, #root {
   height: 100%;
   margin: 0;
   padding: 0;
+  /* iPhone Safe Area 지원 */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 
 body {
@@ -27,6 +32,12 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   min-height: 100vh;
+  /* 카톡 브라우저 최적화 */
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  /* 터치 스크롤 개선 */
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
 }
 
 code {
@@ -296,7 +307,7 @@ code {
   }
 }
 
-/* 반응형 개선 */
+/* 반응형 개선 - 카톡 브라우저 최적화 */
 @media (max-width: 640px) {
   .card {
     @apply rounded-xl shadow-md;
@@ -306,9 +317,25 @@ code {
   .message-bubble {
     max-width: 85%;
   }
+  
+  /* 하단 탭바 높이 조정 */
+  .pb-24 {
+    padding-bottom: calc(6rem + env(safe-area-inset-bottom));
+  }
+  
+  /* 터치 영역 확대 */
+  .btn-primary, .btn-secondary {
+    min-height: 44px; /* iOS 권장 터치 영역 */
+    padding: 12px 16px;
+  }
+  
+  /* 입력 필드 줌 방지 */
+  input, textarea, select {
+    font-size: 16px;
+  }
 }
 
-/* 폴드폰 최적화 (Galaxy Fold6 등) */
+/* 폴드폰 최적화 (Galaxy Fold6, Galaxy Z Fold 등) */
 @media (max-width: 400px) {
   .card {
     @apply rounded-lg shadow-sm;
@@ -333,6 +360,71 @@ code {
   
   .text-xl {
     font-size: 1.125rem !important;
+  }
+  
+  /* 폴드폰 전용 패딩 */
+  .max-w-md {
+    max-width: 100%;
+    padding: 0 8px;
+  }
+  
+  /* 버튼 크기 조정 */
+  .btn-primary, .btn-secondary {
+    padding: 10px 12px;
+    font-size: 0.875rem;
+  }
+}
+
+/* 극소형 폴드폰 대응 (280px 이하) */
+@media (max-width: 320px) {
+  .max-w-2xl, .max-w-md {
+    max-width: 100%;
+    padding: 0 4px;
+  }
+  
+  .card {
+    padding: 6px;
+    border-radius: 8px;
+  }
+  
+  .text-xs {
+    font-size: 0.6875rem !important; /* 11px */
+  }
+  
+  /* 하단 탭바 아이콘/텍스트 크기 조정 */
+  .fixed.bottom-0 .flex .w-6 {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+  
+  .fixed.bottom-0 .text-xs {
+    font-size: 0.625rem; /* 10px */
+  }
+}
+
+/* 카톡 브라우저 전용 최적화 */
+@media screen and (max-width: 414px) and (-webkit-min-device-pixel-ratio: 2) {
+  /* iOS Safari 및 카톡 브라우저 */
+  body {
+    -webkit-text-size-adjust: none; /* 텍스트 크기 자동 조정 방지 */
+  }
+  
+  input, textarea, select {
+    font-size: 16px; /* iOS 줌 방지 */
+  }
+  
+  /* 스크롤 바운스 방지 */
+  body, html {
+    position: fixed;
+    overflow: hidden;
+    width: 100%;
+    height: 100%;
+  }
+  
+  #root {
+    overflow-y: auto;
+    height: 100vh;
+    -webkit-overflow-scrolling: touch;
   }
 }
 
@@ -368,4 +460,141 @@ code {
 html {
   scrollbar-width: none;
   -ms-overflow-style: none;
+}
+
+/* 추가 모바일 최적화 */
+
+/* 극소형 폴드폰 대응 (280px 이하) */
+@media (max-width: 320px) {
+  .max-w-2xl, .max-w-md {
+    max-width: 100%;
+    padding: 0 4px;
+  }
+  
+  .card {
+    padding: 6px;
+    border-radius: 8px;
+  }
+  
+  .text-xs {
+    font-size: 0.6875rem !important; /* 11px */
+  }
+  
+  /* 하단 탭바 아이콘/텍스트 크기 조정 */
+  .fixed.bottom-0 .flex .w-6 {
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+  
+  .fixed.bottom-0 .text-xs {
+    font-size: 0.625rem; /* 10px */
+  }
+}
+
+/* 카톡 브라우저 전용 최적화 */
+@media screen and (max-width: 414px) and (-webkit-min-device-pixel-ratio: 2) {
+  /* iOS Safari 및 카톡 브라우저 */
+  body {
+    -webkit-text-size-adjust: none; /* 텍스트 크기 자동 조정 방지 */
+  }
+  
+  input, textarea, select {
+    font-size: 16px; /* iOS 줌 방지 */
+  }
+}
+
+/* 하단 탭바 Safe Area 대응 */
+.tab-bar-safe {
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+}
+
+/* 터치 영역 확대 */
+.touch-area {
+  min-height: 44px; /* iOS 권장 터치 영역 */
+  min-width: 44px;
+}
+
+/* 모바일 입력 필드 최적화 */
+.mobile-input {
+  font-size: 16px; /* iOS 줌 방지 */
+  -webkit-appearance: none;
+  border-radius: 0;
+}
+
+/* ===== 추가 모바일 최적화 ===== */
+
+/* Safe Area 지원 */
+.pb-safe {
+  padding-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* Safe Area 마진 추가 */
+.mb-safe {
+  margin-bottom: calc(6rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* 카톡 브라우저 최적화 */
+@media screen and (max-width: 414px) {
+  body {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
+  
+  /* 입력 필드 줌 방지 */
+  input, textarea, select {
+    font-size: 16px !important;
+    -webkit-appearance: none;
+  }
+  
+  /* 터치 영역 확대 */
+  .btn-primary, .btn-secondary, button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* 폴드폰 특별 최적화 */
+@media (max-width: 360px) {
+  .max-w-md, .max-w-2xl {
+    max-width: 100%;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  
+  .card {
+    margin: 4px;
+    padding: 8px;
+    border-radius: 12px;
+  }
+  
+  /* 하단 탭바 텍스트 크기 조정 */
+  .fixed.bottom-0 .text-xs {
+    font-size: 10px;
+  }
+  
+  .fixed.bottom-0 .w-6.h-6 {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+/* 극소형 디스플레이 (Galaxy Fold 등) */
+@media (max-width: 280px) {
+  h1, h2, h3 {
+    font-size: 1.25rem !important;
+  }
+  
+  .text-2xl {
+    font-size: 1.125rem !important;
+  }
+  
+  .p-4 {
+    padding: 8px !important;
+  }
+  
+  .space-y-4 > * + * {
+    margin-top: 8px !important;
+  }
 }

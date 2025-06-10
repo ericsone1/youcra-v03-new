@@ -69,7 +69,7 @@ function ChatList() {
       <div className="text-sm text-gray-500 mb-2">방 개수: {rooms.length}</div>
 
       {/* 채팅방 리스트 */}
-      <div className="flex flex-col gap-3 mb-24">
+      <div className="flex flex-col gap-3 mb-safe">
         {activeTab === "전체" ? (
           // 전체 탭
           <div className="space-y-3">

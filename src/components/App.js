@@ -173,7 +173,7 @@ function App() {
   return (
     <AuthProvider>
       <div 
-        className="bg-blue-100 min-h-screen pb-24"
+        className="bg-blue-100 min-h-screen pb-safe"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -226,20 +226,20 @@ function App() {
           </div>
         )}
         {/* 하단 네비게이션 바 */}
-        <footer className="fixed bottom-0 left-0 w-full bg-white rounded-t-2xl shadow-lg border-t flex justify-around items-center h-16 z-50">
-          <Link to="/" className={`flex flex-col items-center ${location.pathname === "/" ? "text-blue-500 font-bold" : "text-gray-400"}`}>
+        <footer className="fixed bottom-0 left-0 w-full bg-white rounded-t-2xl shadow-lg border-t flex justify-around items-center h-16 z-50 pb-safe">
+          <Link to="/" className={`flex flex-col items-center touch-area ${location.pathname === "/" ? "text-blue-500 font-bold" : "text-gray-400"}`}>
             <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0h6" /></svg>
             <span className="text-xs">홈</span>
           </Link>
-          <Link to="/chat" className={`flex flex-col items-center ${location.pathname.startsWith("/chat") ? "text-blue-500 font-bold" : "text-gray-400"}`}>
+          <Link to="/chat" className={`flex flex-col items-center touch-area ${location.pathname.startsWith("/chat") ? "text-blue-500 font-bold" : "text-gray-400"}`}>
             <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2v-8a2 2 0 012-2h2m10 0V6a4 4 0 00-8 0v2" /></svg>
             <span className="text-xs">채팅방</span>
           </Link>
-          <Link to="/board" className={`flex flex-col items-center ${location.pathname === "/board" ? "text-blue-500 font-bold" : "text-gray-400"}`}>
+          <Link to="/board" className={`flex flex-col items-center touch-area ${location.pathname === "/board" ? "text-blue-500 font-bold" : "text-gray-400"}`}>
             <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
             <span className="text-xs">게시판</span>
           </Link>
-          <Link to="/my" className={`flex flex-col items-center ${location.pathname === "/my" ? "text-blue-500 font-bold" : "text-gray-400"}`}>
+          <Link to="/my" className={`flex flex-col items-center touch-area ${location.pathname === "/my" ? "text-blue-500 font-bold" : "text-gray-400"}`}>
             <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 15c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
             <span className="text-xs">마이채널</span>
           </Link>

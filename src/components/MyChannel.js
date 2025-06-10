@@ -41,7 +41,7 @@ function MyChannel() {
   // 로딩 중 화면
   if (loading) {
     return (
-      <div className="min-h-screen bg-blue-50 flex flex-col items-center justify-center pb-24 max-w-md mx-auto">
+      <div className="min-h-screen bg-blue-50 flex flex-col items-center justify-center pb-safe max-w-md mx-auto">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mb-4"></div>
         <p className="text-gray-600">로딩 중...</p>
         <BottomTabBar />
@@ -52,7 +52,7 @@ function MyChannel() {
   // 로그인이 필요한 화면 - 모바일 최적화
   if (!isAuthenticated || !user) {
     return (
-      <div className="min-h-screen bg-blue-50 flex flex-col items-center justify-center p-4 sm:p-6 pb-24 max-w-md mx-auto">
+      <div className="min-h-screen bg-blue-50 flex flex-col items-center justify-center p-4 sm:p-6 pb-safe max-w-md mx-auto">
         <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8 max-w-md w-full text-center">
           <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-blue-100 flex items-center justify-center text-xl sm:text-2xl mx-auto mb-3 sm:mb-4">
             🔒
@@ -101,7 +101,7 @@ function MyChannel() {
   }
 
   return (
-    <div className="min-h-screen bg-blue-50 flex flex-col pb-24 max-w-md mx-auto">
+    <div className="min-h-screen bg-blue-50 flex flex-col pb-safe max-w-md mx-auto">
       {/* 프로필 섹션 - 모바일 최적화 */}
       <ProfileSection
         {...profileData}
