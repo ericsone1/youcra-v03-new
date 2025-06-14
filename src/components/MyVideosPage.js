@@ -132,9 +132,18 @@ function MyVideosPage() {
       </div>
 
       {/* 영상 현황 - 모바일 최적화 */}
-      <div className="mx-3 sm:mx-4">
-        <VideoStatus myVideosData={videoData.myVideosData} />
-      </div>
+      {profile?.channelLink ? (
+        <div className="mx-3 sm:mx-4">
+          <VideoStatus myVideosData={videoData.myVideosData} />
+        </div>
+      ) : (
+        <div className="mx-3 sm:mx-4 text-center py-12 text-gray-500">
+          <p className="mb-3 text-sm sm:text-base">
+            아직 유튜브 채널이 등록되지 않았습니다.<br/>
+            채널 URL을 등록하면 내 영상이 포함된 채팅방 목록이 표시됩니다.
+          </p>
+        </div>
+      )}
 
       {/* 하단 탭바 */}
       <BottomTabBar />

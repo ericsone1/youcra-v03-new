@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AuthProvider } from "../contexts/AuthContext";
 import Home from "./Home";
 import ChatList from "./ChatList";
+import AllChatRooms from "./AllChatRooms"; // 전체 채팅방 컴포넌트 추가
 import ChatRoom from "./ChatRoom";
 import Board from "./Board";
 import LoginPage from "./LoginPage"; // 새로운 이메일 로그인 페이지
@@ -189,11 +190,13 @@ function App() {
           <Route path="/my" element={<MyChannel />} />
           <Route path="/" element={<Home />} />
           <Route path="/chat" element={<ChatList />} />
+          <Route path="/chats" element={<AllChatRooms />} />
+          <Route path="/Chats" element={<AllChatRooms />} />
+          <Route path="/chat/create" element={<ChatRoomCreate />} />
           <Route path="/chat/:roomId" element={<ChatRoom />} />
-          <Route path="/chat/:roomId/manage" element={<ChatRoomManage />} />
           <Route path="/chat/:roomId/info" element={<ChatRoomInfo />} />
+          <Route path="/chat/:roomId/manage" element={<ChatRoomManage />} />
           <Route path="/chat/:roomId/videos" element={<VideoListPage />} />
-          <Route path="/chat/:roomId/add-video" element={<AddVideoPage />} />
           <Route path="/board" element={<Board />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/profile/:roomId/:uid" element={<UserProfile />} />
@@ -201,7 +204,6 @@ function App() {
           <Route path="/videos" element={<VideoListPage />} />
           <Route path="/add-video" element={<AddVideoPage />} />
           <Route path="/search" element={<SearchResult />} />
-          <Route path="/chat/create" element={<ChatRoomCreate />} />
           <Route path="/product/:id" element={<ProductDetail />} />
           <Route path="/admin" element={<AdminPage />} />
         </Routes>

@@ -21,10 +21,10 @@ function CreateRoomModal({
       ariaHideApp={false}
     >
       <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-xs flex flex-col items-center">
-        <h3 className="font-bold text-lg mb-4">새 채팅방 만들기</h3>
+        <h3 className="font-bold text-xl mb-4">새 채팅방 만들기</h3>
         
         <input
-          className="w-full border rounded-lg px-3 py-2 mb-4 text-base"
+          className="w-full border rounded-lg px-3 py-2 mb-4 text-lg"
           placeholder="채팅방 이름 입력"
           value={newRoomName}
           onChange={(e) => setNewRoomName(e.target.value)}
@@ -33,7 +33,7 @@ function CreateRoomModal({
         />
         
         <input
-          className="w-full border rounded-lg px-3 py-2 mb-4 text-base"
+          className="w-full border rounded-lg px-3 py-2 mb-4 text-lg"
           placeholder="#게임 #음악 #일상 (띄어쓰기로 구분)"
           value={newRoomHashtags}
           onChange={(e) => setNewRoomHashtags(e.target.value)}
@@ -43,12 +43,12 @@ function CreateRoomModal({
         {/* 해시태그 미리보기 */}
         {newRoomHashtags && (
           <div className="mb-4">
-            <div className="text-xs text-gray-600 mb-1">입력된 태그:</div>
+            <div className="text-sm text-gray-600 mb-1">입력된 태그:</div>
             <div className="flex flex-wrap gap-1">
               {parseHashtags(newRoomHashtags).map((tag, idx) => (
                 <span 
                   key={idx} 
-                  className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs"
+                  className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-sm"
                 >
                   #{tag}
                 </span>
@@ -58,7 +58,7 @@ function CreateRoomModal({
         )}
         
         <button
-          className="w-full bg-blue-500 text-white py-2 rounded-lg font-bold text-base hover:bg-blue-600 transition mb-2"
+          className="w-full bg-blue-500 text-white py-2 rounded-lg font-bold text-lg hover:bg-blue-600 transition mb-2"
           onClick={onCreateRoom}
           disabled={creating || !newRoomName.trim()}
         >
@@ -66,7 +66,7 @@ function CreateRoomModal({
         </button>
         
         <button
-          className="w-full bg-gray-200 text-gray-700 py-2 rounded-lg font-bold text-base hover:bg-gray-300 transition"
+          className="w-full bg-gray-200 text-gray-700 py-2 rounded-lg font-bold text-lg hover:bg-gray-300 transition"
           onClick={onClose}
           disabled={creating}
         >

@@ -13,7 +13,8 @@ import { LoadingSpinner } from "./components/common/LoadingSpinner";
 import Navigation from "./components/common/Navigation";
 
 // 컴포넌트 지연 로딩
-const Home = React.lazy(() => import("./components/Home"));
+import Home from "./components/Home";
+// const Home = React.lazy(() => import("./components/Home"));
 const Login = React.lazy(() => import("./components/Login"));
 const MyChannel = React.lazy(() => import("./components/MyChannel"));
 const MyBlog = React.lazy(() => import("./components/MyBlog"));
@@ -26,10 +27,18 @@ const ChatRoom = React.lazy(() => import("./components/ChatRoom"));
 const ChatRoomInfo = React.lazy(() => import("./components/ChatRoomInfo"));
 const ChatRoomHost = React.lazy(() => import("./components/ChatRoomHost"));
 const VideoListPage = React.lazy(() => import("./components/VideoListPage"));
+const ChatRoomCreate = React.lazy(() => import("./components/ChatRoomCreate"));
+const ChatRoomMenu = React.lazy(() => import("./components/ChatRoomMenu"));
+const ChatRoomVote = React.lazy(() => import("./components/ChatRoomVote"));
 
 const UserProfile = React.lazy(() => import("./components/UserProfile"));
 const TestProfile = React.lazy(() => import("./components/TestProfile"));
 const Board = React.lazy(() => import("./components/Board"));
+const DMChatRoom = React.lazy(() => import("./components/DMChatRoom"));
+const AllChatRooms = React.lazy(() => import("./components/AllChatRooms"));
+const ChatRoomNotice = React.lazy(() => import("./components/ChatRoomNotice"));
+const ChatRoomParticipants = React.lazy(() => import("./components/ChatRoomParticipants"));
+const ChatRoomContacts = React.lazy(() => import("./components/ChatRoomContacts"));
 
 // Fallback 컴포넌트만 유지
 
@@ -149,6 +158,14 @@ function App() {
                   }
                 />
                 <Route
+                  path="/chat/create"
+                  element={
+                    <ProtectedRoute>
+                      <ChatRoomCreate />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
                   path="/chat/:roomId"
                   element={
                     <ProtectedRoute>
@@ -181,6 +198,30 @@ function App() {
                   }
                 />
                 <Route
+                  path="/chat/:roomId/menu"
+                  element={
+                    <ProtectedRoute>
+                      <ChatRoomMenu />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/chat/:roomId/vote"
+                  element={
+                    <ProtectedRoute>
+                      <ChatRoomVote />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/chat/:roomId/contacts"
+                  element={
+                    <ProtectedRoute>
+                      <ChatRoomContacts />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
                   path="/board"
                   element={
                     <ProtectedRoute>
@@ -189,10 +230,50 @@ function App() {
                   }
                 />
                 <Route
+                  path="/dm/:uid"
+                  element={
+                    <ProtectedRoute>
+                      <DMChatRoom />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/profile/:roomId/:uid"
+                  element={
+                    <ProtectedRoute>
+                      <UserProfile />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
                   path="/report"
                   element={
                     <ProtectedRoute>
                       <FallbackComponent componentName="Report" />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/chats"
+                  element={
+                    <ProtectedRoute>
+                      <AllChatRooms />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/chat/:roomId/notice"
+                  element={
+                    <ProtectedRoute>
+                      <ChatRoomNotice />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/chat/:roomId/participants"
+                  element={
+                    <ProtectedRoute>
+                      <ChatRoomParticipants />
                     </ProtectedRoute>
                   }
                 />

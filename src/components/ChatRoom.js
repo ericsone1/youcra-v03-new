@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { auth, db, storage } from "../firebase";
 import {
@@ -28,17 +28,39 @@ function formatTime(timestamp) {
   const date = timestamp.seconds
     ? new Date(timestamp.seconds * 1000)
     : new Date(timestamp);
-  return (
-    date.getFullYear() +
+  
+  // 날짜 부분
+  const dateStr = date.getFullYear() +
     "-" +
     String(date.getMonth() + 1).padStart(2, "0") +
     "-" +
-    String(date.getDate()).padStart(2, "0") +
-    " " +
-    String(date.getHours()).padStart(2, "0") +
-    ":" +
-    String(date.getMinutes()).padStart(2, "0")
-  );
+    String(date.getDate()).padStart(2, "0");
+  
+  // 시간 부분 (12시간 형식 + 오전/오후)
+  let hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const ampm = hours >= 12 ? "오후" : "오전";
+  hours = hours % 12;
+  hours = hours ? hours : 12; // 0시는 12시로 표시
+  const timeStr = ampm + " " + String(hours).padStart(2, "0") + ":" + minutes;
+  
+  return dateStr + " " + timeStr;
+}
+
+// 시간만 반환하는 함수 추가
+function formatTimeOnly(timestamp) {
+  if (!timestamp) return "";
+  const date = timestamp.seconds
+    ? new Date(timestamp.seconds * 1000)
+    : new Date(timestamp);
+  
+  let hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const ampm = hours >= 12 ? "오후" : "오전";
+  hours = hours % 12;
+  hours = hours ? hours : 12; // 0시는 12시로 표시
+  
+  return ampm + " " + String(hours).padStart(2, "0") + ":" + minutes;
 }
 
 function renderMessageWithPreview(text) {
@@ -149,6 +171,7 @@ function ChatRoom() {
   const [messages, setMessages] = useState([]);
   const [newMsg, setNewMsg] = useState("");
   const [participants, setParticipants] = useState([]);
+  const [participantUids, setParticipantUids] = useState([]);
   const [roomName, setRoomName] = useState("");
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
@@ -177,22 +200,33 @@ function ChatRoom() {
   const [videoEnded, setVideoEnded] = useState(false);
   const [countdown, setCountdown] = useState(5);
   const [endCountdown, setEndCountdown] = useState(0);
+  const [showInfoPanel, setShowInfoPanel] = useState(false); // 채팅방 정보 패널 표시 여부
+  
+  // === 업로드 관련 State ===
+  const [showUploadMenu, setShowUploadMenu] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [showVideo, setShowVideo] = useState(false);
+  const [currentPlayer, setCurrentPlayer] = useState(null);
+  const [dragging, setDragging] = useState(false);
+  
+  // === 기타 State ===
+  const [messageReadStatus, setMessageReadStatus] = useState({});
+  const [isInitialLoad, setIsInitialLoad] = useState(true); // 초기 로딩 여부
+  const [messagesLoaded, setMessagesLoaded] = useState(false); // 메시지 로딩 완료 여부
+  
+  // === UI 관련 State ===
+  const [showUserProfile, setShowUserProfile] = useState(null);
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
   const [watching, setWatching] = useState(0);
-  
-  // === UI 관련 State ===
-  const [popupPos, setPopupPos] = useState({ x: 100, y: 100 });
-  const [dragging, setDragging] = useState(false);
   const [minimized, setMinimized] = useState(false);
+  const [popupPos, setPopupPos] = useState({ x: 100, y: 100 });
   const [showDelete, setShowDelete] = useState(null);
-  const [showUploadMenu, setShowUploadMenu] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [showUserProfile, setShowUserProfile] = useState(null);
-  const [playerHovered, setPlayerHovered] = useState(false);
   
   // === Refs ===
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
   const dragOffset = useRef({ x: 0, y: 0 });
@@ -200,6 +234,9 @@ function ChatRoom() {
   const autoNextTimer = useRef(null);
   const longPressTimer = useRef(null);
   const endTimer = useRef(null);
+  
+  // ADD_MISSING_STATE
+  const [showVideoPanel, setShowVideoPanel] = useState(false);
 
   // 비로그인 접근 제한
   useEffect(() => {
@@ -277,6 +314,14 @@ function ChatRoom() {
       
       setMessages(msgs);
       
+      // 메시지 로딩 완료 표시 (첫 구독 시에만)
+      if (!messagesLoaded) {
+        // DOM 업데이트를 위해 약간의 딜레이 후 설정
+        setTimeout(() => {
+          setMessagesLoaded(true);
+        }, 100);
+      }
+      
       // 닉네임 매핑 - 성능 최적화: 이미 매핑된 유저는 제외
       const uids = Array.from(new Set(msgs.map((m) => m.uid).filter(Boolean)));
       
@@ -317,7 +362,85 @@ function ChatRoom() {
     });
     
     return () => unsub && unsub();
-  }, [roomId, loading, myJoinedAt]); // userNickMap 의존성 제거
+  }, [roomId, loading, myJoinedAt, messagesLoaded]); // messagesLoaded 의존성 추가
+
+  // 메시지별 읽음 상태 실시간 구독
+  useEffect(() => {
+    if (loading || !messages.length) return;
+
+    const unsubscribes = [];
+
+    messages.forEach((msg) => {
+      const readStatusRef = collection(db, "chatRooms", roomId, "messages", msg.id, "readBy");
+      const unsub = onSnapshot(readStatusRef, (snapshot) => {
+        const readByUids = snapshot.docs.map(doc => doc.id);
+        setMessageReadStatus(prev => ({
+          ...prev,
+          [msg.id]: readByUids
+        }));
+      });
+      unsubscribes.push(unsub);
+    });
+
+    return () => {
+      unsubscribes.forEach(unsub => unsub());
+    };
+  }, [roomId, messages, loading]);
+
+  // 메시지 읽음 처리 함수
+  const markMessageAsRead = async (messageId) => {
+    if (!auth.currentUser || !messageId) return;
+
+    try {
+      const readDocRef = doc(db, "chatRooms", roomId, "messages", messageId, "readBy", auth.currentUser.uid);
+      await setDoc(readDocRef, {
+        uid: auth.currentUser.uid,
+        readAt: serverTimestamp()
+      });
+    } catch (error) {
+      console.error("메시지 읽음 처리 오류:", error);
+    }
+  };
+
+  // 화면에 보이는 메시지들을 읽음 처리
+  useEffect(() => {
+    if (loading || !messages.length || !auth.currentUser) return;
+
+    // 페이지가 보이는 상태에서만 읽음 처리
+    if (document.visibilityState === 'visible') {
+      messages.forEach(msg => {
+        // 내가 보낸 메시지가 아니고, 아직 읽지 않은 메시지만 처리
+        if (msg.uid !== auth.currentUser.uid) {
+          const readByUids = messageReadStatus[msg.id] || [];
+          if (!readByUids.includes(auth.currentUser.uid)) {
+            markMessageAsRead(msg.id);
+          }
+        }
+      });
+    }
+  }, [messages, messageReadStatus, loading, auth.currentUser]);
+
+  // 페이지 포커스/블러 이벤트 처리
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && messages.length) {
+        // 페이지가 다시 보이면 읽지 않은 메시지들을 읽음 처리
+        messages.forEach(msg => {
+          if (msg.uid !== auth.currentUser?.uid) {
+            const readByUids = messageReadStatus[msg.id] || [];
+            if (!readByUids.includes(auth.currentUser?.uid)) {
+              markMessageAsRead(msg.id);
+            }
+          }
+        });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [messages, messageReadStatus, auth.currentUser]);
 
   // 실시간 참여자 관리
   useEffect(() => {
@@ -327,13 +450,19 @@ function ChatRoom() {
 
     setDoc(participantRef, {
       email: user.email,
+      uid: user.uid,
       joinedAt: serverTimestamp(),
     });
 
     const unsub = onSnapshot(
       collection(db, "chatRooms", roomId, "participants"),
       (snapshot) => {
-        setParticipants(snapshot.docs.map((doc) => doc.data().email));
+        const participantsData = snapshot.docs.map((doc) => ({
+          email: doc.data().email,
+          uid: doc.data().uid || doc.id
+        }));
+        setParticipants(participantsData.map(p => p.email));
+        setParticipantUids(participantsData.map(p => p.uid));
       }
     );
 
@@ -448,13 +577,20 @@ function ChatRoom() {
     setError("");
     setSending(true);
     try {
-      await addDoc(collection(db, "chatRooms", roomId, "messages"), {
+      const messageRef = await addDoc(collection(db, "chatRooms", roomId, "messages"), {
         text: newMsg,
         email: auth.currentUser.email,
         createdAt: serverTimestamp(),
         uid: auth.currentUser.uid,
         photoURL: auth.currentUser.photoURL || "",
       });
+      
+      // 내가 보낸 메시지는 자동으로 읽음 처리
+      await setDoc(doc(db, "chatRooms", roomId, "messages", messageRef.id, "readBy", auth.currentUser.uid), {
+        uid: auth.currentUser.uid,
+        readAt: serverTimestamp()
+      });
+      
       setNewMsg("");
     } catch (err) {
       setError("메시지 전송 중 오류가 발생했습니다.");
@@ -496,6 +632,24 @@ function ChatRoom() {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend(e);
+    }
+  };
+
+  // 안 읽은 사람 수 계산 함수
+  const getUnreadCount = (messageId, messageUid) => {
+    const readByUids = messageReadStatus[messageId] || [];
+    
+    if (messageUid === auth.currentUser?.uid) {
+      // 내가 보낸 메시지: 나를 제외한 다른 참여자들이 안 읽은 수
+      const otherParticipants = participantUids.filter(uid => uid !== auth.currentUser?.uid);
+      const otherParticipantsReadCount = readByUids.filter(uid => uid !== auth.currentUser?.uid).length;
+      const unreadCount = otherParticipants.length - otherParticipantsReadCount;
+      return unreadCount > 0 ? unreadCount : 0;
+    } else {
+      // 다른 사람이 보낸 메시지: 전체 참여자 중 안 읽은 수
+      const totalParticipants = participantUids.length;
+      const unreadCount = totalParticipants - readByUids.length;
+      return unreadCount > 0 ? unreadCount : 0;
     }
   };
 
@@ -571,7 +725,7 @@ function ChatRoom() {
       const downloadURL = await getDownloadURL(snapshot.ref);
       
       // 메시지로 파일 정보 저장
-      await addDoc(collection(db, "chatRooms", roomId, "messages"), {
+      const messageRef = await addDoc(collection(db, "chatRooms", roomId, "messages"), {
         fileType: type,
         fileName: file.name,
         fileUrl: downloadURL,
@@ -580,6 +734,12 @@ function ChatRoom() {
         createdAt: serverTimestamp(),
         uid: auth.currentUser.uid,
         photoURL: auth.currentUser.photoURL || "",
+      });
+      
+      // 내가 보낸 파일 메시지는 자동으로 읽음 처리
+      await setDoc(doc(db, "chatRooms", roomId, "messages", messageRef.id, "readBy", auth.currentUser.uid), {
+        uid: auth.currentUser.uid,
+        readAt: serverTimestamp()
       });
       
     } catch (error) {
@@ -609,11 +769,10 @@ function ChatRoom() {
             <div className="max-w-xs">
               <img 
                 src={msg.fileUrl} 
-                alt={msg.fileName}
+                alt="첨부 이미지"
                 className="rounded-lg max-w-full h-auto cursor-pointer"
                 onClick={() => window.open(msg.fileUrl, '_blank')}
               />
-              <div className="text-xs text-gray-500 mt-1">{msg.fileName}</div>
             </div>
           );
         case 'video':
@@ -625,7 +784,6 @@ function ChatRoom() {
                 className="rounded-lg max-w-full h-auto"
                 style={{ maxHeight: '200px' }}
               />
-              <div className="text-xs text-gray-500 mt-1">{msg.fileName}</div>
             </div>
           );
         case 'file':
@@ -634,7 +792,7 @@ function ChatRoom() {
             <div className="flex items-center gap-2 p-2 bg-gray-100 rounded-lg max-w-xs">
               <div className="text-2xl">📎</div>
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium truncate">{msg.fileName}</div>
+                <div className="text-sm font-medium">첨부파일</div>
                 <div className="text-xs text-gray-500">{formatFileSize(msg.fileSize)}</div>
               </div>
               <a 
@@ -649,7 +807,7 @@ function ChatRoom() {
       }
     } else {
       // 텍스트 메시지 렌더링
-      return renderMessageWithPreview(msg.text);
+      return <div className="text-lg leading-relaxed text-left whitespace-pre-wrap font-normal">{renderMessageWithPreview(msg.text)}</div>;
     }
   };
 
@@ -1045,18 +1203,75 @@ function ChatRoom() {
     }
   };
 
-  // 컴포넌트 언마운트 시 스크롤 이벤트 리스너 정리
+  // 스크롤 관리 - 컨테이너 직접 조작
+  // 스크롤 처리 로직 개선 - 메시지 로딩 완료 후에만 실행
+  useLayoutEffect(() => {
+    const scrollToBottom = (smooth = false) => {
+      if (messagesContainerRef.current) {
+        const container = messagesContainerRef.current;
+        const scrollOptions = {
+          top: container.scrollHeight,
+          behavior: smooth ? 'smooth' : 'auto'
+        };
+        container.scrollTo(scrollOptions);
+      }
+    };
+
+    // 메시지가 로딩 완료되고 메시지가 있을 때만 스크롤
+    if (messagesLoaded && messages.length > 0) {
+      if (isInitialLoad) {
+        // 초기 로딩 시 충분한 시간을 두고 스크롤 (DOM 렌더링 완료 후)
+        setTimeout(() => {
+          scrollToBottom(false);
+          setIsInitialLoad(false);
+        }, 100);
+      } else {
+        // 새 메시지 추가 시 부드럽게 스크롤
+        setTimeout(() => {
+          scrollToBottom(true);
+        }, 50);
+      }
+    }
+  }, [messages, isInitialLoad, messagesLoaded]); // messagesLoaded 의존성 추가
+
+  // 추가 안전장치: 컴포넌트 마운트 후 스크롤 보장
   useEffect(() => {
-    // 메시지가 업데이트되면 스크롤
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, 0);
-  }, [messages, loading, error]);
+    if (messagesLoaded && messages.length > 0) {
+      const timer = setTimeout(() => {
+        if (messagesContainerRef.current) {
+          const container = messagesContainerRef.current;
+          container.scrollTop = container.scrollHeight;
+        }
+      }, 200);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [messagesLoaded, messages.length]);
 
   // 자동 포커스 제거됨 - 키보드 자동 열림 방지
   // useEffect(() => {
   //   inputRef.current?.focus();
   // }, [loading, messages, error]);
+
+  // 붙여넣기 핸들러 (이미지/파일 클립보드 업로드)
+  const handlePaste = (e) => {
+    if (!e.clipboardData || !e.clipboardData.items) return;
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.kind === 'file') {
+        const file = item.getAsFile();
+        if (file) {
+          const mime = file.type;
+          let fileType = 'file';
+          if (mime.startsWith('image/')) fileType = 'image';
+          else if (mime.startsWith('video/')) fileType = 'video';
+          handleFileUpload(file, fileType);
+          e.preventDefault();
+        }
+      }
+    }
+  };
 
   // ---------------------- return문 시작 ----------------------
   return (
@@ -1085,20 +1300,33 @@ function ChatRoom() {
             </button>
           </div>
         </div>
-        <button onClick={() => navigate(`/chat/${roomId}/info`)} className="text-4xl text-gray-600 hover:text-blue-600 p-2" aria-label="메뉴">≡</button>
+        <button onClick={() => navigate(`/chat/${roomId}/menu`)} className="text-4xl text-gray-600 hover:text-blue-600 p-2" aria-label="메뉴">≡</button>
       </header>
 
       {/* 채팅메시지 패널 */}
-      <main className="flex-1 min-h-0 overflow-y-auto px-3 py-4 hide-scrollbar" style={{
-        background: 'linear-gradient(180deg, #FFFEF7 0%, #FEFDF6 50%, #FDF9F0 100%)',
-        paddingBottom: 160, // 입력창 공간 확보
-        paddingTop: 140,
-        position: 'relative',
-        zIndex: 10,
-        msOverflowStyle: 'none',
-        scrollbarWidth: 'none'
-      }}>
-        {messages.map((msg, idx) => {
+      <main 
+        ref={messagesContainerRef}
+        className="flex-1 min-h-0 overflow-y-auto px-3 py-4 hide-scrollbar" 
+        style={{
+          background: 'linear-gradient(180deg, #FFFEF7 0%, #FEFDF6 50%, #FDF9F0 100%)',
+          paddingBottom: 180, // 입력창 공간을 더 확보하여 마지막 메시지가 잘리지 않도록
+          paddingTop: 140,
+          position: 'relative',
+          zIndex: 10,
+          msOverflowStyle: 'none',
+          scrollbarWidth: 'none'
+        }}
+      >
+        {/* 메시지 로딩 중 표시 */}
+        {!messagesLoaded && (
+          <div className="flex flex-col items-center justify-center h-full">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-rose-500 mb-4"></div>
+            <div className="text-gray-500 text-sm font-medium">메시지를 불러오는 중...</div>
+          </div>
+        )}
+        
+        {/* 메시지 목록 */}
+        {messagesLoaded && messages.map((msg, idx) => {
           const isMine = msg.uid === auth.currentUser?.uid;
           const showDate = idx === 0 || (formatTime(msg.createdAt).slice(0, 10) !== formatTime(messages[idx - 1]?.createdAt).slice(0, 10));
           return (
@@ -1110,15 +1338,13 @@ function ChatRoom() {
                   </div>
                 </div>
               )}
-              <div className={`flex ${isMine ? 'justify-end' : 'justify-start'} mb-3`}>
+              <div className={`flex w-full ${isMine ? 'justify-end' : 'justify-start'} mb-3`}>
+                {/* 상대방 메시지인 경우만 프로필+닉네임 표시 */}
                 {!isMine && (
-                  <div className="flex flex-col items-start mr-3">
-                    {/* 닉네임을 프로필 이미지 위에 표시 */}
-                    <div className="text-xs text-gray-600 mb-1 ml-1 font-medium max-w-24 truncate">
-                      {userNickMap[msg.uid] || msg.email?.split('@')[0] || '익명'}
-                    </div>
+                  <div className="flex items-start mr-2 gap-2">
+                    {/* 프로필 이미지 */}
                     <button 
-                      className="w-12 h-12 rounded-xl overflow-hidden bg-gray-200 shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-white relative group"
+                      className="w-10 h-10 rounded-lg overflow-hidden bg-gray-200 shadow border-2 border-white group flex-shrink-0"
                       onClick={() => navigate(`/profile/${roomId}/${msg.uid}`)}
                       title={`${userNickMap[msg.uid] || msg.email?.split('@')[0] || '익명'}님의 프로필 보기`}
                     >
@@ -1127,81 +1353,88 @@ function ChatRoom() {
                         alt="프로필"
                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-200"
                         onError={(e) => {
-                          // 이미지 로딩 실패 시 폴백
                           e.target.style.display = 'none';
-                          e.target.parentElement.innerHTML = `
-                            <div class="w-full h-full bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500 flex items-center justify-center text-sm font-bold text-white">
-                              ${(userNickMap[msg.uid] || msg.email?.split('@')[0] || '익명').slice(0, 2).toUpperCase()}
-                            </div>
-                          `;
+                          e.target.parentElement.innerHTML = `<div class=\"w-full h-full bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500 flex items-center justify-center text-sm font-bold text-white\">${(userNickMap[msg.uid] || msg.email?.split('@')[0] || '익명').slice(0, 2).toUpperCase()}</div>`;
                         }}
                       />
                     </button>
-                  </div>
-                )}
-                <div className="flex flex-col max-w-[75%]">
-                  {/* 메시지 말풍선 */}
-                  <div className={`relative px-4 py-3 rounded-2xl ${
-                    isMine 
-                      ? 'bg-yellow-300 text-gray-800 rounded-br-sm ml-2 shadow-md' 
-                      : 'bg-white text-gray-800 rounded-bl-sm mr-2 border border-gray-200 shadow-md'
-                  } break-words`}>
-                    {/* 말풍선 꼬리 - 카톡 스타일 */}
-                    {isMine ? (
-                      <div className="absolute -right-2 bottom-3 w-0 h-0 border-l-8 border-l-yellow-300 border-t-4 border-t-transparent border-b-4 border-b-transparent drop-shadow-sm"></div>
-                    ) : (
+                    {/* 닉네임과 말풍선을 세로로 */}
+                    <div className="flex flex-col">
+                      {/* 닉네임 */}
+                      <div className="text-xl text-gray-600 font-medium max-w-20 truncate mb-1">{userNickMap[msg.uid] || msg.email?.split('@')[0] || '익명'}</div>
+                      {/* 말풍선+시간 */}
+                      <div className={`flex items-end gap-2 max-w-[85%]`}>
+                        <div className={`relative px-4 py-3 rounded-2xl bg-white text-gray-800 rounded-bl-sm border border-gray-200 shadow-md break-words`}>
                       <div className="absolute -left-2 bottom-3 w-0 h-0 border-r-8 border-r-white border-t-4 border-t-transparent border-b-4 border-b-transparent drop-shadow-sm"></div>
-                    )}
-                    
                     {msg.fileType ? (
-                      <div className="text-left">
-                        {renderMessage(msg)}
-                      </div>
+                            <div className="text-left">{renderMessage(msg)}</div>
                     ) : (
-                      <div className="text-sm leading-relaxed text-left whitespace-pre-wrap font-normal">
-                        {renderMessageWithPreview(msg.text)}
-                      </div>
+                            <div className="text-lg leading-relaxed text-left whitespace-pre-wrap font-normal">{renderMessageWithPreview(msg.text)}</div>
                     )}
                   </div>
-                  
-                  {/* 타임스탬프 */}
-                  <div className={`text-[11px] mt-1 text-gray-500 ${isMine ? 'text-right mr-2' : 'text-left ml-2'} px-1`}>
-                    {formatTime(msg.createdAt).slice(11, 16)}
+                        
+                        {/* 시간 + 안 읽은 사람 수 */}
+                        <div className="flex flex-col items-start gap-1 pb-1">
+                          {/* 안 읽은 사람 수 - 시간 윗줄 좌측 */}
+                          {(() => {
+                            const unreadCount = getUnreadCount(msg.id, msg.uid);
+                            return unreadCount > 0 && (
+                              <div className="text-xs text-yellow-500 font-bold">
+                                {unreadCount}
+                              </div>
+                            );
+                          })()}
+                          {/* 시간 */}
+                          <div className="text-base text-gray-500 opacity-80 select-none whitespace-nowrap">{formatTimeOnly(msg.createdAt)}</div>
+                        </div>
                   </div>
                 </div>
-                
+                  </div>
+                )}
+                {/* 내 메시지는 기존과 동일 */}
                 {isMine && (
-                  <div className="flex flex-col items-end ml-3">
-                    {/* 내 닉네임 */}
-                    <div className="text-xs text-gray-600 mb-1 mr-1 font-medium max-w-24 truncate text-right">
-                      {userNickMap[auth.currentUser?.uid] || auth.currentUser?.email?.split('@')[0] || '나'}
+                  <div className={`flex items-end gap-2 max-w-[85%] flex-row-reverse`}>
+                    <div className={`relative px-4 py-3 rounded-2xl bg-yellow-300 text-gray-800 rounded-br-sm shadow-md break-words`}>
+                      <div className="absolute -right-2 bottom-3 w-0 h-0 border-l-8 border-l-yellow-300 border-t-4 border-t-transparent border-b-4 border-b-transparent drop-shadow-sm"></div>
+                      {msg.fileType ? (
+                        <div className="text-left">{renderMessage(msg)}</div>
+                      ) : (
+                        <div className="text-lg leading-relaxed text-left whitespace-pre-wrap font-normal">{renderMessageWithPreview(msg.text)}</div>
+                      )}
                     </div>
-                    <button 
-                      className="w-12 h-12 rounded-xl overflow-hidden bg-gray-200 shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-white relative group"
-                      onClick={() => navigate('/my')}
-                      title="내 프로필 보기"
-                    >
-                      <img 
-                        src={`https://picsum.photos/seed/${auth.currentUser?.uid || 'me'}/100/100`}
-                        alt="내 프로필"
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-200"
-                        onError={(e) => {
-                          // 이미지 로딩 실패 시 폴백
-                          e.target.style.display = 'none';
-                          e.target.parentElement.innerHTML = `
-                            <div class="w-full h-full bg-gradient-to-br from-indigo-500 via-blue-600 to-cyan-500 flex items-center justify-center text-sm font-bold text-white">
-                              ${(userNickMap[auth.currentUser?.uid] || auth.currentUser?.email?.split('@')[0] || '나').slice(0, 2).toUpperCase()}
-                            </div>
-                          `;
-                        }}
-                      />
-                    </button>
+                    
+                    {/* 시간 + 안 읽은 사람 수 */}
+                    <div className="flex flex-col items-end gap-1 pb-1">
+                      {/* 안 읽은 사람 수 - 시간 윗줄 우측 정렬 */}
+                      {(() => {
+                        const unreadCount = getUnreadCount(msg.id, msg.uid);
+                        return unreadCount > 0 && (
+                          <div className="text-xs text-yellow-500 font-bold self-end">
+                            {unreadCount}
+                          </div>
+                        );
+                      })()}
+                      {/* 시간 */}
+                      <div className="text-base text-gray-500 opacity-80 select-none whitespace-nowrap">{formatTimeOnly(msg.createdAt)}</div>
+                    </div>
                   </div>
                 )}
               </div>
             </React.Fragment>
           );
         })}
+        
+        {/* 메시지가 없을 때 표시 */}
+        {messagesLoaded && messages.length === 0 && (
+          <div className="flex flex-col items-center justify-center h-full">
+            <div className="text-6xl mb-4">💬</div>
+            <div className="text-gray-500 text-center">
+              <div className="font-medium mb-1">아직 메시지가 없어요</div>
+              <div className="text-sm">첫 번째 메시지를 보내보세요!</div>
+            </div>
+          </div>
+        )}
+        
         <div ref={messagesEndRef} />
       </main>
 
@@ -1262,6 +1495,7 @@ function ChatRoom() {
           value={newMsg}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           maxLength={MAX_LENGTH}
           placeholder="메시지를 입력하세요..."
         />
@@ -1527,9 +1761,9 @@ function ChatRoom() {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="flex-1 text-center bg-red-500 text-white py-2 rounded-lg hover:bg-red-600 transition-colors"
-                    title="YouTube에 이동"
+                    title="구독/좋아요 바로가기"
                   >
-                    ⚠️ YouTube에 이동
+                    ❤️ 구독/좋아요 바로가기
                   </a>
                   
                   {/* 좋아요 */}
@@ -1563,14 +1797,14 @@ function ChatRoom() {
         </div>
       )}
 
-      {/* 사용자 프로필 모달 */}
-      {showUserProfile && (
+      {/* 사용자 프로필 모달 - 임시 주석 처리 */}
+      {/* {showUserProfile && (
         <UserProfileModal 
           uid={showUserProfile} 
           onClose={() => setShowUserProfile(null)} 
           userNickMap={userNickMap}
         />
-      )}
+      )} */}
 
       {/* Hidden file input for React-style file upload */}
       <input
@@ -1580,6 +1814,153 @@ function ChatRoom() {
         style={{ display: 'none' }}
         accept="*/*"
       />
+
+      {/* --- Video List / Register Modal --- */}
+      <Modal
+        isOpen={showVideoPanel}
+        onRequestClose={() => setShowVideoPanel(false)}
+        className="fixed top-0 right-0 w-full max-w-md h-full bg-white shadow-lg z-50 p-4 overflow-y-auto"
+        overlayClassName="fixed inset-0 bg-black bg-opacity-30 z-40"
+        ariaHideApp={false}
+      >
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="font-bold text-lg">시청 영상 리스트</h2>
+          <button onClick={() => setShowVideoPanel(false)} className="text-2xl text-gray-400 hover:text-gray-700">✕</button>
+        </div>
+        {/* 영상 등록 폼 */}
+        <div className="flex gap-2 items-center mb-2">
+          <input
+            type="text"
+            className="flex-1 border rounded px-2 py-1"
+            placeholder="유튜브 영상 링크를 입력하세요"
+            value={videoUrl}
+            onChange={(e) => setVideoUrl(e.target.value)}
+            disabled={videoLoading}
+          />
+          <button
+            className="bg-blue-500 text-white px-3 py-1 rounded"
+            onClick={handleVideoCheck}
+            disabled={videoLoading}
+          >
+            확인
+          </button>
+        </div>
+        {videoMsg && <div className="text-sm text-red-500">{videoMsg}</div>}
+        {videoMeta && (
+          <div className="flex items-center gap-2 mb-2">
+            <img src={videoMeta.thumbnail} alt="썸네일" className="w-24 h-14 rounded" />
+            <div>
+              <div className="font-bold">{videoMeta.title}</div>
+              <div className="text-xs text-gray-500">{videoMeta.channel}</div>
+              <div className="text-xs text-gray-500">길이: {videoMeta.duration}초</div>
+            </div>
+            <button
+              className="bg-green-500 text-white px-3 py-1 rounded ml-2"
+              onClick={handleVideoRegister}
+              disabled={videoLoading}
+            >
+              등록
+            </button>
+          </div>
+        )}
+        {/* 영상 리스트 */}
+        {videoList.length === 0 && (
+          <div className="text-sm text-gray-500">아직 등록된 영상이 없습니다.</div>
+        )}
+        <div className="flex flex-col gap-4">
+          {videoList.map((video, idx) => (
+            <div
+              key={video.id}
+              className="border rounded-lg p-2 bg-white shadow flex items-center gap-4 relative cursor-pointer hover:bg-blue-50"
+              onClick={() => {
+                setShowVideoPanel(false);
+                setSelectedVideoIdx(idx);
+              }}
+            >
+              <img src={video.thumbnail} alt="썸네일" className="w-32 h-20 object-cover rounded" />
+              <div className="flex-1 min-w-0">
+                <div className="font-bold text-base truncate">{video.title}</div>
+                <div className="text-xs text-gray-500">{video.channel}</div>
+                <div className="text-xs text-gray-400">등록자: {video.registeredBy}</div>
+              </div>
+              {certifiedVideoIds.includes(video.id) ? (
+                <button
+                  className="bg-green-500 text-white px-4 py-2 rounded font-bold cursor-default"
+                  disabled
+                >
+                  시청 완료
+                </button>
+              ) : (
+                <button
+                  className="bg-blue-500 text-white px-4 py-2 rounded font-bold"
+                  onClick={e => { e.stopPropagation(); setSelectedVideoIdx(idx); setShowVideoPanel(false); }}
+                >
+                  시청하기
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </Modal>
+
+      {/* ---------- 채팅방 정보 패널 ---------- */}
+      {showInfoPanel && (
+        <div className="fixed inset-0 z-50 flex justify-center items-center bg-black bg-opacity-30">
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-lg overflow-hidden animate-slideInUp">
+            {/* 상단 */}
+            <div className="flex items-center justify-between px-4 py-4 border-b">
+              <button onClick={() => setShowInfoPanel(false)} className="text-2xl text-gray-600 hover:text-blue-600" aria-label="뒤로가기">←</button>
+              <div className="flex-1 text-center font-bold text-lg">채팅방 정보</div>
+              <div style={{ width: 32 }} />
+            </div>
+
+            {/* 프로필/방이름/참여자 */}
+            <div className="flex flex-col items-center py-6">
+              <img src="https://picsum.photos/seed/chatroom/120/120" alt="방 프로필" className="w-20 h-20 rounded-full mb-2 border-2 border-blue-200" />
+              <div className="font-bold text-lg mb-1 flex items-center gap-1">
+                {roomName || "채팅방"}
+                {isOwner && <span title="방장" className="ml-1 text-yellow-500 text-xl">👑</span>}
+              </div>
+              <div className="text-gray-500 text-sm">참여자 {participants.length}명</div>
+            </div>
+
+            {/* 메뉴 리스트 */}
+            <div className="divide-y">
+              <MenuItem icon="📢" label="공지" />
+              <MenuItem icon="🗳️" label="투표" />
+              <MenuItem icon="🤖" label="챗봇" />
+              <MenuItem icon="🖼️" label="사진/동영상" />
+              <MenuItem icon="🎬" label="시청하기" onClick={() => navigate(`/chat/${roomId}/videos`)} />
+              <MenuItem icon="📁" label="파일" />
+              <MenuItem icon="🔗" label="링크" />
+              <MenuItem icon="📅" label="일정" />
+              <MenuItem icon="👥" label="대화상대" />
+            </div>
+
+            {/* 방장 추가 버튼들 */}
+            {isOwner && (
+              <div className="flex items-center justify-between px-6 py-4 border-t">
+                <button
+                  className="bg-blue-500 text-white font-bold py-2 px-3 rounded hover:bg-blue-600 text-sm"
+                  onClick={() => { setShowInfoPanel(false); setShowVideoPanel(true); }}
+                >
+                  시청리스트
+                </button>
+                <button
+                  className="bg-blue-500 text-white font-bold py-2 px-3 rounded hover:bg-blue-600 text-sm"
+                  onClick={() => { setShowInfoPanel(false); navigate(`/chat/${roomId}/manage`); }}
+                >
+                  방 관리
+                </button>
+              </div>
+            )}
+
+            <div className="p-4">
+              <button onClick={() => setShowInfoPanel(false)} className="w-full text-blue-600 font-bold py-2 rounded hover:bg-blue-50">💬 채팅방으로 돌아가기</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

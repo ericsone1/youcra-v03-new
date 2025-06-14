@@ -169,7 +169,6 @@ export function AuthProvider({ children }) {
     loading,
     authMethod,
     logout,
-    tempLogin,
     emailLogin,
     emailSignup,
     isAuthenticated: !!currentUser // currentUser가 있으면 true, 없으면 false

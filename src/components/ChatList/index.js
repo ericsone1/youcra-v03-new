@@ -48,7 +48,7 @@ function ChatList() {
 
   return (
     <div className="max-w-md mx-auto bg-[#f7faff] rounded-2xl p-3 min-h-screen flex flex-col">
-      <h2 className="text-2xl font-bold text-center mt-4 mb-2">채팅방 리스트</h2>
+      <h2 className="text-3xl font-bold text-center mt-4 mb-2">채팅방 리스트</h2>
       
       <TabHeader
         activeTab={activeTab}
@@ -66,7 +66,7 @@ function ChatList() {
       />
 
       {/* 방 개수 표시 */}
-      <div className="text-sm text-gray-500 mb-2">방 개수: {rooms.length}</div>
+      <div className="text-base text-gray-500 mb-2">방 개수: {rooms.length}</div>
 
       {/* 채팅방 리스트 */}
       <div className="flex flex-col gap-3 mb-24">

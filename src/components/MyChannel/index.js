@@ -9,7 +9,7 @@ import VideoStatus from './VideoStatus';
 import BottomTabBar from './BottomTabBar';
 
 function MyChannel() {
-  const { currentUser, logout, tempLogin, loading, isAuthenticated } = useAuth();
+  const { currentUser, logout, loading, isAuthenticated } = useAuth();
   const user = currentUser;
   const navigate = useNavigate();
 
@@ -68,35 +68,22 @@ function MyChannel() {
             마이채널을 이용하려면 로그인이 필요합니다
           </p>
 
-          {/* 임시 로그인 카드 */}
-          <div className="bg-gradient-to-br from-yellow-50 to-orange-50 border border-yellow-200 rounded-xl p-6 mb-6">
-            <div className="text-yellow-600 text-2xl mb-3">⚡</div>
-            <h3 className="font-bold text-gray-800 mb-2">빠른 체험하기</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              임시 계정으로 유크라의 모든 기능을 체험해보세요
-            </p>
-            <button
-              onClick={tempLogin}
-              className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 text-white py-3 px-6 rounded-lg font-bold hover:from-yellow-600 hover:to-orange-600 transition-all duration-200 shadow-md"
+          {/* 로그인 / 회원가입 버튼 */}
+          <div className="space-y-4">
+            <Link
+              to="/login"
+              className="block w-full bg-blue-500 text-white py-3 px-6 rounded-lg font-bold hover:bg-blue-600 transition-all duration-200 shadow-md"
             >
-              💨 임시 로그인으로 시작하기
-            </button>
-          </div>
+              📧 이메일로 로그인
+            </Link>
 
-          {/* 구분선 */}
-          <div className="flex items-center my-6">
-            <hr className="flex-1 border-gray-300" />
-            <span className="px-3 text-gray-400 text-sm">또는</span>
-            <hr className="flex-1 border-gray-300" />
+            <Link
+              to="/login?mode=signup"
+              className="block w-full bg-green-500 text-white py-3 px-6 rounded-lg font-bold hover:bg-green-600 transition-all duration-200 shadow-md"
+            >
+              ✨ 회원가입
+            </Link>
           </div>
-
-          {/* 정식 로그인 */}
-          <Link
-            to="/login"
-            className="block w-full bg-blue-500 text-white py-3 px-6 rounded-lg font-bold hover:bg-blue-600 transition-all duration-200 shadow-md"
-          >
-            📧 이메일로 로그인
-          </Link>
         </div>
 
         <BottomTabBar />

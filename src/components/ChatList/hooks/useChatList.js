@@ -13,11 +13,11 @@ import {
 
 export function useChatList() {
   const [rooms, setRooms] = useState([]);
+  const [roomsLoading, setRoomsLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [searchActive, setSearchActive] = useState(false);
-  const [filter, setFilter] = useState("최신순");
-  const [activeTab, setActiveTab] = useState("내 채팅방");
+  // 탭 관련 상태 제거 - 이제 내 채팅방만 표시
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newRoomName, setNewRoomName] = useState("");
   const [newRoomHashtags, setNewRoomHashtags] = useState("");
@@ -91,14 +91,43 @@ export function useChatList() {
           const participantsRef = collection(db, "chatRooms", room.id, "participants");
           const participantsSnap = await getDocs(participantsRef);
           let joinedAt = null;
+          let lastReadAt = null;
           
           participantsSnap.forEach((doc) => {
             if (doc.id === auth.currentUser?.uid) {
               joinedAt = doc.data().joinedAt;
+              lastReadAt = doc.data().lastReadAt;
             }
           });
 
-          // 3. 방 정보 업데이트
+          // 3. 안읽음 메시지 개수 계산
+          let unreadCount = 0;
+          if (lastReadAt) {
+            msgSnap.forEach((msgDoc) => {
+              const msg = msgDoc.data();
+              if (msg.createdAt && msg.uid !== auth.currentUser?.uid) {
+                const msgTime = msg.createdAt.seconds;
+                const readTime = lastReadAt.seconds;
+                if (msgTime > readTime) {
+                  unreadCount++;
+                }
+              }
+            });
+          } else if (joinedAt) {
+            // lastReadAt이 없으면 joinedAt 이후 메시지들이 안읽음
+            msgSnap.forEach((msgDoc) => {
+              const msg = msgDoc.data();
+              if (msg.createdAt && msg.uid !== auth.currentUser?.uid) {
+                const msgTime = msg.createdAt.seconds;
+                const joinTime = joinedAt.seconds;
+                if (msgTime > joinTime) {
+                  unreadCount++;
+                }
+              }
+            });
+          }
+
+          // 4. 방 정보 업데이트
           room.participantUids = Array.from(participants);
           room.participantCount = participants.size;
           room.lastMsg = lastMsg;
@@ -107,12 +136,14 @@ export function useChatList() {
             : null;
           room.lastMsgText = lastMsg?.text || (lastMsg?.imageUrl ? "[이미지]" : "") || "";
           room.joinedAt = joinedAt;
+          room.lastReadAt = lastReadAt;
+          room.unreadCount = unreadCount;
           room.myLastActiveAt = myLastMsg?.createdAt || null;
 
-          // 4. 정렬을 위한 타임스탬프 설정
+          // 5. 정렬을 위한 타임스탬프 설정
           room.sortTimestamp = myLastMsg?.createdAt?.seconds || joinedAt?.seconds || 0;
 
-          // 5. UI 관련 속성 설정
+          // 6. UI 관련 속성 설정
           room.likes = Math.floor(Math.random() * 100) + 10;
           room.title = room.name || room.title || "";
           room.desc = room.desc || "새로운 채팅방입니다. 함께 이야기해요!";
@@ -121,7 +152,8 @@ export function useChatList() {
           room.members = room.participantCount;
           room.isMine = room.createdBy === auth.currentUser?.uid;
           room.isJoined = room.participantUids?.includes(auth.currentUser?.uid);
-          room.isVisible = (activeTab === "전체") || (activeTab === "내 채팅방" && (room.isMine || room.isJoined));
+          // 내 채팅방만 표시 (내가 만든 방 또는 참여중인 방)
+          room.isVisible = room.isMine || room.isJoined;
           room.isSearched = !search || 
             room.title.includes(search) || 
             room.desc.includes(search) ||
@@ -137,10 +169,11 @@ export function useChatList() {
       // 모든 방의 데이터를 병렬로 처리
       const processedRooms = await Promise.all(roomPromises);
       setRooms(processedRooms);
+      setRoomsLoading(false);
     });
 
     return () => unsubscribe();
-  }, [activeTab, search, filter]);
+  }, [search]); // filter 의존성도 제거
 
   // 방 생성 핸들러
   const handleCreateRoom = async () => {
@@ -184,21 +217,12 @@ export function useChatList() {
     navigate(`/chat/${roomId}`);
   };
 
-  // 필터된 방 목록 계산
+  // 필터된 방 목록 계산 (사용하지 않음 - 내 채팅방만 표시)
   const getFilteredRooms = () => {
     let filtered = rooms.filter(room => room.isVisible && room.isSearched);
     
-    // 정렬
-    switch (filter) {
-      case "좋아요순":
-        filtered.sort((a, b) => b.likes - a.likes);
-        break;
-      case "참여인원순":
-        filtered.sort((a, b) => b.members - a.members);
-        break;
-      default: // 최신순
-        filtered.sort((a, b) => getLastActiveAt(b) - getLastActiveAt(a));
-    }
+    // 항상 최신순으로 정렬
+    filtered.sort((a, b) => getLastActiveAt(b) - getLastActiveAt(a));
     
     return filtered;
   };
@@ -220,14 +244,11 @@ export function useChatList() {
   return {
     // 상태
     rooms,
+    roomsLoading,
     search,
     searchInput,
     setSearchInput,
     searchActive,
-    filter,
-    setFilter,
-    activeTab,
-    setActiveTab,
     showCreateModal,
     setShowCreateModal,
     newRoomName,

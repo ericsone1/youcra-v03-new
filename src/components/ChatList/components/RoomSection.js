@@ -16,10 +16,10 @@ function RoomSection({
     <div className="mb-4">
       {/* 섹션 헤더 */}
       <div className="mb-2 mt-2 flex items-center justify-between">
-        <span className="text-base font-bold text-blue-700">{title}</span>
+        <span className="text-lg font-bold text-blue-700">{title}</span>
         {showCreateButton && (
           <button
-            className="flex items-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-full shadow font-bold text-sm hover:bg-blue-600 transition"
+            className="flex items-center gap-2 bg-blue-500 text-white px-4 py-2 rounded-full shadow font-bold text-base hover:bg-blue-600 transition"
             onClick={onCreateClick}
           >
             <FaPlus /> 방 생성하기
@@ -29,7 +29,7 @@ function RoomSection({
 
       {/* 방 목록 */}
       {rooms.slice(0, visibleCount).length === 0 ? (
-        <div className="text-sm text-gray-400 mb-2">{emptyMessage}</div>
+        <div className="text-base text-gray-400 mb-2">{emptyMessage}</div>
       ) : (
         <div className="space-y-3">
           {rooms.slice(0, visibleCount).map(room => (

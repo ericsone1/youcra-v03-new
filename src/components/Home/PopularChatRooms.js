@@ -1,22 +1,27 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import SearchSection from './SearchSection';
+import SearchBar from './SearchBar';
 import ChatRoomCard from './ChatRoomCard';
 
 function PopularChatRooms({
   chatRooms,
   loadingRooms,
   searchQuery,
-  setSearchQuery,
-  filteredChatRooms,
-  visibleRoomsCount,
-  setVisibleRoomsCount,
-  onRoomClick,
+  onSearchChange,
   onSearch,
-  onSearchKeyDown
+  onSearchKeyDown,
+  onRoomClick
 }) {
   const navigate = useNavigate();
+  const [visibleRoomsCount, setVisibleRoomsCount] = useState(3);
+
+  // 필터링된 채팅방
+  const filteredChatRooms = chatRooms.filter(
+    (room) =>
+      room.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      room.hashtags?.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase().replace('#', '')))
+  );
 
   return (
     <motion.div 
@@ -32,9 +37,10 @@ function PopularChatRooms({
         </h2>
       </div>
       
-      <SearchSection 
+      {/* 검색창 */}
+      <SearchBar
         searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
+        onSearchChange={onSearchChange}
         onSearch={onSearch}
         onKeyDown={onSearchKeyDown}
       />
@@ -48,12 +54,61 @@ function PopularChatRooms({
       ) : (
         <div className="space-y-1.5">
           {(searchQuery ? filteredChatRooms : chatRooms).slice(0, visibleRoomsCount).map((room, idx) => (
-            <ChatRoomCard
+            <motion.button
               key={room.id}
-              room={room}
-              index={idx}
-              onClick={onRoomClick}
-            />
+              className="w-full flex items-center gap-3 hover:bg-blue-50 rounded-lg px-3 py-2 transition-all duration-200 text-left"
+              onClick={() => onRoomClick(room.id)}
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <div className="flex flex-col items-center min-w-[50px]">
+                <span className={`
+                  font-bold text-xs w-8 h-6 rounded-full flex items-center justify-center text-white shadow-md
+                  ${idx === 0 ? 'bg-gradient-to-r from-amber-400 to-orange-500' : 
+                    idx === 1 ? 'bg-gradient-to-r from-blue-400 to-indigo-500' : 
+                    idx === 2 ? 'bg-gradient-to-r from-emerald-400 to-teal-500' : 
+                    'bg-gradient-to-r from-gray-400 to-gray-500'}
+                `}>
+                  {idx + 1}위
+                </span>
+              </div>
+              <div className="flex-1">
+                <div className="font-semibold text-gray-800 truncate max-w-[160px]">
+                  {room.name && room.name.length > 13 ? `${room.name.substring(0, 13)}...` : room.name}
+                </div>
+                {room.hashtags && room.hashtags.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {room.hashtags.slice(0, 3).map((tag, tagIdx) => (
+                      <span key={tagIdx} className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                        #{tag}
+                      </span>
+                    ))}
+                    {room.hashtags.length > 3 && (
+                      <span className="text-xs text-gray-400">+{room.hashtags.length - 3}</span>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-col items-end text-sm">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="flex items-center text-blue-500">
+                    <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z" />
+                    </svg>
+                    <span className="font-semibold">{room.participantCount}명</span>
+                  </div>
+                  <div className="flex items-center text-red-500">
+                    <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                    </svg>
+                    <span className="font-semibold">{room.likesCount || 0}</span>
+                  </div>
+                </div>
+                {room.isActive && (
+                  <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                )}
+              </div>
+            </motion.button>
           ))}
           
           {chatRooms.length === 0 && !loadingRooms && (
@@ -68,7 +123,7 @@ function PopularChatRooms({
             </div>
           )}
           
-          {/* 더보기 버튼 */}
+          {/* 더보기/접기 버튼 */}
           {!searchQuery && chatRooms.length > visibleRoomsCount && visibleRoomsCount < 10 && (
             <div className="text-center mt-4">
               <button
@@ -79,8 +134,6 @@ function PopularChatRooms({
               </button>
             </div>
           )}
-          
-          {/* 접기 버튼 */}
           {!searchQuery && visibleRoomsCount > 3 && (
             <div className="text-center mt-2">
               <button

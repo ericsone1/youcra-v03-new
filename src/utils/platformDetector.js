@@ -135,11 +135,16 @@ export const getPlatformMeta = (platformType) => {
  */
 export const isValidUrl = (url) => {
   if (!url || typeof url !== 'string') return false;
-  
+
+  const trimmed = url.trim();
+  // 간단한 정규식: 프로토콜(optional) + 도메인/경로 (언더바·한글 등 허용)
+  const pattern = /^(https?:\/\/)?[\w\-._~%가-힣]+(\.[\w\-._~%가-힣]+)+(\/[^\s]*)?$/i;
+  if (pattern.test(trimmed)) return true;
+
+  // fallback: 브라우저 URL 파서 시도 (특수문자 인코딩 처리)
   try {
-    // http/https가 없으면 추가
-    const urlToTest = url.startsWith('http') ? url : `https://${url}`;
-    new URL(urlToTest);
+    const urlToTest = trimmed.startsWith('http') ? trimmed : `https://${trimmed}`;
+    new URL(encodeURI(urlToTest));
     return true;
   } catch {
     return false;

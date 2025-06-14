@@ -12,7 +12,7 @@ function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const { emailLogin, emailSignup, tempLogin } = useAuth();
+  const { emailLogin, emailSignup } = useAuth();
   const navigate = useNavigate();
 
   // 이메일 로그인/회원가입 처리
@@ -60,19 +60,6 @@ function Login() {
         default:
           setError(isLogin ? '로그인에 실패했습니다.' : '회원가입에 실패했습니다.');
       }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // 임시 로그인
-  const handleTempLogin = async () => {
-    try {
-      setLoading(true);
-      await tempLogin();
-      navigate('/my');
-    } catch (error) {
-      setError('임시 로그인에 실패했습니다.');
     } finally {
       setLoading(false);
     }
@@ -221,22 +208,6 @@ function Login() {
             {loading ? '처리 중...' : (isLogin ? '로그인' : '회원가입')}
           </button>
         </form>
-
-        {/* 구분선 */}
-        <div className="flex items-center my-6">
-          <hr className="flex-1 border-gray-300" />
-          <span className="px-3 text-gray-400 text-sm">또는</span>
-          <hr className="flex-1 border-gray-300" />
-        </div>
-
-        {/* 임시 로그인 */}
-        <button
-          onClick={handleTempLogin}
-          disabled={loading}
-          className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 text-white py-3 rounded-lg font-bold hover:from-yellow-600 hover:to-orange-600 active:from-yellow-700 active:to-orange-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          💨 임시 로그인으로 체험하기
-        </button>
       </div>
 
       <BottomTabBar />

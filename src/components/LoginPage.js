@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { auth, db } from '../firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
 
 function LoginPage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -15,7 +14,15 @@ function LoginPage() {
   const [error, setError] = useState('');
 
   const navigate = useNavigate();
-  const { tempLogin } = useAuth();
+
+  // URL 파라미터로 초기 모드 결정 (mode=signup)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const mode = params.get('mode');
+    if (mode === 'signup') {
+      setIsLogin(false);
+    }
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -91,11 +98,6 @@ function LoginPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleGuestLogin = () => {
-    tempLogin();
-    navigate('/my');
   };
 
   return (
@@ -223,14 +225,6 @@ function LoginPage() {
           <span className="px-3 text-gray-400 text-sm">또는</span>
           <hr className="flex-1 border-gray-300" />
         </div>
-
-        {/* 게스트 로그인 */}
-        <button
-          onClick={handleGuestLogin}
-          className="w-full bg-gray-100 text-gray-700 py-3 px-6 rounded-lg font-bold hover:bg-gray-200 transition-all duration-200 border border-gray-200"
-        >
-          👤 게스트로 체험하기
-        </button>
 
         {/* 홈으로 돌아가기 */}
         <div className="mt-6 text-center">

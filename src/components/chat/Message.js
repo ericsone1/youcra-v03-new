@@ -52,7 +52,7 @@ function MessageComponent({ message, isMyMessage, isFirstInGroup, isLastInGroup 
         <div className={`flex flex-col ${isMyMessage ? 'items-end' : 'items-start'}`}>
           {/* 발신자 이름 - 그룹의 첫 번째 메시지에만 표시 */}
           {!isMyMessage && isFirstInGroup && (
-            <div className="text-xs font-medium text-gray-600 mb-2 px-2 fade-in" aria-label="보낸 사람">
+            <div className="text-[0.675rem] font-medium text-gray-600 mb-2 px-2 fade-in" aria-label="보낸 사람">
               {message.email?.split('@')[0] || '익명'}
             </div>
           )}
@@ -67,7 +67,7 @@ function MessageComponent({ message, isMyMessage, isFirstInGroup, isLastInGroup 
 
             {/* 메시지 버블 */}
             <div
-              className={`group relative px-4 py-3 max-w-xs break-words shadow-lg transition-all duration-200 hover:shadow-xl ${
+              className={`group relative px-4 py-3 max-w-full break-normal shadow-lg transition-all duration-200 hover:shadow-xl ${
                 isMyMessage
                   ? 'bg-gradient-to-br from-blue-500 to-purple-600 text-white'
                   : 'bg-white text-gray-800 border border-gray-100'
@@ -92,7 +92,7 @@ function MessageComponent({ message, isMyMessage, isFirstInGroup, isLastInGroup 
               role="article"
             >
               {/* 메시지 내용 */}
-              <div aria-label="메시지 내용" className="whitespace-pre-wrap leading-relaxed">
+              <div aria-label="메시지 내용" className="whitespace-pre-wrap leading-relaxed break-keep">
                 {message.text}
               </div>
               
