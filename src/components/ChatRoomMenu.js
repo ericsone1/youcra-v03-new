@@ -12,10 +12,34 @@ function ChatRoomMenu() {
   const navigate = useNavigate();
   const { roomId } = useParams();
   const [participants, setParticipants] = useState([]);
-  // TODO: 실제 데이터 연동(방 이름, 참여자 수, 프로필 등)은 이후 단계에서 추가
-  const roomName = '최팀들오삼'; // 임시
-  const participantsCount = 12; // 임시
+  const [roomData, setRoomData] = useState(null);
+  const [loading, setLoading] = useState(true);
 
+  // 실제 방 이름과 참여자 수
+  const roomName = roomData?.name || '채팅방';
+  const participantsCount = participants.length;
+
+  // 채팅방 데이터 가져오기
+  useEffect(() => {
+    if (!roomId) return;
+    
+    const fetchRoomData = async () => {
+      try {
+        const roomDoc = await getDoc(doc(db, 'chatRooms', roomId));
+        if (roomDoc.exists()) {
+          setRoomData(roomDoc.data());
+        }
+        setLoading(false);
+      } catch (error) {
+        console.error('방 데이터 가져오기 실패:', error);
+        setLoading(false);
+      }
+    };
+
+    fetchRoomData();
+  }, [roomId]);
+
+  // 참여자 데이터 실시간 구독
   useEffect(() => {
     if (!roomId) return;
     const q = collection(db, 'chatRooms', roomId, 'participants');
@@ -23,26 +47,51 @@ function ChatRoomMenu() {
       const list = await Promise.all(
         snap.docs.map(async (d) => {
           const uid = d.id;
-          // 사용자 정보 시도적으로 가져오기
+          const participantData = d.data();
+          
+          // 사용자 정보 가져오기 - 더 포괄적인 닉네임 처리
           try {
             const userDoc = await getDoc(doc(db, 'users', uid));
             if (userDoc.exists()) {
-              const u = userDoc.data();
+              const userData = userDoc.data();
+              // 닉네임 우선순위: nickname > displayName > email 앞부분 > 익명
+              const displayName = userData.nickname || 
+                                userData.displayName || 
+                                userData.nick || 
+                                userData.email?.split('@')[0] || 
+                                '익명';
+              
               return {
                 id: uid,
-                name: u.displayName || u.nick || u.email?.split('@')[0] || '익명',
-                avatar: u.photoURL || null,
-                isOwner: u.role === 'owner' || false,
+                name: displayName,
+                avatar: userData.photoURL || userData.profileImage || null,
+                isOwner: participantData.role === 'owner' || 
+                         userData.role === 'owner' || 
+                         roomData?.createdBy === uid || 
+                         false,
+                email: userData.email || null,
+                joinedAt: participantData.joinedAt || null,
               };
             }
-          } catch {}
-          return { id: uid, name: uid.slice(0, 6), avatar: null, isOwner: false };
+          } catch (error) {
+            console.error('사용자 정보 가져오기 실패:', uid, error);
+          }
+          
+          // 사용자 정보를 가져올 수 없는 경우 기본값
+          return { 
+            id: uid, 
+            name: uid.slice(0, 6) + '...', 
+            avatar: null, 
+            isOwner: false,
+            email: null,
+            joinedAt: participantData.joinedAt || null,
+          };
         })
       );
       setParticipants(list);
     });
     return () => unsub();
-  }, [roomId]);
+  }, [roomId, roomData]);
 
   const menuList = [
     { icon: '📢', label: '공지', to: `/chat/${roomId}/notice` },
@@ -54,6 +103,23 @@ function ChatRoomMenu() {
     { icon: '🔗', label: '링크', to: `/chat/${roomId}/links` },
     { icon: '📅', label: '일정', to: `/chat/${roomId}/schedule` },
   ];
+
+  if (loading) {
+    return (
+      <div className="flex flex-col h-screen max-w-md mx-auto bg-white relative">
+        <header className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md flex items-center justify-between px-4 py-3 border-b z-30 bg-white">
+          <button onClick={() => navigate(-1)} className="text-2xl text-gray-600 hover:text-blue-600" aria-label="뒤로가기">
+            ←
+          </button>
+          <div className="flex-1 text-center font-bold text-lg">채팅방 정보</div>
+          <div className="w-8" />
+        </header>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-screen max-w-md mx-auto bg-white relative">
@@ -93,7 +159,7 @@ function ChatRoomMenu() {
         {/* 대화상대 리스트 */}
         <div className="mt-6 bg-white rounded-xl shadow divide-y">
           <div className="px-5 py-3 font-bold text-gray-700 flex items-center gap-2">
-            👥 대화상대
+            👥 대화상대 ({participants.length}명)
           </div>
           {participants.length === 0 ? (
             <div className="px-5 py-4 text-gray-500 text-sm">아직 참여자가 없습니다.</div>
@@ -105,15 +171,27 @@ function ChatRoomMenu() {
                 onClick={() => navigate(`/profile/${roomId}/${user.id}`)}
               >
                 {user.avatar ? (
-                  <img src={user.avatar} alt={user.name} className="w-8 h-8 rounded-full object-cover" />
+                  <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full object-cover border-2 border-gray-200" />
                 ) : (
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 flex items-center justify-center text-white text-xs font-bold">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 flex items-center justify-center text-white text-sm font-bold border-2 border-gray-200">
                     {user.name.slice(0,2).toUpperCase()}
                   </div>
                 )}
-                <div className="flex-1 text-sm font-medium text-gray-800 flex items-center gap-1">
-                  {user.name}
-                  {user.isOwner && <span className="text-yellow-500">👑</span>}
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-800">{user.name}</span>
+                    {user.isOwner && <span className="text-yellow-500 text-lg">👑</span>}
+                  </div>
+                  {user.email && (
+                    <div className="text-xs text-gray-500 mt-0.5">
+                      {user.email}
+                    </div>
+                  )}
+                </div>
+                <div className="text-gray-400">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
                 </div>
               </button>
             ))
