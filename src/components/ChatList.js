@@ -2,7 +2,7 @@ import React from 'react';
 import { useNavigate } from "react-router-dom";
 import SearchFilter from './ChatList/components/SearchFilter';
 import RoomCard from './ChatList/components/RoomCard';
-import CreateRoomModal from './ChatList/components/CreateRoomModal';
+
 import { useChatList } from './ChatList/hooks/useChatList';
 import { useAuth } from "../contexts/AuthContext";
 
@@ -16,20 +16,10 @@ function ChatList() {
     searchInput,
     setSearchInput,
     searchActive,
-    showCreateModal,
-    setShowCreateModal,
-    newRoomName,
-    setNewRoomName,
-    newRoomHashtags,
-    setNewRoomHashtags,
-    creating,
-
     // 핸들러
-    handleCreateRoom,
     handleSearch,
     handleClearSearch,
     handleEnterRoom,
-    parseHashtags,
 
     // 계산된 값
     myRooms,
@@ -48,19 +38,31 @@ function ChatList() {
 
   return (
     <div className="max-w-md mx-auto bg-[#f7faff] rounded-2xl p-3 min-h-screen flex flex-col">
-      {/* 헤더 - 제목과 전체 채팅방 아이콘 */}
+      {/* 헤더 - 제목과 버튼들 */}
       <div className="flex items-center justify-between mt-4 mb-4">
         <h2 className="text-2xl font-bold">내 채팅방</h2>
-        <button
-          onClick={() => navigate('/chats')}
-          className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 transition-all"
-          title="방 찾기"
-        >
-          <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-          </svg>
-          <span className="text-sm font-medium text-gray-600">방 찾기</span>
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => navigate('/chat/create')}
+            className="flex items-center gap-2 px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all"
+            title="방 만들기"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            <span className="text-sm font-medium">방 만들기</span>
+          </button>
+          <button
+            onClick={() => navigate('/chats')}
+            className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 transition-all"
+            title="방 찾기"
+          >
+            <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+            </svg>
+            <span className="text-sm font-medium text-gray-600">방 찾기</span>
+          </button>
+        </div>
       </div>
 
       <SearchFilter
@@ -139,18 +141,7 @@ function ChatList() {
         </div>
       </div>
 
-      {/* 방 생성 모달 */}
-      <CreateRoomModal
-        isOpen={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        newRoomName={newRoomName}
-        setNewRoomName={setNewRoomName}
-        newRoomHashtags={newRoomHashtags}
-        setNewRoomHashtags={setNewRoomHashtags}
-        onCreateRoom={handleCreateRoom}
-        creating={creating}
-        parseHashtags={parseHashtags}
-      />
+
     </div>
   );
 }

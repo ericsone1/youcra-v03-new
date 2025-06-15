@@ -18,21 +18,12 @@ export function useChatList() {
   const [searchInput, setSearchInput] = useState("");
   const [searchActive, setSearchActive] = useState(false);
   // 탭 관련 상태 제거 - 이제 내 채팅방만 표시
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newRoomName, setNewRoomName] = useState("");
-  const [newRoomHashtags, setNewRoomHashtags] = useState("");
-  const [creating, setCreating] = useState(false);
   const [visibleCount, setVisibleCount] = useState(10);
   const [myRoomsVisibleCount, setMyRoomsVisibleCount] = useState(5);
   const [joinedRoomsVisibleCount, setJoinedRoomsVisibleCount] = useState(5);
   const navigate = useNavigate();
 
-  // 해시태그 파싱 함수
-  const parseHashtags = (text) => {
-    const hashtagRegex = /#[\w가-힣]+/g;
-    const matches = text.match(hashtagRegex);
-    return matches ? matches.map(tag => tag.substring(1).toLowerCase()) : [];
-  };
+
 
   // 최근 활동 기준 정렬 함수
   const getLastActiveAt = (room) => {
@@ -175,29 +166,7 @@ export function useChatList() {
     return () => unsubscribe();
   }, [search]); // filter 의존성도 제거
 
-  // 방 생성 핸들러
-  const handleCreateRoom = async () => {
-    if (!newRoomName.trim()) return;
-    setCreating(true);
-    
-    // 해시태그 파싱
-    const parsedHashtags = parseHashtags(newRoomHashtags);
-    
-    const docRef = await addDoc(collection(db, "chatRooms"), {
-      name: newRoomName,
-      hashtags: parsedHashtags,
-      createdAt: serverTimestamp(),
-      createdBy: auth.currentUser?.uid || "anonymous",
-      profileImage: "",
-      maxParticipants: 10,
-    });
-    
-    setNewRoomName("");
-    setNewRoomHashtags("");
-    setCreating(false);
-    setShowCreateModal(false);
-    navigate(`/chat/${docRef.id}`);
-  };
+
 
   // 검색 핸들러
   const handleSearch = (searchText) => {
@@ -249,13 +218,6 @@ export function useChatList() {
     searchInput,
     setSearchInput,
     searchActive,
-    showCreateModal,
-    setShowCreateModal,
-    newRoomName,
-    setNewRoomName,
-    newRoomHashtags,
-    setNewRoomHashtags,
-    creating,
     visibleCount,
     setVisibleCount,
     myRoomsVisibleCount,
@@ -264,11 +226,9 @@ export function useChatList() {
     setJoinedRoomsVisibleCount,
 
     // 핸들러
-    handleCreateRoom,
     handleSearch,
     handleClearSearch,
     handleEnterRoom,
-    parseHashtags,
 
     // 계산된 값
     filteredRooms: getFilteredRooms(),
