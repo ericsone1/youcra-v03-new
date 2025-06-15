@@ -35,21 +35,7 @@ export default function ChatRoomInfo() {
     roomData.hostUid === myUid
   );
 
-  // 디버깅용 로그 (개발 환경에서만)
-  if (process.env.NODE_ENV === 'development' && roomData && myUid) {
-    console.log('🔍 방장 확인:', {
-      myUid,
-      myEmail,
-      roomData: {
-        createdBy: roomData.createdBy,
-        ownerEmail: roomData.ownerEmail,
-        creatorEmail: roomData.creatorEmail,
-        owner: roomData.owner,
-        hostUid: roomData.hostUid
-      },
-      isOwner
-    });
-  }
+
 
   // 방 타입 정보
   const getRoomTypeInfo = (roomType) => {
@@ -114,7 +100,7 @@ export default function ChatRoomInfo() {
                 setOwnerData(ownerDoc.data());
               }
             } catch (error) {
-              console.log('방장 정보 로드 실패:', error);
+              // 방장 정보 로드 실패 시 무시
             }
           }
         }

@@ -186,25 +186,30 @@ export const VideoSection = ({
                         <span className="text-gray-500">영상 로딩 중...</span>
                       </div>
                     )}
-                    <YouTube
-                      key={video.videoId}
-                      videoId={video.videoId}
-                      onReady={handleYoutubeReady}
-                      onStateChange={handleYoutubeStateChange}
-                      onEnd={handleYoutubeEnd}
-                      opts={{
-                        width: "100%",
-                        height: "200",
-                        playerVars: {
-                          autoplay: 1,
-                          controls: 1,
-                          modestbranding: 1,
-                          rel: 0,
-                          enablejsapi: 1,
-                          playsinline: 1,
-                        },
-                      }}
-                    />
+                    <div className="youtube-player">
+                      <YouTube
+                        key={video.videoId}
+                        videoId={video.videoId}
+                        onReady={handleYoutubeReady}
+                        onStateChange={handleYoutubeStateChange}
+                        onEnd={handleYoutubeEnd}
+                        opts={{
+                          width: "100%",
+                          height: "100%",
+                          playerVars: {
+                            autoplay: 1,
+                            controls: 1, // 플레이어 컨트롤 표시
+                            modestbranding: 0, // YouTube 로고 표시
+                            rel: 0, // 관련 동영상 숨김
+                            enablejsapi: 1,
+                            playsinline: 1, // 모바일에서 인라인 재생
+                            fs: 1, // 전체화면 활성화
+                            disablekb: 0, // 키보드 컨트롤 활성화
+                            start: 0 // 처음부터 재생
+                          },
+                        }}
+                      />
+                    </div>
                     {/* 플레이어 컨트롤 */}
                     <div className="mt-3 p-3 bg-gray-50 rounded-lg">
                       <div className="flex items-center justify-between mb-2">

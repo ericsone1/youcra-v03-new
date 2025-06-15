@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { useParams, useNavigate, useLocation, NavLink } from "react-router-dom";
 import { auth, db, storage } from "../firebase";
 import {
   collection,
@@ -14,12 +14,14 @@ import {
   getDoc,
   getDocs,
   where,
+  limit,
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
 // import Picker from '@emoji-mart/react';
 // import data from '@emoji-mart/data';
 import YouTube from 'react-youtube';
 import Modal from "react-modal";
+import { roomIdFromParam, roomPath } from '../utils/route';
 
 const MAX_LENGTH = 200;
 
@@ -163,7 +165,8 @@ function getYoutubeUrl(videoId) {
 }
 
 function ChatRoom() {
-  const { roomId } = useParams();
+  const { roomId: rawRoomId } = useParams();
+  const roomId = roomIdFromParam(rawRoomId);
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -237,6 +240,15 @@ function ChatRoom() {
   
   // ADD_MISSING_STATE
   const [showVideoPanel, setShowVideoPanel] = useState(false);
+  
+  // === 시청인증 설정 State ===
+  const [certificationSettings, setCertificationSettings] = useState({
+    mode: 'time', // 'time' 또는 'complete'
+    requiredTime: 180 // 기본 3분
+  });
+
+  // 팝업 최초 열림 감지를 위한 ref (중앙 정렬용)
+  const prevSelectedVideoIdx = useRef(null);
 
   // 비로그인 접근 제한
   useEffect(() => {
@@ -298,21 +310,23 @@ function ChatRoom() {
 
     const q = query(
       collection(db, "chatRooms", roomId, "messages"),
-      orderBy("createdAt")
+      orderBy("createdAt"),
+      limit(100) // 최근 100개 메시지만 로드
     );
     
     const unsub = onSnapshot(q, async (snapshot) => {
-      let msgs = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      
-      // 최초 입장 시에만 메시지 필터링 적용
-      if (initialJoinTime && messages.length === 0) {
-        msgs = msgs.filter(msg => msg.createdAt && msg.createdAt.seconds >= initialJoinTime);
-      }
-      
-      setMessages(msgs);
+      try {
+        let msgs = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        
+        // 최초 입장 시에만 메시지 필터링 적용
+        if (initialJoinTime && messages.length === 0) {
+          msgs = msgs.filter(msg => msg.createdAt && msg.createdAt.seconds >= initialJoinTime);
+        }
+        
+        setMessages(msgs);
       
       // 메시지 로딩 완료 표시 (첫 구독 시에만)
       if (!messagesLoaded) {
@@ -359,6 +373,15 @@ function ChatRoom() {
         
         return currentNickMap; // 현재 상태 유지
       });
+      } catch (error) {
+        console.error("메시지 구독 오류:", error);
+      }
+    }, (error) => {
+      console.error("Firestore 구독 오류:", error);
+      // 오류 발생 시 사용자에게 알림 (선택사항)
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Firestore 인덱스가 필요할 수 있습니다. Firebase Console에서 인덱스를 생성해주세요.');
+      }
     });
     
     return () => unsub && unsub();
@@ -503,18 +526,23 @@ function ChatRoom() {
       setCertifiedVideoIds([]);
       return;
     }
+    
     const unsubscribes = videoList.map((video) => {
       const q = collection(db, "chatRooms", roomId, "videos", video.id, "certifications");
       return onSnapshot(q, (snapshot) => {
         const found = snapshot.docs.find(
           (doc) => doc.data().uid === auth.currentUser.uid
         );
+        
         setCertifiedVideoIds((prev) => {
           if (found && !prev.includes(video.id)) {
-            return [...prev, video.id];
+            const newIds = [...prev, video.id];
+
+            return newIds;
           }
           if (!found && prev.includes(video.id)) {
-            return prev.filter((id) => id !== video.id);
+            const newIds = prev.filter((id) => id !== video.id);
+            return newIds;
           }
           return prev;
         });
@@ -525,7 +553,14 @@ function ChatRoom() {
 
   // 팝업 플레이어 인증 상태 초기화 (영상 변경 시)
   useEffect(() => {
-    setIsCertified(false);
+    // 현재 선택된 영상이 이미 인증된 영상인지 확인
+    const currentVideo = videoList[selectedVideoIdx];
+    const isAlreadyCertified = currentVideo && certifiedVideoIds.includes(currentVideo.id);
+    
+
+    
+    // 이미 인증된 영상이면 인증 상태를 true로, 아니면 false로 설정
+    setIsCertified(isAlreadyCertified);
     setWatchSeconds(0);
     setLastPlayerTime(0);
     setVideoEnded(false);
@@ -547,7 +582,7 @@ function ChatRoom() {
       clearInterval(endTimer.current);
       endTimer.current = null;
     }
-  }, [selectedVideoIdx]);
+  }, [selectedVideoIdx, certifiedVideoIds, videoList]);
 
   // 영상 선택 시 좋아요 상태 초기화
   useEffect(() => {
@@ -895,6 +930,7 @@ function ChatRoom() {
 
   // 드래그 핸들러 - 간단하고 빠른 방식
   const handleDragStart = (e) => {
+    e.stopPropagation();
     setDragging(true);
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -906,6 +942,7 @@ function ChatRoom() {
   };
   
   const handleDrag = (e) => {
+    e.stopPropagation();
     if (!dragging) return;
     
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -924,16 +961,21 @@ function ChatRoom() {
     });
   };
   
-  const handleDragEnd = () => {
+  const handleDragEnd = (e) => {
+    if (e) e.stopPropagation();
     setDragging(false);
   };
 
   // 유튜브 플레이어 핸들러
   const handleYoutubeReady = (event) => {
-    playerRef.current = event.target;
-    setWatchSeconds(0);
-    setLastPlayerTime(0);
-    setVideoEnded(false);
+    try {
+      playerRef.current = event.target;
+      setWatchSeconds(0);
+      setLastPlayerTime(0);
+      setVideoEnded(false);
+    } catch (error) {
+      console.error("YouTube Player 초기화 오류:", error);
+    }
   };
   
   const handleYoutubeStateChange = (event) => {
@@ -958,12 +1000,6 @@ function ChatRoom() {
   };
   
   const handleYoutubeEnd = () => {
-    console.log('🎬 영상 끝남 감지:', {
-      selectedVideoIdx,
-      videoListLength: videoList.length,
-      hasNext: selectedVideoIdx < videoList.length - 1
-    });
-    
     // 영상 종료 시 interval 정리
     if (playerRef.current && playerRef.current._interval) {
       clearInterval(playerRef.current._interval);
@@ -972,24 +1008,14 @@ function ChatRoom() {
     
     // 영상 종료 시 videoEnded 상태 설정
     setVideoEnded(true);
-    
-    // 다음 영상이 있을 때만 카운트다운 시작
+  };
+
+  // 다음 영상으로 이동하는 공통 함수
+  const moveToNextVideo = () => {
     if (selectedVideoIdx < videoList.length - 1) {
-      console.log('⏰ 다음 영상 카운트다운 시작');
-      setEndCountdown(3);
-      endTimer.current = setInterval(() => {
-        setEndCountdown((prev) => {
-          if (prev <= 1) {
-            clearInterval(endTimer.current);
-            console.log('➡️ 다음 영상으로 이동:', selectedVideoIdx + 1);
-            setSelectedVideoIdx(selectedVideoIdx + 1);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+      setSelectedVideoIdx(selectedVideoIdx + 1);
     } else {
-      console.log('📺 마지막 영상 완료');
+      setSelectedVideoIdx(0);
     }
   };
 
@@ -997,6 +1023,7 @@ function ChatRoom() {
   const handleCertify = async () => {
     setCertLoading(true);
     const video = videoList[selectedVideoIdx];
+    
     await addDoc(
       collection(db, "chatRooms", roomId, "videos", video.id, "certifications"),
       {
@@ -1006,48 +1033,56 @@ function ChatRoom() {
       }
     );
     setIsCertified(true);
+    setCertifiedVideoIds(prev => prev.includes(video.id) ? prev : [...prev, video.id]);
     setCertLoading(false);
+    
+    // 인증 완료 후 다음 영상으로 이동
+    setTimeout(moveToNextVideo, 1000);
   };
 
-  // certAvailable 선언 - README 기본 조건에 맞게 단순화
+  // certAvailable 선언 - 방장 설정에 따른 동적 조건
   let certAvailable = false;
   if (
     selectedVideoIdx !== null &&
     videoList[selectedVideoIdx] &&
     typeof videoList[selectedVideoIdx].duration === "number"
   ) {
-    certAvailable =
-      videoList[selectedVideoIdx].duration >= 180
-        ? watchSeconds >= 180  // 3분 이상 영상: 3분 시청
-        : videoEnded;          // 3분 미만 영상: 완시청
+    const videoDuration = videoList[selectedVideoIdx].duration;
+    
+    if (certificationSettings.mode === 'full') {
+      // 완주 기반 인증: 영상을 끝까지 시청해야 함
+      certAvailable = videoEnded;
+    } else {
+      // 시간 기반 인증: 설정된 시간 이상 시청하면 됨
+      if (videoDuration <= 180) {
+        // 3분 이하 영상은 완주 기반으로 처리
+        certAvailable = videoEnded;
+      } else {
+        // 3분 초과 영상은 3분 시청으로 인증
+        const requiredTime = 180;
+        certAvailable = watchSeconds >= requiredTime;
+      }
+    }
   }
 
-  // 카운트다운 자동 이동 useEffect
+  // 자동 인증 및 카운트다운 useEffect
   useEffect(() => {
     const currentVideo = videoList[selectedVideoIdx];
     const isAlreadyCertified = currentVideo && certifiedVideoIds.includes(currentVideo.id);
+    const isAutoEnabled = certificationSettings.enabled !== false; // 기본값은 true (기존 호환성)
+    const shouldAutoCertify = isAutoEnabled && certAvailable && !isCertified && !certLoading && !isAlreadyCertified;
     
-    // 인증 가능하고, 아직 인증하지 않았고, 이미 인증된 영상이 아닐 때만 카운트다운 시작
-    if (certAvailable && !isCertified && !certLoading && !isAlreadyCertified) {
-      setCountdown(5);
-      autoNextTimer.current = setInterval(() => {
-        setCountdown((prev) => {
-          if (prev <= 1) {
-            clearInterval(autoNextTimer.current);
-            if (selectedVideoIdx < videoList.length - 1) {
-              setSelectedVideoIdx(selectedVideoIdx + 1);
-            }
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+    if (shouldAutoCertify) {
+      // 자동 인증 실행 (자동 인증이 활성화된 경우에만)
+      handleCertify();
     } else {
+      // 조건을 만족하지 않으면 타이머 정리
       clearInterval(autoNextTimer.current);
       setCountdown(5);
     }
+    
     return () => clearInterval(autoNextTimer.current);
-  }, [certAvailable, isCertified, certLoading, selectedVideoIdx, videoList.length, certifiedVideoIds]);
+  }, [certAvailable, isCertified, certLoading, selectedVideoIdx, videoList.length, certifiedVideoIds, certificationSettings.enabled]);
 
   useEffect(() => {
     // 채팅방 진입 시 body, html 스크롤 막기
@@ -1107,7 +1142,7 @@ function ChatRoom() {
     };
   }, []);
 
-  // 채팅방 정보 불러오기 (방장 확인용)
+  // 채팅방 정보 불러오기 (방장 확인용 + 시청인증 설정)
   useEffect(() => {
     if (!roomId) return;
 
@@ -1115,7 +1150,26 @@ function ChatRoom() {
       try {
         const roomDoc = await getDoc(doc(db, "chatRooms", roomId));
         if (roomDoc.exists()) {
-          setRoomData(roomDoc.data());
+          const data = roomDoc.data();
+          setRoomData(data);
+          
+          // 시청인증 설정 불러오기
+          if (data.certificationSettings) {
+            setCertificationSettings({
+              mode: data.certificationSettings.mode || 'time',
+              requiredTime: data.certificationSettings.requiredTime || 180
+            });
+          }
+          
+          // 새로운 인증 설정 불러오기 (CertificationSettings.js에서 설정한 것)
+          if (data.certSettings) {
+            setCertificationSettings(prev => ({
+              ...prev,
+              enabled: data.certSettings.enabled || false,
+              watchRule: data.certSettings.watchRule || 'full',
+              badgeColor: data.certSettings.badgeColor || '#3b82f6'
+            }));
+          }
         }
       } catch (error) {
         console.error("채팅방 정보 불러오기 오류:", error);
@@ -1300,7 +1354,7 @@ function ChatRoom() {
             </button>
           </div>
         </div>
-        <button onClick={() => navigate(`/chat/${roomId}/menu`)} className="text-4xl text-gray-600 hover:text-blue-600 p-2" aria-label="메뉴">≡</button>
+        <button onClick={() => navigate(roomPath(roomId,'menu'))} className="text-4xl text-gray-600 hover:text-blue-600 p-2" aria-label="메뉴">≡</button>
       </header>
 
       {/* 채팅메시지 패널 */}
@@ -1509,63 +1563,80 @@ function ChatRoom() {
       </form>
 
       {/* 푸터(탭 네비게이터) */}
-      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md flex justify-around items-center border-t h-16 z-40 bg-white">
-        <button className="flex flex-col items-center text-gray-500 hover:text-blue-500 text-sm font-bold focus:outline-none" onClick={() => navigate('/')}>🏠<span>홈</span></button>
-        <button className="flex flex-col items-center text-blue-500 text-sm font-bold focus:outline-none" onClick={() => navigate('/chat')}>💬<span>채팅방</span></button>
-        <button className="flex flex-col items-center text-gray-500 hover:text-blue-500 text-sm font-bold focus:outline-none" onClick={() => navigate('/board')}>📋<span>게시판</span></button>
-        <button className="flex flex-col items-center text-gray-500 hover:text-blue-500 text-sm font-bold focus:outline-none" onClick={() => navigate('/my')}>👤<span>마이채널</span></button>
+      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md flex justify-evenly items-center border-t h-16 z-40 bg-white">
+        <NavLink to="/" className="flex flex-col items-center text-gray-500 hover:text-blue-500 text-sm font-bold focus:outline-none flex-1">🏠<span>홈</span></NavLink>
+        <NavLink to="/chat" className="flex flex-col items-center text-blue-500 text-sm font-bold focus:outline-none flex-1">💬<span>채팅방</span></NavLink>
+        <NavLink to="/board" className="flex flex-col items-center text-gray-500 hover:text-blue-500 text-sm font-bold focus:outline-none flex-1">📋<span>게시판</span></NavLink>
+        <NavLink to="/my" className="flex flex-col items-center text-gray-500 hover:text-blue-500 text-sm font-bold focus:outline-none flex-1">👤<span>마이채널</span></NavLink>
       </nav>
 
       {/* 드래그 가능한 영상 팝업 플레이어 */}
       {selectedVideoIdx !== null && videoList[selectedVideoIdx] && (
         <div
-          className={`fixed z-20 bg-white rounded-xl shadow-lg transition-all duration-300 ${
-            minimized ? 'w-16 h-16' : 'w-96 max-w-[90vw]'
+          className={`fixed z-50 bg-white rounded-xl shadow-lg transition-all duration-300 ${
+            minimized ? 'w-16 h-16' : 'w-[85vw] max-w-[420px]'
           }`}
           style={{
             top: popupPos.y,
             left: popupPos.x,
+            cursor: dragging ? 'grabbing' : 'grab',
           }}
+          onMouseDown={handleDragStart}
+          onMouseMove={handleDrag}
+          onMouseUp={handleDragEnd}
+          onMouseLeave={handleDragEnd}
+          onTouchStart={handleDragStart}
+          onTouchMove={handleDrag}
+          onTouchEnd={handleDragEnd}
         >
-          {/* 공통 YouTube 플레이어 - 항상 렌더링 */}
-          <div 
-            className={`absolute transition-all duration-300 ${
-              minimized 
-                ? 'hidden'  // 최소화 시 완전히 숨김
-                : 'w-full top-12 left-0'
-            }`}
-            style={{ 
-              pointerEvents: minimized ? 'none' : 'auto',
-              zIndex: 15  // UI 오버레이보다 높게 설정
-            }}
-          >
-            {videoList[selectedVideoIdx]?.videoId ? (
-              <YouTube
-                key={videoList[selectedVideoIdx].videoId}
-                videoId={videoList[selectedVideoIdx].videoId}
-                opts={{
-                  width: '100%',
-                  height: minimized ? '64' : '200',
-                  playerVars: { autoplay: 1 }
-                }}
-                onReady={handleYoutubeReady}
-                onStateChange={handleYoutubeStateChange}
-                onEnd={handleYoutubeEnd}
-                className="rounded"
-              />
-            ) : (
-              <div className="w-full h-48 bg-gray-200 flex items-center justify-center text-gray-500">
-                ⚠️ 영상 로딩 중...
-              </div>
-            )}
-          </div>
-
-          {/* UI 오버레이 */}
-          <div className={`relative z-10 ${minimized ? 'w-full h-full' : 'p-3'}`}>
-            {minimized ? (
-              // 최소화된 상태 - 깔끔한 아이콘만 (드래그 가능)
+          {minimized ? (
+            // 최소화된 상태 - 깔끔한 아이콘만 (드래그 가능)
+            <div 
+              className="w-full h-full relative bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center rounded-xl shadow-lg select-none"
+              style={{ cursor: dragging ? 'grabbing' : 'grab' }}
+              onMouseDown={handleDragStart}
+              onMouseMove={handleDrag}
+              onMouseUp={handleDragEnd}
+              onMouseLeave={handleDragEnd}
+              onTouchStart={handleDragStart}
+              onTouchMove={handleDrag}
+              onTouchEnd={handleDragEnd}
+            >
+              {/* 영상 아이콘 */}
               <div 
-                className="w-full h-full relative bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center rounded-xl shadow-lg select-none"
+                className="text-white text-2xl cursor-pointer hover:scale-110 transition-transform"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMinimized(false);
+                }}
+                title="영상 플레이어 열기"
+              >
+                ▶️
+              </div>
+              
+              {/* 닫기 버튼 */}
+              <button
+                className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 flex items-center justify-center z-20"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedVideoIdx(null);
+                  setMinimized(false);
+                  if (playerRef.current && playerRef.current._interval) {
+                    clearInterval(playerRef.current._interval);
+                    playerRef.current._interval = null;
+                  }
+                }}
+                title="닫기"
+              >
+                ×
+              </button>
+            </div>
+          ) : (
+            // 확장된 상태
+            <div className="p-2">
+              {/* 상단 헤더 - 드래그 가능 영역 */}
+              <div 
+                className="flex items-center mb-2 p-1 -m-2 rounded-t-xl bg-gray-50 select-none justify-between"
                 style={{ cursor: dragging ? 'grabbing' : 'grab' }}
                 onMouseDown={handleDragStart}
                 onMouseMove={handleDrag}
@@ -1574,71 +1645,16 @@ function ChatRoom() {
                 onTouchStart={handleDragStart}
                 onTouchMove={handleDrag}
                 onTouchEnd={handleDragEnd}
+                title="드래그해서 이동"
               >
-                {/* 영상 아이콘 */}
-                <div 
-                  className="text-white text-2xl cursor-pointer hover:scale-110 transition-transform"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setMinimized(false);
-                  }}
-                  title="영상 플레이어 열기"
-                >
-                  ▶️
+                {/* 중앙 타이틀 */}
+                <div className="flex-1 text-center text-xs text-gray-500 font-medium select-none pointer-events-none">
+                  영상 플레이어 (드래그 가능)
                 </div>
-                
-                {/* 닫기 버튼 */}
-                <button
-                  className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs hover:bg-red-600 flex items-center justify-center z-20"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedVideoIdx(null);
-                    setMinimized(false);
-                    if (playerRef.current && playerRef.current._interval) {
-                      clearInterval(playerRef.current._interval);
-                      playerRef.current._interval = null;
-                    }
-                  }}
-                  title="닫기"
-                >
-                  ×
-                </button>
-                
-                {/* 재생 시간 표시 (단일 타이머로 통일) */}
-                <div className="flex flex-col gap-1 text-xs text-gray-600 mb-2 px-1">
-                  <div className="flex justify-between items-center">
-                    <span className="text-blue-600 font-medium">
-                      시청 시간: {Math.floor(watchSeconds / 60)}:{(watchSeconds % 60).toString().padStart(2, '0')}
-                    </span>
-                    <span className="text-gray-500">
-                      {videoList[selectedVideoIdx]?.duration ? 
-                        `전체: ${Math.floor(videoList[selectedVideoIdx].duration / 60)}:${(videoList[selectedVideoIdx].duration % 60).toString().padStart(2, '0')}` 
-                        : ''}
-                    </span>
-                  </div>
-                  <div className="text-center text-blue-600 font-medium">
-                    {videoList[selectedVideoIdx]?.duration >= 180
-                      ? `연속 3분 시청 시 인증 (${Math.max(0, 180 - watchSeconds)}초 남음)`
-                      : `3분이상 시청시 인증가능`}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              // 확장된 상태
-              <div>
-                {/* 상단 헤더 - 드래그 가능 영역 */}
-                <div 
-                  className="flex justify-between items-center mb-1 p-3 -m-3 rounded-t-xl bg-gray-50 select-none"
-                  style={{ cursor: dragging ? 'grabbing' : 'grab' }}
-                  onMouseDown={handleDragStart}
-                  onMouseMove={handleDrag}
-                  onMouseUp={handleDragEnd}
-                  onMouseLeave={handleDragEnd}
-                  onTouchStart={handleDragStart}
-                  onTouchMove={handleDrag}
-                  onTouchEnd={handleDragEnd}
-                  title="드래그해서 이동"
-                >
+
+                {/* 우측 버튼 그룹 */}
+                <div className="flex items-center gap-1">
+                  {/* 최소화 */}
                   <button
                     className="text-lg text-blue-500 hover:text-blue-700 p-1"
                     onClick={(e) => {
@@ -1649,12 +1665,7 @@ function ChatRoom() {
                   >
                     ➖
                   </button>
-                  
-                  {/* 중앙 드래그 핸들 */}
-                  <div className="flex-1 text-center text-xs text-gray-500 font-medium">
-                    영상 플레이어 (드래그 가능)
-                  </div>
-                  
+                  {/* 닫기 */}
                   <button
                     className="text-xl text-gray-400 hover:text-gray-700 p-1"
                     onClick={(e) => {
@@ -1671,129 +1682,172 @@ function ChatRoom() {
                     ×
                   </button>
                 </div>
-                
-                {/* 영상 공간 (YouTube 플레이어가 위에 표시됨) */}
-                <div 
-                  className="mb-2" 
-                  style={{ 
-                    height: '200px', 
-                    pointerEvents: 'none'  // 이 영역에서 마우스 이벤트를 YouTube 플레이어로 전달
-                  }}
-                >
-                  {/* YouTube 플레이어가 여기 위에 absolute로 위치함 */}
+              </div>
+              
+              {/* YouTube 플레이어 */}
+              {videoList[selectedVideoIdx]?.videoId ? (
+                <div className="youtube-player">
+                  <YouTube
+                    key={videoList[selectedVideoIdx].videoId}
+                    videoId={videoList[selectedVideoIdx].videoId}
+                    opts={{
+                      width: '100%',
+                      height: '100%',
+                      playerVars: { 
+                        autoplay: 1,
+                        controls: 1, // 플레이어 컨트롤 표시 (1 = 표시, 0 = 숨김)
+                        modestbranding: 0, // YouTube 로고 표시
+                        rel: 0, // 관련 동영상 숨김
+                        origin: window.location.origin,
+                        enablejsapi: 1,
+                        fs: 1, // 전체화면 활성화
+                        disablekb: 0, // 키보드 컨트롤 활성화 (0 = 활성화)
+                        playsinline: 1, // 모바일에서 인라인 재생
+                        widget_referrer: window.location.origin,
+                        start: 0 // 처음부터 재생
+                      }
+                    }}
+                    onReady={handleYoutubeReady}
+                    onStateChange={handleYoutubeStateChange}
+                    onEnd={handleYoutubeEnd}
+                    className="rounded"
+                  />
                 </div>
-                
-                {/* 제목 - 일반 텍스트로 변경 */}
-                <div className="font-bold text-sm mb-2 px-1 leading-tight" title={videoList[selectedVideoIdx].title}>
-                  {videoList[selectedVideoIdx].title}
+              ) : (
+                <div className="w-full h-48 bg-gray-200 flex items-center justify-center text-gray-500">
+                  ⚠️ 영상 로딩 중...
                 </div>
-                
-                {/* 시청 시간과 인증 정보를 한 줄로 */}
-                <div className="flex flex-col gap-1 text-xs text-gray-600 mb-2 px-1">
-                  <div className="flex justify-between items-center">
-                    <span className="text-blue-600 font-medium">
-                      시청 시간: {Math.floor(watchSeconds / 60)}:{(watchSeconds % 60).toString().padStart(2, '0')}
-                    </span>
-                    <span className="text-gray-500">
-                      {videoList[selectedVideoIdx]?.duration ? 
-                        `전체: ${Math.floor(videoList[selectedVideoIdx].duration / 60)}:${(videoList[selectedVideoIdx].duration % 60).toString().padStart(2, '0')}` 
-                        : ''}
-                    </span>
-                  </div>
-                  <div className="text-center text-blue-600 font-medium">
-                    {videoList[selectedVideoIdx]?.duration >= 180
-                      ? `연속 3분 시청 시 인증 (${Math.max(0, 180 - watchSeconds)}초 남음)`
-                      : `3분이상 시청시 인증가능`}
-                  </div>
+              )}
+              
+              {/* 제목 - 컴팩트하게 변경 */}
+              <div className="font-bold text-sm mb-1 px-1 leading-tight line-clamp-2" title={videoList[selectedVideoIdx].title}>
+                {videoList[selectedVideoIdx].title}
+              </div>
+              
+              {/* 시청 시간과 인증 정보를 한 줄로 */}
+              <div className="flex flex-col gap-1 text-xs text-gray-600 mb-1 px-1">
+                <div className="flex justify-between items-center">
+                  <span className="text-blue-600 font-medium">
+                    시청 시간: {Math.floor(watchSeconds / 60)}:{(watchSeconds % 60).toString().padStart(2, '0')}
+                  </span>
+                  <span className="text-gray-500">
+                    {videoList[selectedVideoIdx]?.duration ? 
+                      `전체: ${Math.floor(videoList[selectedVideoIdx].duration / 60)}:${(videoList[selectedVideoIdx].duration % 60).toString().padStart(2, '0')}` 
+                      : ''}
+                  </span>
                 </div>
-                
-                {/* 인증 버튼 */}
-                <button
-                  className={`w-full py-2 mb-2 rounded-lg font-bold text-sm ${
-                    certifiedVideoIds.includes(videoList[selectedVideoIdx]?.id)
-                      ? "bg-green-500 text-white hover:bg-green-600 cursor-pointer"
-                      : certAvailable && !certLoading
-                      ? "bg-green-500 text-white hover:bg-green-600"
-                      : "bg-gray-200 text-gray-500 cursor-not-allowed"
-                  }`}
-                  disabled={!certifiedVideoIds.includes(videoList[selectedVideoIdx]?.id) && (!certAvailable || certLoading)}
-                  onClick={() => {
-                    if (certifiedVideoIds.includes(videoList[selectedVideoIdx]?.id)) {
-                      // 이미 인증된 영상이면
-                      if (selectedVideoIdx < videoList.length - 1) {
-                        // 다음 영상이 있으면 이동
-                        setSelectedVideoIdx(selectedVideoIdx + 1);
+                <div className="text-center text-blue-600 font-medium">
+                  {(() => {
+                    const currentVideo = videoList[selectedVideoIdx];
+                    if (!currentVideo) return '';
+                    
+                    if (certificationSettings.mode === 'full') {
+                      // 완주 기반: 모든 영상 끝까지 시청
+                      return '영상을 끝까지 시청하면 인증 가능';
+                    } else {
+                      // 시간 기반: 영상 길이에 따라 다름
+                      if (currentVideo.duration <= 180) {
+                        // 3분 이하 영상: 끝까지 시청
+                        return '짧은 영상 - 끝까지 시청하면 인증 가능';
                       } else {
-                        // 마지막 영상이면 플레이어 종료
-                        setSelectedVideoIdx(null);
-                        setMinimized(false);
-                        if (playerRef.current && playerRef.current._interval) {
-                          clearInterval(playerRef.current._interval);
-                          playerRef.current._interval = null;
-                        }
-                        if (endTimer.current) {
-                          clearInterval(endTimer.current);
-                          endTimer.current = null;
+                        // 3분 초과 영상: 3분 시청
+                        const remainingSeconds = Math.max(0, 180 - watchSeconds);
+                        return remainingSeconds > 0 
+                          ? `3분 시청 시 인증 가능 (${remainingSeconds}초 남음)`
+                          : '3분 시청 완료 - 인증 가능!';
+                      }
+                    }
+                  })()}
+                </div>
+              </div>
+              
+              {/* 인증 버튼 */}
+              <button
+                className={`w-full py-2 mb-1 rounded-lg font-bold text-sm ${
+                  certifiedVideoIds.includes(videoList[selectedVideoIdx]?.id)
+                    ? "bg-green-500 text-white hover:bg-green-600 cursor-pointer"
+                    : certAvailable && !certLoading
+                    ? "bg-green-500 text-white hover:bg-green-600"
+                    : "bg-gray-200 text-gray-500 cursor-not-allowed"
+                }`}
+                disabled={!certifiedVideoIds.includes(videoList[selectedVideoIdx]?.id) && (!certAvailable || certLoading)}
+                onClick={() => {
+                  if (certifiedVideoIds.includes(videoList[selectedVideoIdx]?.id)) {
+                    // 이미 인증된 영상인 경우
+                    const isAutoEnabled = certificationSettings.enabled !== false;
+                    
+                    if (isAutoEnabled) {
+                      // 자동 인증이 활성화되어 있으면 다음 영상으로 이동
+                      moveToNextVideo();
+                    } else {
+                      // 자동 인증이 비활성화되어 있으면 다시 재생
+                      if (playerRef.current && playerRef.current.seekTo) {
+                        playerRef.current.seekTo(0);
+                        setWatchSeconds(0);
+                        setVideoEnded(false);
+                        // 플레이어가 일시정지 상태라면 재생
+                        if (playerRef.current.playVideo) {
+                          playerRef.current.playVideo();
                         }
                       }
+                    }
+                  } else {
+                    // 새로운 영상이면 인증 처리
+                    handleCertify();
+                  }
+                }}
+              >
+                {certifiedVideoIds.includes(videoList[selectedVideoIdx]?.id)
+                  ? certificationSettings.enabled !== false
+                    ? "✅ 인증완료 (다음영상보기)"
+                    : "✅ 인증완료 (다시보기)"
+                  : certLoading 
+                  ? "인증 중..." 
+                  : certAvailable 
+                  ? "시청인증 완료" 
+                  : "시청인증 대기"}
+              </button>
+              
+              {/* 간단한 하단 버튼들 */}
+              <div className="flex gap-2 text-xs items-center">
+                {/* YouTube 이동 */}
+                <a
+                  href={getYoutubeUrl(videoList[selectedVideoIdx].videoId)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 text-center bg-red-500 text-white py-2 rounded-lg hover:bg-red-600 transition-colors"
+                  title="구독/좋아요 바로가기"
+                >
+                  ❤️ 구독/좋아요 바로가기
+                </a>
+                
+                {/* 좋아요 */}
+                <button
+                  className="flex items-center gap-1 px-3 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                  onClick={() => {
+                    if (!liked) {
+                      setLiked(true);
+                      setLikeCount((prev) => prev + 1);
                     } else {
-                      // 새로운 영상이면 인증 처리
-                      handleCertify();
+                      setLiked(false);
+                      setLikeCount((prev) => (prev > 0 ? prev - 1 : 0));
                     }
                   }}
                 >
-                  {certifiedVideoIds.includes(videoList[selectedVideoIdx]?.id)
-                    ? selectedVideoIdx < videoList.length - 1 
-                      ? "✅ 시청인증 완료 (다음 영상 보기)" 
-                      : "✅ 시청인증 완료 (마지막 영상)"
-                    : certLoading 
-                    ? "인증 중..." 
-                    : certAvailable 
-                    ? "시청인증 완료" 
-                    : "시청인증 대기"}
+                  <span style={{ color: liked ? '#ec4899' : '#6b7280' }}>
+                    {liked ? '♥' : '♡'}
+                  </span>
+                  <span className="text-gray-600">{likeCount}</span>
                 </button>
                 
-                {/* 간단한 하단 버튼들 */}
-                <div className="flex gap-2 text-xs items-center">
-                  {/* YouTube 이동 */}
-                  <a
-                    href={getYoutubeUrl(videoList[selectedVideoIdx].videoId)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex-1 text-center bg-red-500 text-white py-2 rounded-lg hover:bg-red-600 transition-colors"
-                    title="구독/좋아요 바로가기"
-                  >
-                    ❤️ 구독/좋아요 바로가기
-                  </a>
-                  
-                  {/* 좋아요 */}
-                  <button
-                    className="flex items-center gap-1 px-3 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-                    onClick={() => {
-                      if (!liked) {
-                        setLiked(true);
-                        setLikeCount((prev) => prev + 1);
-                      } else {
-                        setLiked(false);
-                        setLikeCount((prev) => (prev > 0 ? prev - 1 : 0));
-                      }
-                    }}
-                  >
-                    <span style={{ color: liked ? '#ec4899' : '#6b7280' }}>
-                      {liked ? '♥' : '♡'}
-                    </span>
-                    <span className="text-gray-600">{likeCount}</span>
-                  </button>
-                  
-                  {/* 시청자수 */}
-                  <div className="flex items-center gap-1 px-3 py-2 bg-blue-50 rounded-lg">
-                    <span className="text-blue-500">👁️</span>
-                    <span className="text-blue-600">{watching}</span>
-                  </div>
+                {/* 시청자수 */}
+                <div className="flex items-center gap-1 px-3 py-2 bg-blue-50 rounded-lg">
+                  <span className="text-blue-500">👁️</span>
+                  <span className="text-blue-600">{watching}</span>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1873,6 +1927,7 @@ function ChatRoom() {
               key={video.id}
               className="border rounded-lg p-2 bg-white shadow flex items-center gap-4 relative cursor-pointer hover:bg-blue-50"
               onClick={() => {
+
                 setShowVideoPanel(false);
                 setSelectedVideoIdx(idx);
               }}
@@ -1884,20 +1939,28 @@ function ChatRoom() {
                 <div className="text-xs text-gray-400">등록자: {video.registeredBy}</div>
               </div>
               {certifiedVideoIds.includes(video.id) ? (
-                <button
-                  className="bg-green-500 text-white px-4 py-2 rounded font-bold cursor-default"
-                  disabled
-                >
-                  시청 완료
-                </button>
-              ) : (
-                <button
-                  className="bg-blue-500 text-white px-4 py-2 rounded font-bold"
-                  onClick={e => { e.stopPropagation(); setSelectedVideoIdx(idx); setShowVideoPanel(false); }}
-                >
-                  시청하기
-                </button>
-              )}
+                  <button
+                    className="bg-green-500 text-white px-4 py-2 rounded font-bold hover:bg-green-600"
+                    onClick={e => { 
+                      e.stopPropagation(); 
+                      setSelectedVideoIdx(idx); 
+                      setShowVideoPanel(false); 
+                    }}
+                  >
+                    ✅ 시청완료
+                  </button>
+                ) : (
+                  <button
+                    className="bg-blue-500 text-white px-4 py-2 rounded font-bold hover:bg-blue-600"
+                    onClick={e => { 
+                      e.stopPropagation(); 
+                      setSelectedVideoIdx(idx); 
+                      setShowVideoPanel(false); 
+                    }}
+                  >
+                    시청하기
+                  </button>
+                )}
             </div>
           ))}
         </div>

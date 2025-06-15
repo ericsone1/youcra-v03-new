@@ -25,13 +25,10 @@ export function AuthProvider({ children }) {
 
   // Firebase Auth 상태 감지 및 임시 사용자 관리
   useEffect(() => {
-    console.log('🔄 혼합 인증 모드 활성화 (Firebase Auth + 임시 인증)');
-    
     // Firebase Auth 상태 감지
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
         // Firebase 사용자 로그인됨
-        console.log('✅ Firebase 사용자 감지:', firebaseUser.email);
         setCurrentUser({
           uid: firebaseUser.uid,
           email: firebaseUser.email,
@@ -51,12 +48,10 @@ export function AuthProvider({ children }) {
         if (!isLoggedOut && savedUser) {
           // 기존 임시 사용자 복원
           const tempUser = JSON.parse(savedUser);
-          console.log('📂 기존 임시 사용자 복원:', tempUser.displayName);
           setCurrentUser(tempUser);
           setAuthMethod('temporary');
         } else {
           // 완전한 로그아웃 상태
-          console.log('🚪 로그아웃 상태');
           setCurrentUser(null);
           setAuthMethod(null);
         }
@@ -69,19 +64,16 @@ export function AuthProvider({ children }) {
 
   // 로그아웃 (Firebase Auth + 임시 인증 지원)
   const logout = async () => {
-    console.log('🔄 로그아웃 실행 중...');
     try {
       // 사용자 확인 메시지
       const confirmLogout = window.confirm('정말 로그아웃 하시겠습니까?');
       if (!confirmLogout) {
-        console.log('❌ 로그아웃 취소됨');
         return;
       }
 
       // Firebase 사용자인 경우 Firebase 로그아웃
       if (authMethod === 'firebase') {
         await signOut(auth);
-        console.log('✅ Firebase 로그아웃 완료');
       }
 
       // 로그아웃 상태 저장 및 임시 사용자 정보 제거
@@ -92,33 +84,28 @@ export function AuthProvider({ children }) {
       setCurrentUser(null);
       setAuthMethod(null);
       
-      console.log('✅ 로그아웃 완료');
-      
       // 부드러운 페이지 전환 (새로고침 대신 홈으로 이동)
       window.location.href = '/';
     } catch (error) {
-      console.error('❌ 로그아웃 실패:', error);
+      console.error('로그아웃 실패:', error);
       alert('로그아웃 중 오류가 발생했습니다.');
     }
   };
 
   // 이메일 로그인 함수
   const emailLogin = async (email, password) => {
-    console.log('🔄 이메일 로그인 실행:', email);
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      console.log('✅ 이메일 로그인 성공:', userCredential.user.email);
       // onAuthStateChanged가 자동으로 currentUser 업데이트
       return userCredential.user;
     } catch (error) {
-      console.error('❌ 이메일 로그인 실패:', error);
+      console.error('이메일 로그인 실패:', error);
       throw error;
     }
   };
 
   // 이메일 회원가입 함수
   const emailSignup = async (email, password, displayName) => {
-    console.log('🔄 이메일 회원가입 실행:', email);
     try {
       // 계정 생성
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -130,19 +117,16 @@ export function AuthProvider({ children }) {
         });
       }
       
-      console.log('✅ 이메일 회원가입 성공:', userCredential.user.email);
       // onAuthStateChanged가 자동으로 currentUser 업데이트
       return userCredential.user;
     } catch (error) {
-      console.error('❌ 이메일 회원가입 실패:', error);
+      console.error('이메일 회원가입 실패:', error);
       throw error;
     }
   };
 
   // 임시 로그인 함수 (개선된 버전)
   const tempLogin = () => {
-    console.log('🔄 임시 로그인 실행');
-    
     // 새로운 임시 사용자 생성
     const newUser = {
       uid: 'temp_user_' + Date.now(),
@@ -160,8 +144,6 @@ export function AuthProvider({ children }) {
     // 상태 업데이트
     setCurrentUser(newUser);
     setAuthMethod('temporary');
-    
-    console.log('✅ 임시 로그인 완료:', newUser.displayName);
   };
 
   const value = {

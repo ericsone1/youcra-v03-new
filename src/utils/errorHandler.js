@@ -55,4 +55,56 @@ export const validationErrors = {
   email: '유효한 이메일 주소를 입력해주세요.',
   url: '유효한 URL을 입력해주세요.',
   match: '입력한 값이 일치하지 않습니다.',
+};
+
+// 전역 오류 처리 유틸리티
+
+export const handleFirestoreError = (error, context = '') => {
+  console.error(`Firestore 오류 (${context}):`, error);
+  
+  // BloomFilter 오류 처리
+  if (error.message?.includes('BloomFilter')) {
+    console.warn('Firestore 인덱스가 필요합니다. Firebase Console에서 복합 인덱스를 생성해주세요.');
+    return;
+  }
+  
+  // 권한 오류 처리
+  if (error.code === 'permission-denied') {
+    console.warn('Firestore 권한이 거부되었습니다.');
+    return;
+  }
+  
+  // 네트워크 오류 처리
+  if (error.code === 'unavailable') {
+    console.warn('네트워크 연결을 확인해주세요.');
+    return;
+  }
+};
+
+export const handleYouTubeError = (error, context = '') => {
+  console.error(`YouTube 오류 (${context}):`, error);
+  
+  // Signature decipher 오류는 일시적인 문제일 수 있음
+  if (error.message?.includes('signature decipher')) {
+    console.warn('YouTube API 일시적 오류입니다. 잠시 후 다시 시도해주세요.');
+    return;
+  }
+};
+
+export const setupGlobalErrorHandlers = () => {
+  // 전역 에러 핸들러
+  window.addEventListener('error', (event) => {
+    if (event.error?.message?.includes('BloomFilter')) {
+      event.preventDefault(); // 콘솔 스팸 방지
+      console.warn('Firestore 인덱스 관련 경고가 발생했습니다.');
+    }
+  });
+  
+  // Promise rejection 핸들러
+  window.addEventListener('unhandledrejection', (event) => {
+    if (event.reason?.message?.includes('BloomFilter')) {
+      event.preventDefault(); // 콘솔 스팸 방지
+      console.warn('Firestore 인덱스 관련 경고가 발생했습니다.');
+    }
+  });
 }; 

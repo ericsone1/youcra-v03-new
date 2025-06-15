@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { db } from '../firebase';
+import { db, auth } from '../firebase';
 import { collection, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { roomIdFromParam, roomPath } from '../utils/route';
 
 function getInitial(name) {
   if (!name) return '방';
@@ -10,7 +11,8 @@ function getInitial(name) {
 
 function ChatRoomMenu() {
   const navigate = useNavigate();
-  const { roomId } = useParams();
+  const { roomId: rawRoomId } = useParams();
+  const roomId = roomIdFromParam(rawRoomId);
   const [participants, setParticipants] = useState([]);
   const [roomData, setRoomData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -27,11 +29,12 @@ function ChatRoomMenu() {
       try {
         const roomDoc = await getDoc(doc(db, 'chatRooms', roomId));
         if (roomDoc.exists()) {
-          setRoomData(roomDoc.data());
+          const data = roomDoc.data();
+          setRoomData(data);
         }
         setLoading(false);
       } catch (error) {
-        console.error('방 데이터 가져오기 실패:', error);
+        console.error('❌ 방 데이터 가져오기 실패:', error);
         setLoading(false);
       }
     };
@@ -93,15 +96,28 @@ function ChatRoomMenu() {
     return () => unsub();
   }, [roomId, roomData]);
 
+  // 방장 확인
+  const myUid = auth.currentUser?.uid;
+  const isOwner = roomData && myUid && (
+    roomData.createdBy === myUid ||
+    participants.some(p => p.id === myUid && p.isOwner)
+  );
+
   const menuList = [
-    { icon: '📢', label: '공지', to: `/chat/${roomId}/notice` },
-    { icon: '🗳️', label: '투표', to: `/chat/${roomId}/vote` },
-    { icon: '🤖', label: '챗봇', to: `/chat/${roomId}/bot` },
-    { icon: '🖼️', label: '사진/동영상', to: `/chat/${roomId}/media` },
-    { icon: '🎬', label: '시청하기', to: `/chat/${roomId}/videos` },
-    { icon: '📁', label: '파일', to: `/chat/${roomId}/files` },
-    { icon: '🔗', label: '링크', to: `/chat/${roomId}/links` },
-    { icon: '📅', label: '일정', to: `/chat/${roomId}/schedule` },
+    { icon: '��', label: '공지', to: roomPath(roomId, 'notice') },
+    { icon: '🗳️', label: '투표', to: roomPath(roomId, 'vote') },
+    { icon: '🤖', label: '챗봇', to: roomPath(roomId, 'bot') },
+    { icon: '🖼️', label: '사진/동영상', to: roomPath(roomId, 'media') },
+    { icon: '🎬', label: '시청하기', to: roomPath(roomId, 'videos') },
+    { icon: '📁', label: '파일', to: roomPath(roomId, 'files') },
+    { icon: '🔗', label: '링크', to: roomPath(roomId, 'links') },
+    { icon: '📅', label: '일정', to: roomPath(roomId, 'schedule') },
+  ];
+
+  // 방장 전용 메뉴
+  const ownerMenuList = [
+    { icon: '⭐', label: '시청인증 설정', to: roomPath(roomId, 'certification-settings') },
+    { icon: '⚙️', label: '방 관리', to: roomPath(roomId, 'manage') },
   ];
 
   if (loading) {
@@ -143,6 +159,26 @@ function ChatRoomMenu() {
 
       {/* 메뉴 리스트 */}
       <main className="flex-1 px-4 pb-8">
+        {/* 방장 전용 메뉴 - 최상단에 배치 */}
+        {isOwner && (
+          <div className="mb-6 bg-white rounded-xl shadow divide-y">
+            <div className="px-5 py-3 font-bold text-gray-700 flex items-center gap-2">
+              👑 방장 전용
+            </div>
+            {ownerMenuList.map((item) => (
+              <button
+                key={item.label}
+                className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-yellow-50 text-gray-800 text-base font-medium transition"
+                onClick={() => navigate(item.to)}
+              >
+                <span className="text-2xl mr-2">{item.icon}</span>
+                {item.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* 일반 메뉴 */}
         <div className="bg-white rounded-xl shadow divide-y">
           {menuList.map((item) => (
             <button
@@ -168,7 +204,7 @@ function ChatRoomMenu() {
               <button
                 key={user.id}
                 className="flex items-center gap-3 px-5 py-3 w-full text-left hover:bg-blue-50 transition"
-                onClick={() => navigate(`/profile/${roomId}/${user.id}`)}
+                onClick={() => navigate(`/profile/${encodeURIComponent(roomId)}/${user.id}`)}
               >
                 {user.avatar ? (
                   <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full object-cover border-2 border-gray-200" />

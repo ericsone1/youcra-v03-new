@@ -600,3 +600,45 @@ html {
     margin-top: 8px !important;
   }
 }
+
+/* YouTube 플레이어 최적화 */
+.youtube-player {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9; /* 가로 기준 자동 세로 */
+  overflow: hidden;
+  margin-bottom: 0; /* 하단 여백 제거 */
+}
+
+/* YouTube 플레이어 iframe */
+.youtube-player iframe {
+  width: 100% !important;
+  height: 100% !important;
+  border: 0;
+  border-radius: 8px;
+}
+
+/* YouTube 플레이어 컨트롤바 보장 */
+.youtube-player .ytp-chrome-bottom {
+  display: block !important;
+  opacity: 1 !important;
+}
+
+.youtube-player .ytp-chrome-controls {
+  display: flex !important;
+  opacity: 1 !important;
+}
+
+/* YouTube 플레이어 호버 시 컨트롤 표시 */
+.youtube-player:hover .ytp-chrome-bottom {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* YouTube 플레이어 내부 비디오 크기 조정 */
+.youtube-player iframe[src*="youtube.com"] {
+  width: 100% !important;
+  height: 100% !important;
+  /* transform: scale(1.1);  // 크기 확대로 인해 상하단이 잘리는 문제 제거 */
+  /* transform-origin: center; */
+}
