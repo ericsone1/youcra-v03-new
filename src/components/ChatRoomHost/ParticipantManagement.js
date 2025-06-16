@@ -62,20 +62,20 @@ const ParticipantManagement = ({
                   </div>
                   
                   {/* 사용자 정보 */}
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <div className="text-sm font-semibold">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <div className="text-sm font-semibold">
                         {participant.displayName || participant.email}
-                        {isOwnerParticipant && (
-                          <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">방장</span>
-                        )}
-                      </div>
+                      {isOwnerParticipant && (
+                        <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">방장</span>
+                      )}
                     </div>
-                    <div className="text-xs text-gray-500 mt-1">
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
                       {participant.displayName && participant.email !== participant.displayName && (
                         <div>{participant.email}</div>
                       )}
-                      입장: {formatJoinTime(participant.joinedAt)}
+                    입장: {formatJoinTime(participant.joinedAt)}
                     </div>
                   </div>
                 </div>
@@ -101,17 +101,17 @@ const ParticipantManagement = ({
                         {/* 메뉴 옵션들 */}
                         <div className="absolute right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-20 w-36">
                           <div className="py-1">
-                            <button
-                              onClick={() => {
-                                setSelectedTransferUser(participant);
-                                onShowTransferModal();
+                    <button
+                      onClick={() => {
+                        setSelectedTransferUser(participant);
+                        onShowTransferModal();
                                 closeMenu();
-                              }}
+                      }}
                               className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
-                            >
+                    >
                               <span>👑</span>
                               방장 위임
-                            </button>
+                    </button>
                             <button
                               onClick={() => {
                                 // TODO: 부방장 위임 기능 구현
@@ -124,27 +124,27 @@ const ParticipantManagement = ({
                               부방장 위임
                             </button>
                             <hr className="my-1" />
-                            <button
-                              onClick={() => {
-                                setSelectedBanUser(participant);
-                                onShowBanModal();
+                    <button
+                      onClick={() => {
+                        setSelectedBanUser(participant);
+                        onShowBanModal();
                                 closeMenu();
-                              }}
+                      }}
                               className="w-full text-left px-4 py-2 text-sm text-orange-600 hover:bg-orange-50 flex items-center gap-2"
-                            >
+                    >
                               <span>🚫</span>
-                              차단
-                            </button>
-                            <button
+                      차단
+                    </button>
+                    <button
                               onClick={() => {
                                 onKickParticipant(participant.id, participant.email);
                                 closeMenu();
                               }}
                               className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
-                            >
+                    >
                               <span>⚠️</span>
-                              강퇴
-                            </button>
+                      강퇴
+                    </button>
                           </div>
                         </div>
                       </>

@@ -20,6 +20,7 @@ import AdminPage from "./AdminPage";
 import ChatRoomInfo from "./ChatRoomInfo";
 import CertificationSettings from "./CertificationSettings";
 import ChatRoomMenu from "./ChatRoomMenu";
+import MyVideosPage from "./MyVideosPage";
 
 function App() {
   const location = useLocation();
@@ -195,6 +196,7 @@ function App() {
           <Route path="/search" element={<SearchResult />} />
           <Route path="/product/:id" element={<ProductDetail />} />
           <Route path="/admin" element={<AdminPage />} />
+          <Route path="/my/videos" element={<MyVideosPage />} />
         </Routes>
         
         {/* 스와이프 피드백 */}

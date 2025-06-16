@@ -900,6 +900,10 @@ function ChatRoom() {
 
   // 드래그 핸들러 - 간단하고 빠른 방식
   const handleDragStart = (e) => {
+    // 드래그 중 하단 탭 네비게이션으로 이벤트가 전파되는 것을 방지
+    e.stopPropagation();
+    if (e.cancelable) e.preventDefault();
+
     setDragging(true);
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -911,6 +915,10 @@ function ChatRoom() {
   };
   
   const handleDrag = (e) => {
+    // 탭 이동 방지
+    e.stopPropagation();
+    if (e.cancelable) e.preventDefault();
+
     if (!dragging) return;
     
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -930,6 +938,9 @@ function ChatRoom() {
   };
   
   const handleDragEnd = () => {
+    // 탭 이동 방지
+    // pointercancel 용도 포함하여 이벤트 정리
+    if (event?.stopPropagation) event.stopPropagation();
     setDragging(false);
   };
 
@@ -978,23 +989,26 @@ function ChatRoom() {
     // 영상 종료 시 videoEnded 상태 설정
     setVideoEnded(true);
     
-    // 다음 영상이 있을 때만 카운트다운 시작
-    if (selectedVideoIdx < videoList.length - 1) {
-      console.log('⏰ 다음 영상 카운트다운 시작');
-      setEndCountdown(3);
-      endTimer.current = setInterval(() => {
-        setEndCountdown((prev) => {
-          if (prev <= 1) {
-            clearInterval(endTimer.current);
-            console.log('➡️ 다음 영상으로 이동:', selectedVideoIdx + 1);
-            setSelectedVideoIdx(selectedVideoIdx + 1);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    } else {
-      console.log('📺 마지막 영상 완료');
+    // 시청인증이 활성화되어 있다면 자동 인증 useEffect에서 처리하도록 함
+    // 시청인증이 비활성화되어 있다면 바로 다음 영상으로 이동
+    if (!watchSettings.enabled) {
+      if (selectedVideoIdx < videoList.length - 1) {
+        console.log('⏰ 다음 영상 카운트다운 시작 (시청인증 비활성)');
+        setEndCountdown(3);
+        endTimer.current = setInterval(() => {
+          setEndCountdown((prev) => {
+            if (prev <= 1) {
+              clearInterval(endTimer.current);
+              console.log('➡️ 다음 영상으로 이동:', selectedVideoIdx + 1);
+              setSelectedVideoIdx(selectedVideoIdx + 1);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      } else {
+        console.log('📺 마지막 영상 완료');
+      }
     }
   };
 
@@ -1039,13 +1053,25 @@ function ChatRoom() {
     const currentVideo = videoList[selectedVideoIdx];
     const isAlreadyCertified = currentVideo && certifiedVideoIds.includes(currentVideo.id);
     
+    console.log('🔄 자동 인증 useEffect 실행:', {
+      watchSettingsEnabled: watchSettings.enabled,
+      certAvailable,
+      isCertified,
+      certLoading,
+      isAlreadyCertified,
+      videoEnded
+    });
+    
     // 시청인증이 활성화되고, 인증 가능하고, 아직 인증하지 않았고, 이미 인증된 영상이 아닐 때만 카운트다운 시작
     if (watchSettings.enabled && certAvailable && !isCertified && !certLoading && !isAlreadyCertified) {
+      console.log('⏰ 자동 인증 5초 카운트다운 시작');
       setCountdown(5);
       autoNextTimer.current = setInterval(() => {
         setCountdown((prev) => {
+          console.log(`⏱️ 자동 인증 카운트다운: ${prev}초`);
           if (prev <= 1) {
             clearInterval(autoNextTimer.current);
+            console.log('✅ 자동 인증 처리 시작');
             
             // 자동으로 인증 처리
             handleCertify();
@@ -1053,9 +1079,11 @@ function ChatRoom() {
             // 다음 영상이 있으면 이동, 없으면 플레이어 종료
             setTimeout(() => {
             if (selectedVideoIdx < videoList.length - 1) {
+                console.log('➡️ 다음 영상으로 자동 이동:', selectedVideoIdx + 1);
                 // 다음 영상으로 이동
               setSelectedVideoIdx(selectedVideoIdx + 1);
               } else {
+                console.log('📺 마지막 영상 완료 - 플레이어 종료');
                 // 마지막 영상이므로 플레이어 종료
                 setSelectedVideoIdx(null);
                 setMinimized(false);
@@ -1573,7 +1601,9 @@ function ChatRoom() {
       </form>
 
       {/* 푸터(탭 네비게이터) */}
-      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md flex justify-around items-center border-t h-16 z-40 bg-white">
+      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md flex justify-around items-center border-t h-16 z-40 bg-white"
+        style={{ pointerEvents: dragging ? 'none' : 'auto' }}
+      >
         <button className="flex flex-col items-center text-gray-500 hover:text-blue-500 text-sm font-bold focus:outline-none" onClick={() => navigate('/')}>🏠<span>홈</span></button>
         <button className="flex flex-col items-center text-blue-500 text-sm font-bold focus:outline-none" onClick={() => navigate('/chat')}>💬<span>채팅방</span></button>
         <button className="flex flex-col items-center text-gray-500 hover:text-blue-500 text-sm font-bold focus:outline-none" onClick={() => navigate('/board')}>📋<span>게시판</span></button>
@@ -1614,10 +1644,7 @@ function ChatRoom() {
                     autoplay: 1,
                     controls: 1,          // YouTube 기본 컨트롤바 활성화
                     rel: 0,               // 관련 영상 비활성화
-                    modestbranding: 0,    // YouTube 로고 표시 (컨트롤바 가시성 향상)
                     fs: 1,                // 전체화면 버튼 활성화
-                    cc_load_policy: 0,    // 자막 버튼 표시
-                    iv_load_policy: 3,    // 주석 숨기기
                   }
                 }}
                 onReady={handleYoutubeReady}

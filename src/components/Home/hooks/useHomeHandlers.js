@@ -130,6 +130,19 @@ export const useHomeHandlers = ({
       playerRef.current._watchTimer = null;
     }
     
+    // 영상이 끝났을 때 시청 인증 조건을 충족했다면 자동 인증 처리
+    const canCertify = videoDuration > 0
+      ? (videoDuration >= 180 ? watchSeconds >= 180 : true) // 영상이 끝났으므로 조건 충족
+      : watchSeconds >= 180;
+
+    if (canCertify && !fanCertified) {
+      setFanCertified(true);
+      if (saveFanCertificationStatus) {
+        saveFanCertificationStatus(selectedVideoId, true);
+      }
+      console.log('🎉 영상 종료로 인한 자동 시청 인증 완료!');
+    }
+    
     // 다음 영상 자동 재생
     setTimeout(() => {
       const allVideos = [...ucraVideos, ...videos];
@@ -147,16 +160,32 @@ export const useHomeHandlers = ({
 
   // 팬 인증 핸들러
   const handleFanCertification = () => {
-    const canCertify = videoDuration > 0 
+    const canCertify = videoDuration > 0
       ? (videoDuration >= 180 ? watchSeconds >= 180 : videoEnded)
       : watchSeconds >= 180;
-      
+
+    // 1) 아직 인증 전이고 조건을 충족한 경우 → 인증 처리
     if (canCertify && !fanCertified) {
       setFanCertified(true);
       if (saveFanCertificationStatus) {
         saveFanCertificationStatus(selectedVideoId, true);
       }
-      alert('🎉 유튜버에게 당신의 시청인증 달성이 전달되었습니다!');
+      alert('🎉 시청 인증이 완료되었습니다!');
+      return; // 여기서 종료(다음 영상은 두 번째 클릭에서 처리)
+    }
+
+    // 2) 이미 인증이 완료된 상태에서 버튼을 누르면 다음 영상으로 이동
+    if (fanCertified) {
+      const allVideos = [...ucraVideos, ...videos];
+      const currentIndex = allVideos.findIndex((v) => (v.videoId || v.id) === selectedVideoId);
+
+      if (currentIndex !== -1 && currentIndex < allVideos.length - 1) {
+        const nextVideo = allVideos[currentIndex + 1];
+        const nextVideoId = nextVideo.videoId || nextVideo.id;
+        handleVideoSelect(nextVideoId);
+      } else {
+        alert('마지막 영상입니다.');
+      }
     }
   };
 

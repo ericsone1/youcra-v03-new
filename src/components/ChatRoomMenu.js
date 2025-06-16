@@ -100,47 +100,47 @@ function ChatRoomMenu() {
       {/* 스크롤 가능한 콘텐츠 영역 */}
       <div className="flex-1 overflow-y-auto pb-20">
         <div className="p-4 space-y-4">
-          {/* 메뉴 리스트 */}
+      {/* 메뉴 리스트 */}
           <div className="bg-white rounded-xl shadow border">
             {menuList.map((item, index) => (
-              <button
-                key={item.label}
+            <button
+              key={item.label}
                 className={`w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-blue-50 text-gray-800 text-sm font-medium transition ${
                   index !== menuList.length - 1 ? 'border-b border-gray-100' : ''
                 }`}
-                onClick={() => navigate(item.to)}
-              >
+              onClick={() => navigate(item.to)}
+            >
                 <span className="text-xl">{item.icon}</span>
-                {item.label}
-              </button>
-            ))}
-          </div>
+              {item.label}
+            </button>
+          ))}
+        </div>
 
-          {/* 대화상대 리스트 */}
+        {/* 대화상대 리스트 */}
           <div className="bg-white rounded-xl shadow border">
             <div className="px-4 py-3 font-bold text-gray-700 flex items-center gap-2 bg-gray-50 border-b">
               👥 대화상대 ({participants.length}명)
-            </div>
+          </div>
             
-            {participants.length === 0 ? (
+          {participants.length === 0 ? (
               <div className="px-4 py-8 text-gray-500 text-sm text-center">
                 아직 참여자가 없습니다.
               </div>
-            ) : (
+          ) : (
               <div className="divide-y divide-gray-100">
                 {participants.map((user) => (
-                  <button
-                    key={user.id}
+              <button
+                key={user.id}
                     className="flex items-center gap-3 px-4 py-3 w-full text-left hover:bg-blue-50 transition"
-                    onClick={() => navigate(`/profile/${roomId}/${user.id}`)}
-                  >
-                    {user.avatar ? (
+                onClick={() => navigate(`/profile/${roomId}/${user.id}`)}
+              >
+                {user.avatar ? (
                       <img src={user.avatar} alt={user.name} className="w-10 h-10 rounded-full object-cover" />
-                    ) : (
+                ) : (
                       <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-400 to-purple-400 flex items-center justify-center text-white text-sm font-bold">
-                        {user.name.slice(0,2).toUpperCase()}
-                      </div>
-                    )}
+                    {user.name.slice(0,2).toUpperCase()}
+                  </div>
+                )}
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-gray-800 flex items-center gap-2">
                         <span className="truncate">{user.name}</span>
@@ -149,24 +149,24 @@ function ChatRoomMenu() {
                     </div>
                     <div className="text-xs text-gray-400 flex-shrink-0">
                       ›
-                    </div>
-                  </button>
+                </div>
+              </button>
                 ))}
               </div>
-            )}
-          </div>
+          )}
+        </div>
 
-          {/* 채팅방 나가기 버튼 */}
-          <button
-            onClick={() => {
-              if (window.confirm('채팅방에서 나가시겠습니까?')) {
-                navigate('/chat');
-              }
-            }}
+        {/* 채팅방 나가기 버튼 */}
+        <button
+          onClick={() => {
+            if (window.confirm('채팅방에서 나가시겠습니까?')) {
+              navigate('/chat');
+            }
+          }}
             className="w-full bg-red-50 hover:bg-red-100 text-red-600 font-bold py-3 rounded-xl border border-red-200 transition-colors"
-          >
-            채팅방 나가기
-          </button>
+        >
+          채팅방 나가기
+        </button>
         </div>
       </div>
     </div>

@@ -119,7 +119,11 @@ function MyChannel() {
         <div className="grid grid-cols-3 gap-4">
           {/* 첫 번째 줄 */}
           <button 
-            onClick={() => navigate('/my/videos')}
+            onClick={() => {
+              console.log('📺 내 유튜브 버튼 클릭!');
+              console.log('이동할 경로: /my/videos');
+              navigate('/my/videos');
+            }}
             className="flex flex-col items-center p-4 bg-red-50 rounded-xl hover:bg-red-100 transition-colors"
           >
             <div className="text-2xl mb-2">📺</div>

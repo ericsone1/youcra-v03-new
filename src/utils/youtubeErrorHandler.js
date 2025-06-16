@@ -57,18 +57,13 @@ export const getOptimizedYouTubePlayerVars = () => {
   return {
     autoplay: 1,
     controls: 1, // 플레이어 컨트롤 표시
-    modestbranding: 0, // YouTube 로고 표시 (사용자 친화적)
     rel: 0, // 관련 동영상 숨김
     origin: window.location.origin,
     enablejsapi: 1,
-    fs: 1, // 전체화면 활성화 (사용자 편의성)
-    iv_load_policy: 1, // 주석 표시 (기본값)
-    cc_load_policy: 1, // 자막 사용 가능
-    disablekb: 0, // 키보드 컨트롤 활성화
+    fs: 1, // 전체화면 활성화
     playsinline: 1, // 모바일에서 인라인 재생
-    widget_referrer: window.location.origin,
-    showinfo: 1, // 동영상 정보 표시
-    color: 'red', // 진행바 색상 (YouTube 기본)
-    theme: 'dark' // 다크 테마 (현대적)
+    widget_referrer: window.location.origin
+    // YouTube 기본 테마와 색상 유지 (color, theme 제거)
+    // modestbranding, iv_load_policy, cc_load_policy 등 기본값 사용
   };
 }; 

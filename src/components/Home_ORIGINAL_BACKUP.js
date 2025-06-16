@@ -857,7 +857,6 @@ function Home() {
                             playerVars: {
                               autoplay: 1,
                               controls: 1,
-                              modestbranding: 1,
                               rel: 0,
                               enablejsapi: 1,
                               playsinline: 1,

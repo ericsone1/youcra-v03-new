@@ -43,6 +43,11 @@ const YouTubeChannelManager = () => {
   const [activeTab, setActiveTab] = useState('registered'); // 'registered' | 'watched'
   const [watchedVideos, setWatchedVideos] = useState([]); // 시청한 영상 리스트
 
+  // 디버그 로그 추가
+  console.log('🎬 YouTubeChannelManager 렌더링됨');
+  console.log('현재 유저:', currentUser?.uid);
+  console.log('채널 데이터:', channelData);
+
   // ... existing useEffect and functions ...
   // 기존 채널 정보 로드 및 자동 동기화
   useEffect(() => {

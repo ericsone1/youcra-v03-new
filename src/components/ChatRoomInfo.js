@@ -108,7 +108,7 @@ export default function ChatRoomInfo() {
         const roomDoc = await getDoc(doc(db, 'chatRooms', roomId));
         if (roomDoc.exists()) {
           setRoomData(roomDoc.data());
-        }
+          }
       } catch (error) {
         console.error('방 정보 로딩 실패:', error);
       }
@@ -138,7 +138,7 @@ export default function ChatRoomInfo() {
       }
     );
 
-    fetchRoomData();
+      fetchRoomData();
     setLoading(false);
 
     return () => {
@@ -172,17 +172,17 @@ export default function ChatRoomInfo() {
       {/* 상단 헤더 */}
       <div className="bg-white border-b sticky top-0 z-10">
         <div className="flex items-center justify-between px-4 py-4">
-          <button 
+            <button 
             onClick={() => navigate(`/chat/${roomId}`)} 
             className="text-2xl text-gray-600 hover:text-blue-600"
             aria-label="뒤로가기"
-          >
-            ←
-          </button>
+            >
+              ←
+            </button>
           <h1 className="flex-1 text-center font-bold text-lg">채팅방 정보</h1>
           <div style={{ width: 32 }} />
         </div>
-      </div>
+          </div>
 
       <div className="max-w-md mx-auto">
         {/* 방 프로필 섹션 */}
@@ -208,15 +208,15 @@ export default function ChatRoomInfo() {
 
         {/* 콘텐츠 시청리스트 */}
         <div className="bg-white mb-4 p-4">
-          <button
+                  <button 
             className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white font-bold py-4 px-6 rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all shadow-lg flex items-center justify-center gap-3"
             onClick={() => navigate(`/chat/${roomId}/videos`)}
-          >
+                  >
             <span className="text-xl">🎬</span>
             <span>콘텐츠 시청리스트</span>
             <span className="text-sm opacity-80">({videoList.length})</span>
-          </button>
-        </div>
+                  </button>
+          </div>
 
         {/* 방장 전용 메뉴 */}
         {isOwner && (

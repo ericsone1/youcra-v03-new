@@ -233,7 +233,7 @@ export const VideoSection = ({
                               e.stopPropagation();
                               handleFanCertification();
                             }}
-                            disabled={fanCertified || (videoDuration >= 180 ? watchSeconds < 180 : !videoEnded)}
+                            disabled={(!fanCertified) && (videoDuration >= 180 ? watchSeconds < 180 : !videoEnded)}
                             className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
                               fanCertified 
                                 ? 'bg-green-500 text-white cursor-default' 

@@ -338,24 +338,24 @@ function VideoListPage() {
       <div className="flex flex-col h-screen max-w-md mx-auto bg-white relative">
       {/* 유크라 스타일 헤더 */}
       <header className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md flex-shrink-0 flex items-center justify-between px-4 py-3 border-b z-30 bg-rose-100">
-        <button 
-          onClick={() => navigate(-1)} 
+          <button 
+            onClick={() => navigate(-1)} 
           className="text-2xl text-gray-600 hover:text-blue-600"
-          aria-label="뒤로가기"
-        >
-          ←
-        </button>
+            aria-label="뒤로가기"
+          >
+            ←
+          </button>
                  <div className="flex-1 text-center">
            <div className="font-bold text-lg">🎬 콘텐츠 시청리스트</div>
            <div className="text-xs text-gray-600">영상 등록 및 시청하기</div>
          </div>
-        <button
-          onClick={() => navigate(`/chat/${roomId}`)}
+          <button
+            onClick={() => navigate(`/chat/${roomId}`)}
           className="text-2xl text-gray-600 hover:text-blue-600"
-          aria-label="닫기"
-        >
-          ×
-        </button>
+            aria-label="닫기"
+          >
+            ×
+          </button>
       </header>
 
       {/* 메인 콘텐츠 */}
@@ -494,14 +494,14 @@ function VideoListPage() {
                             }} 
                             className="cursor-pointer"
                           >
-                            {certifiedIds.includes(video.id) ? (
+                          {certifiedIds.includes(video.id) ? (
                               <div className="bg-green-500 text-white text-xs px-3 py-1.5 rounded-full font-medium text-center">
-                                ✅ 완료
-                              </div>
-                            ) : (
+                              ✅ 완료
+                            </div>
+                          ) : (
                               <div className="bg-blue-500 text-white text-xs px-3 py-1.5 rounded-full font-medium text-center">
-                                시청하기
-                              </div>
+                              시청하기
+                            </div>
                             )}
                           </div>
                           
