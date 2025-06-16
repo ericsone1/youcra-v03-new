@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { db, auth } from "../firebase";
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, getDoc, deleteDoc, setDoc } from "firebase/firestore";
 
 // YouTube ID 추출 함수
 function getYoutubeId(url) {
@@ -47,7 +47,18 @@ function VideoListPage() {
   
   // 영상 리스트 관련
   const [videoList, setVideoList] = useState([]);
+  const [videoListState, setVideoListState] = useState([]);
   const [certifiedIds, setCertifiedIds] = useState([]);
+  
+  // 방장 권한 관련
+  const [isOwner, setIsOwner] = useState(false);
+  const [roomData, setRoomData] = useState(null);
+  
+  // 드래그 앤 드롭 관련
+  const [draggedIndex, setDraggedIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [draggedItem, setDraggedItem] = useState(null);
   
   // 영상 등록 관련
   const [videoUrl, setVideoUrl] = useState("");
@@ -55,12 +66,37 @@ function VideoListPage() {
   const [videoLoading, setVideoLoading] = useState(false);
   const [videoMsg, setVideoMsg] = useState("");
 
+  // 방장 권한 확인
+  useEffect(() => {
+    const checkOwnership = async () => {
+      if (!roomId || !auth.currentUser) return;
+      
+      try {
+        const roomRef = doc(db, "chatRooms", roomId);
+        const roomSnap = await getDoc(roomRef);
+        
+        if (roomSnap.exists()) {
+          const data = roomSnap.data();
+          setRoomData(data);
+          const ownerCheck = data.createdBy === auth.currentUser.uid || data.createdByEmail === auth.currentUser.email;
+          setIsOwner(ownerCheck);
+        }
+      } catch (error) {
+        console.error("방장 권한 확인 오류:", error);
+      }
+    };
+    
+    checkOwnership();
+  }, [roomId]);
+
   // 영상 리스트 불러오기
   useEffect(() => {
     if (!roomId) return;
     const q = query(collection(db, "chatRooms", roomId, "videos"), orderBy("registeredAt", "desc"));
     const unsub = onSnapshot(q, (snapshot) => {
-      setVideoList(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+      const list = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      setVideoList(list);
+      setVideoListState(list);
     });
     return () => unsub();
   }, [roomId]);
@@ -149,32 +185,183 @@ function VideoListPage() {
     setVideoLoading(false);
   };
 
+  // 영상 삭제 (방장만 가능)
+  const handleDeleteVideo = async (videoId, videoTitle) => {
+    if (!isOwner) return;
+    
+    if (!window.confirm(`"${videoTitle}" 영상을 삭제하시겠습니까?`)) return;
+    
+    try {
+      await deleteDoc(doc(db, "chatRooms", roomId, "videos", videoId));
+    } catch (error) {
+      console.error("영상 삭제 오류:", error);
+      alert("영상 삭제 중 오류가 발생했습니다.");
+    }
+  };
+
+  // 드래그 시작
+  const handleDragStart = (e, index) => {
+    if (!isOwner) return;
+    setDraggedIndex(index);
+    setDraggedItem(videoListState[index]);
+    setIsDragging(true);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/html", e.target.outerHTML);
+    
+    // 드래그 이미지 커스터마이징
+    const dragImage = e.target.cloneNode(true);
+    dragImage.style.transform = "rotate(5deg)";
+    dragImage.style.opacity = "0.8";
+    dragImage.style.boxShadow = "0 10px 25px rgba(0,0,0,0.3)";
+    dragImage.style.borderRadius = "12px";
+    document.body.appendChild(dragImage);
+    e.dataTransfer.setDragImage(dragImage, e.target.offsetWidth / 2, e.target.offsetHeight / 2);
+    
+    // 원본 요소 스타일링
+    e.target.style.transform = "scale(0.95)";
+    e.target.style.opacity = "0.7";
+    e.target.style.transition = "all 0.2s ease";
+    
+    // 임시 드래그 이미지 제거
+    setTimeout(() => {
+      if (dragImage.parentNode) {
+        document.body.removeChild(dragImage);
+      }
+    }, 0);
+  };
+
+  // 드래그 오버
+  const handleDragOver = (e, index) => {
+    if (!isOwner) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverIndex(index);
+  };
+
+  // 드래그 리브
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+
+  // 드래그 종료
+  const handleDragEnd = (e) => {
+    e.target.style.transform = "scale(1)";
+    e.target.style.opacity = "1";
+    e.target.style.transition = "all 0.3s ease";
+    
+    setDraggedIndex(null);
+    setDragOverIndex(null);
+    setIsDragging(false);
+    setDraggedItem(null);
+  };
+
+  // 드롭 처리
+  const handleDrop = async (e, dropIndex) => {
+    if (!isOwner || draggedIndex === null) return;
+    
+    e.preventDefault();
+    setDragOverIndex(null);
+    
+    if (draggedIndex === dropIndex) {
+      setDraggedIndex(null);
+      setIsDragging(false);
+      setDraggedItem(null);
+      return;
+    }
+
+    // 드롭 애니메이션을 위한 임시 상태
+    const newList = [...videoListState];
+    const draggedVideo = newList[draggedIndex];
+    
+    // 배열에서 드래그된 아이템 제거
+    newList.splice(draggedIndex, 1);
+    // 새 위치에 삽입
+    newList.splice(dropIndex, 0, draggedVideo);
+    
+    // 애니메이션과 함께 상태 업데이트
+    setVideoListState(newList);
+    setDraggedIndex(null);
+    setIsDragging(false);
+    setDraggedItem(null);
+
+    // Firestore에서 순서 업데이트
+    try {
+      const updates = newList.map((video, index) => {
+        const timestamp = new Date(Date.now() - index * 1000); // 역순으로 timestamp 생성
+        return setDoc(doc(db, "chatRooms", roomId, "videos", video.id), {
+          registeredAt: timestamp
+        }, { merge: true });
+      });
+      
+      await Promise.all(updates);
+    } catch (error) {
+      console.error("영상 순서 변경 오류:", error);
+      alert("영상 순서 변경 중 오류가 발생했습니다.");
+      // 실패 시 원래 상태로 복원
+      setVideoListState(videoList);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      {/* 통일된 헤더 */}
-      <header className="sticky top-0 z-10 bg-white shadow-sm border-b">
-        <div className="max-w-md mx-auto flex items-center justify-between px-4 py-4">
-          <button 
-            onClick={() => navigate(-1)} 
-            className="text-2xl text-gray-600 hover:text-blue-600 transition-colors"
-            aria-label="뒤로가기"
-          >
-            ←
-          </button>
-          <h1 className="font-bold text-lg text-gray-800">시청 리스트</h1>
-          <button
-            onClick={() => navigate(`/chat/${roomId}`)}
-            className="text-2xl text-gray-400 hover:text-gray-600 transition-colors"
-            aria-label="닫기"
-          >
-            ×
-          </button>
-        </div>
+    <>
+      {/* 드래그 애니메이션 스타일 */}
+      <style jsx>{`
+        @keyframes dragPulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.05); }
+        }
+        
+        @keyframes dropZone {
+          0%, 100% { 
+            border-color: #3b82f6;
+            background-color: rgb(239 246 255);
+          }
+          50% { 
+            border-color: #1d4ed8;
+            background-color: rgb(219 234 254);
+          }
+        }
+        
+        .drag-over {
+          animation: dropZone 1s ease-in-out infinite;
+        }
+        
+        .drag-item {
+          animation: dragPulse 0.5s ease-in-out;
+        }
+        
+        .smooth-reorder {
+          transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+      `}</style>
+      
+      <div className="flex flex-col h-screen max-w-md mx-auto bg-white relative">
+      {/* 유크라 스타일 헤더 */}
+      <header className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md flex-shrink-0 flex items-center justify-between px-4 py-3 border-b z-30 bg-rose-100">
+        <button 
+          onClick={() => navigate(-1)} 
+          className="text-2xl text-gray-600 hover:text-blue-600"
+          aria-label="뒤로가기"
+        >
+          ←
+        </button>
+                 <div className="flex-1 text-center">
+           <div className="font-bold text-lg">🎬 콘텐츠 시청리스트</div>
+           <div className="text-xs text-gray-600">영상 등록 및 시청하기</div>
+         </div>
+        <button
+          onClick={() => navigate(`/chat/${roomId}`)}
+          className="text-2xl text-gray-600 hover:text-blue-600"
+          aria-label="닫기"
+        >
+          ×
+        </button>
       </header>
 
-      <div className="max-w-md mx-auto bg-white min-h-screen">
+      {/* 메인 콘텐츠 */}
+      <main className="flex-1 min-h-0 overflow-y-auto pb-20" style={{ paddingTop: '80px' }}>
         {/* 탭 네비게이션 */}
-        <div className="flex bg-gray-50 border-b">
+        <div className="flex bg-gray-50 border-b sticky top-0 z-20">
           <button
             onClick={() => setActiveTab("watch")}
             className={`flex-1 py-4 px-6 font-medium transition-all ${
@@ -216,14 +403,64 @@ function VideoListPage() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {videoList.map((video) => (
+                  {/* 방장용 안내 메시지 */}
+                  {isOwner && videoList.length > 0 && (
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-blue-600">👑</span>
+                        <span className="text-sm font-medium text-blue-800">방장 전용 기능</span>
+                      </div>
+                      <p className="text-xs text-blue-700 mt-1">
+                        영상을 길게 눌러서 드래그하여 순서를 변경할 수 있습니다. 모든 영상의 삭제가 가능합니다.
+                      </p>
+                    </div>
+                  )}
+                  
+                  {/* 일반 사용자용 안내 메시지 */}
+                  {!isOwner && videoList.length > 0 && videoList.some(v => v.registeredBy === auth.currentUser?.email) && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-green-600">📹</span>
+                        <span className="text-sm font-medium text-green-800">내가 등록한 영상</span>
+                      </div>
+                      <p className="text-xs text-green-700 mt-1">
+                        자신이 등록한 영상은 삭제할 수 있습니다.
+                      </p>
+                    </div>
+                  )}
+                  
+                  {videoListState.map((video, idx) => (
                     <div 
                       key={video.id} 
-                      className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer hover:scale-[1.02]"
-                      onClick={() => navigate(`/chat/${roomId}?video=${video.id}`)}
+                      className={`bg-white border border-gray-200 rounded-xl p-4 shadow-sm transition-all duration-300 ease-in-out transform ${
+                        isOwner ? 'cursor-move hover:shadow-lg' : 'hover:shadow-md'
+                      } ${
+                        dragOverIndex === idx ? 'drag-over scale-105 shadow-lg border-blue-400' : ''
+                      } ${
+                        draggedIndex === idx ? 'opacity-50 scale-95 rotate-2 drag-item' : 'hover:scale-[1.02]'
+                      } ${
+                        isDragging && draggedIndex !== idx ? 'smooth-reorder' : ''
+                      }`}
+                      draggable={isOwner}
+                      onDragStart={(e) => handleDragStart(e, idx)}
+                      onDragOver={(e) => handleDragOver(e, idx)}
+                      onDragLeave={handleDragLeave}
+                      onDragEnd={handleDragEnd}
+                      onDrop={(e) => handleDrop(e, idx)}
+                      style={{
+                        // 드래그 중일 때 다른 아이템들이 부드럽게 이동하는 효과
+                        transform: isDragging && draggedIndex !== idx && dragOverIndex !== null 
+                          ? (idx < dragOverIndex && idx >= draggedIndex) || (idx > dragOverIndex && idx <= draggedIndex)
+                            ? 'translateY(-4px)' 
+                            : 'translateY(0)'
+                          : undefined
+                      }}
                     >
                       <div className="flex gap-3">
-                        <div className="relative">
+                        <div 
+                          className="relative cursor-pointer"
+                          onClick={() => navigate(`/chat/${roomId}?video=${video.id}`)}
+                        >
                           <img 
                             src={video.thumbnail} 
                             alt="썸네일" 
@@ -235,22 +472,51 @@ function VideoListPage() {
                             </div>
                           </div>
                         </div>
-                        <div className="flex-1 min-w-0">
+                        
+                        <div 
+                          className="flex-1 min-w-0 cursor-pointer"
+                          onClick={() => navigate(`/chat/${roomId}?video=${video.id}`)}
+                        >
                           <h3 className="font-medium text-gray-900 text-sm leading-5 line-clamp-2 mb-1">
                             {video.title}
                           </h3>
                           <p className="text-xs text-gray-500 mb-1">{video.channel}</p>
                           <p className="text-xs text-gray-400">등록: {video.registeredBy?.split('@')[0]}</p>
                         </div>
-                        <div className="flex flex-col justify-center">
-                          {certifiedIds.includes(video.id) ? (
-                            <div className="bg-green-500 text-white text-xs px-3 py-1.5 rounded-full font-medium">
-                              ✅ 완료
-                            </div>
-                          ) : (
-                            <div className="bg-blue-500 text-white text-xs px-3 py-1.5 rounded-full font-medium">
-                              시청하기
-                            </div>
+                        
+                        {/* 우측 버튼 영역 */}
+                        <div className="flex flex-col justify-center items-end gap-2">
+                          {/* 시청 상태 버튼 */}
+                          <div 
+                            onClick={(e) => {
+                              e.stopPropagation(); // 드래그 이벤트 방지
+                              navigate(`/chat/${roomId}?video=${video.id}`);
+                            }} 
+                            className="cursor-pointer"
+                          >
+                            {certifiedIds.includes(video.id) ? (
+                              <div className="bg-green-500 text-white text-xs px-3 py-1.5 rounded-full font-medium text-center">
+                                ✅ 완료
+                              </div>
+                            ) : (
+                              <div className="bg-blue-500 text-white text-xs px-3 py-1.5 rounded-full font-medium text-center">
+                                시청하기
+                              </div>
+                            )}
+                          </div>
+                          
+                          {/* 삭제 버튼 - 방장은 모든 영상, 일반 유저는 자신의 영상만 */}
+                          {(isOwner || video.registeredBy === auth.currentUser?.email) && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation(); // 드래그 이벤트 방지
+                                handleDeleteVideo(video.id, video.title);
+                              }}
+                              className="bg-red-500 hover:bg-red-600 text-white text-xs px-3 py-1.5 rounded-full font-medium text-center transition-colors shadow-md hover:shadow-lg"
+                              title="영상 삭제"
+                            >
+                              삭제하기
+                            </button>
                           )}
                         </div>
                       </div>
@@ -339,8 +605,12 @@ function VideoListPage() {
             </div>
           )}
         </div>
+      </main>
+
+      {/* 하단 여백 - 모바일 네비게이션 공간 확보 */}
+      <div style={{ height: '72px' }}></div>
       </div>
-    </div>
+    </>
   );
 }
 

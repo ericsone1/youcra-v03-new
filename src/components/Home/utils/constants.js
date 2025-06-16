@@ -1,7 +1,8 @@
 // 🔧 Home 컴포넌트 상수 정의
 // 원본: Home_ORIGINAL_BACKUP.js에서 추출
 
-export const API_KEY = process.env.REACT_APP_YOUTUBE_API_KEY;
+// YouTube API 키
+export const API_KEY = process.env.REACT_APP_YOUTUBE_API_KEY || "AIzaSyCEmEuwFYKGbUkhjS-V19DN64mhS_5n9iM";
 
 // 카테고리별 키워드 매핑
 export const CATEGORY_KEYWORDS = {

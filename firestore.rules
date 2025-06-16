@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 🚀 YouCra v03.1 - 깔끔한 보안 규칙 (MVP용)
+    // 인증된 사용자는 모든 데이터에 접근 가능 (공개 채팅 플랫폼)
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+} 

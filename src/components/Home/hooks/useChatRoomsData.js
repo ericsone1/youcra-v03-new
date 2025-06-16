@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db, auth } from '../../../firebase';
+import { useAuth } from '../../../contexts/AuthContext';
 import {
   collection,
   query,
@@ -14,11 +15,70 @@ import {
 export const useChatRoomsData = () => {
   const [chatRooms, setChatRooms] = useState([]);
   const [loadingRooms, setLoadingRooms] = useState(true);
+  const { currentUser, isAuthenticated } = useAuth();
+
+  // 더미 채팅방 데이터
+  const getDummyRooms = () => {
+    const dummyRoomNames = [
+      "썰툰 채널 협업방", "개그 맞구독방", "AI 맞구독방", "50대 썰채널 맞구독방", "뷰티 유튜버 협업방",
+      "쿠킹 채널 맞구독방", "게임 유튜버 협업방", "브이로그 맞구독방", "IT리뷰 협업방", "펫튜버 맞구독방"
+    ];
+    
+    const dummyHashtagSets = [
+      ["썰툰", "애니메이션", "협업"],
+      ["개그", "코미디", "맞구독"],
+      ["AI", "인공지능", "맞구독"],
+      ["50대", "썰", "맞구독"],
+      ["뷰티", "메이크업", "협업"],
+      ["쿠킹", "요리", "맞구독"],
+      ["게임", "스트리머", "협업"],
+      ["브이로그", "일상", "맞구독"],
+      ["IT", "리뷰", "협업"],
+      ["펫", "동물", "맞구독"]
+    ];
+
+    return dummyRoomNames.map((name, index) => ({
+      id: `dummy_${index}`,
+      name: name,
+      hashtags: dummyHashtagSets[index] || ["일반", "소통"],
+      participantCount: Math.floor(Math.random() * 50) + 5,
+      messageCount: Math.floor(Math.random() * 200) + 10,
+      likesCount: Math.floor(Math.random() * 30) + 1,
+      popularityScore: Math.floor(Math.random() * 100) + 50, // 더 높은 점수로 인기 표시
+      isActive: Math.random() > 0.2, // 80% 확률로 활성 상태
+      userLiked: false,
+      isDummy: true
+    }));
+  };
 
   useEffect(() => {
+    console.log('🔄 useChatRoomsData: 인증 상태 변화', { isAuthenticated, currentUser: !!currentUser });
+
+    // 로그아웃 상태에서는 더미 데이터만 표시
+    if (!isAuthenticated || !currentUser) {
+      console.log('📋 비로그인 상태: 더미 채팅방 데이터 표시');
+      setLoadingRooms(true);
+      
+      // 약간의 로딩 시간 시뮬레이션
+      setTimeout(() => {
+        const dummyRooms = getDummyRooms();
+        setChatRooms(dummyRooms);
+        setLoadingRooms(false);
+        console.log('✅ 더미 채팅방 데이터 로드 완료:', dummyRooms.length + '개');
+      }, 1000);
+      
+      return; // Firestore 구독하지 않음
+    }
+
+    // 로그인 상태에서만 실제 Firestore 데이터 가져오기
+    console.log('🔥 로그인 상태: Firestore 채팅방 데이터 구독 시작');
+    
     const q = query(collection(db, "chatRooms"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, async (snapshot) => {
+      console.log('📡 Firestore 스냅샷 수신:', snapshot.docs.length + '개 채팅방');
       setLoadingRooms(true);
+      
+      try {
       const roomPromises = snapshot.docs.map(async (docSnap) => {
         const room = { id: docSnap.id, ...docSnap.data() };
 
@@ -65,8 +125,8 @@ export const useChatRoomsData = () => {
           const likesCount = likesSnap.size;
 
           // 사용자의 좋아요 상태 확인
-          const userLikeDoc = auth.currentUser ? 
-            await getDoc(doc(db, "chatRooms", room.id, "likes", auth.currentUser.uid)) : 
+            const userLikeDoc = currentUser ? 
+              await getDoc(doc(db, "chatRooms", room.id, "likes", currentUser.uid)) : 
             null;
           const userLiked = userLikeDoc?.exists() || false;
 
@@ -87,6 +147,7 @@ export const useChatRoomsData = () => {
           room.isActive = lastMsg?.createdAt?.seconds 
             ? (Date.now() - lastMsg.createdAt.seconds * 1000) < 3600000 // 1시간 이내
             : false;
+            room.isDummy = false;
 
           return room;
         } catch (error) {
@@ -97,6 +158,7 @@ export const useChatRoomsData = () => {
           room.userLiked = false;
           room.popularityScore = 0;
           room.isActive = false;
+            room.isDummy = false;
           return room;
         }
       });
@@ -115,48 +177,37 @@ export const useChatRoomsData = () => {
         .sort((a, b) => b.popularityScore - a.popularityScore);
 
       // 10개 미만일 경우 더미 채팅방 추가
-      const dummyRoomNames = [
-        "코딩 스터디방", "맛집 탐방단", "영화 리뷰방", "운동 메이트", "독서 클럽",
-        "여행 계획방", "펜팔 친구들", "취미 공유방", "언어 교환방", "투자 정보방"
-      ];
-      
-      const dummyHashtagSets = [
-        ["코딩", "개발", "프로그래밍"],
-        ["맛집", "리뷰", "추천"],
-        ["영화", "리뷰", "토론"],
-        ["운동", "헬스", "다이어트"],
-        ["독서", "책", "추천"],
-        ["여행", "계획", "정보"],
-        ["펜팔", "외국어", "친구"],
-        ["취미", "공유", "소통"],
-        ["언어", "교환", "학습"],
-        ["투자", "주식", "정보"]
-      ];
-
-      while (sortedRooms.length < 10) {
-        const index = sortedRooms.length;
-        const dummyRoom = {
-          id: `dummy_${index}`,
-          name: dummyRoomNames[index] || `채팅방 ${index + 1}`,
-          hashtags: dummyHashtagSets[index] || ["일반", "소통"],
-          participantCount: Math.floor(Math.random() * 50) + 5,
-          messageCount: Math.floor(Math.random() * 200) + 10,
-          likesCount: Math.floor(Math.random() * 30) + 1,
-          popularityScore: Math.floor(Math.random() * 20) + 1,
-          isActive: Math.random() > 0.3,
-          userLiked: false
-        };
-        sortedRooms.push(dummyRoom);
+        if (sortedRooms.length < 10) {
+          const dummyRooms = getDummyRooms().slice(0, 10 - sortedRooms.length);
+          sortedRooms.push(...dummyRooms);
       }
 
       const finalSortedRooms = sortedRooms.slice(0, 10); // 상위 10개까지
 
       setChatRooms(finalSortedRooms);
+        setLoadingRooms(false);
+        console.log('✅ Firestore 채팅방 데이터 로드 완료:', finalSortedRooms.length + '개');
+        
+      } catch (error) {
+        console.error('❌ Firestore 채팅방 데이터 로드 실패:', error);
+        // 오류 발생시 더미 데이터로 폴백
+        const dummyRooms = getDummyRooms();
+        setChatRooms(dummyRooms);
+        setLoadingRooms(false);
+      }
+    }, (error) => {
+      console.error('❌ Firestore 구독 오류:', error);
+      // 오류 발생시 더미 데이터로 폴백
+      const dummyRooms = getDummyRooms();
+      setChatRooms(dummyRooms);
       setLoadingRooms(false);
     });
 
-    return () => unsubscribe();
-  }, []);
+    return () => {
+      console.log('🔄 Firestore 구독 해제');
+      unsubscribe();
+    };
+  }, [isAuthenticated, currentUser]);
 
   return { chatRooms, loadingRooms };
 }; 

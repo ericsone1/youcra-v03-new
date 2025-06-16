@@ -13,40 +13,78 @@ function AllChatRooms() {
 
   // 채팅방 데이터 실시간 구독
   useEffect(() => {
-    const q = query(collection(db, "chatRooms"), orderBy("createdAt", "desc"));
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const roomPromises = snapshot.docs.map(async (docSnap) => {
-        const room = { id: docSnap.id, ...docSnap.data() };
+    let unsubscribe;
+    
+    try {
+      const q = query(collection(db, "chatRooms"), orderBy("createdAt", "desc"));
+      unsubscribe = onSnapshot(q, async (snapshot) => {
         try {
-          // 메시지 정보 및 참여자 등 추가 데이터 수집
-          const msgQ = query(collection(db, "chatRooms", room.id, "messages"), orderBy("createdAt", "desc"));
-          const msgSnap = await getDocs(msgQ);
-          const participants = new Set();
-          let lastMsg = null;
-          msgSnap.forEach((msgDoc) => {
-            const msg = msgDoc.data();
-            if (msg.uid) participants.add(msg.uid);
-            if (!lastMsg) lastMsg = msg;
+          const roomPromises = snapshot.docs.map(async (docSnap) => {
+            const room = { id: docSnap.id, ...docSnap.data() };
+            try {
+              // 메시지 정보 및 참여자 등 추가 데이터 수집 (타임아웃 설정)
+              const msgQ = query(collection(db, "chatRooms", room.id, "messages"), orderBy("createdAt", "desc"));
+              const msgSnap = await Promise.race([
+                getDocs(msgQ),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 5000))
+              ]);
+              
+              const participants = new Set();
+              let lastMsg = null;
+              msgSnap.forEach((msgDoc) => {
+                const msg = msgDoc.data();
+                if (msg.uid) participants.add(msg.uid);
+                if (!lastMsg) lastMsg = msg;
+              });
+              
+              const partSnap = await Promise.race([
+                getDocs(collection(db, "chatRooms", room.id, "participants")),
+                new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 3000))
+              ]);
+              partSnap.forEach((p) => participants.add(p.id));
+              
+              room.participantCount = participants.size;
+              room.lastMsgText = lastMsg?.text || (lastMsg?.imageUrl ? "[이미지]" : "") || "";
+              room.sortTimestamp = lastMsg?.createdAt?.seconds || room.createdAt?.seconds || 0;
+              room.title = room.name || room.title || "";
+              room.desc = room.desc || "새로운 채팅방입니다. 함께 이야기해요!";
+              room.hashtags = room.hashtags || [];
+              return room;
+            } catch (e) {
+              console.warn(`Failed to load details for room ${room.id}:`, e.message);
+              // 기본값으로 반환
+              room.participantCount = 0;
+              room.lastMsgText = "";
+              room.sortTimestamp = room.createdAt?.seconds || 0;
+              room.title = room.name || room.title || "채팅방";
+              room.desc = room.desc || "새로운 채팅방입니다.";
+              room.hashtags = room.hashtags || [];
+              return room;
+            }
           });
-          const partSnap = await getDocs(collection(db, "chatRooms", room.id, "participants"));
-          partSnap.forEach((p) => participants.add(p.id));
-          room.participantCount = participants.size;
-          room.lastMsgText = lastMsg?.text || (lastMsg?.imageUrl ? "[이미지]" : "") || "";
-          room.sortTimestamp = lastMsg?.createdAt?.seconds || room.createdAt?.seconds || 0;
-          room.title = room.name || room.title || "";
-          room.desc = room.desc || "새로운 채팅방입니다. 함께 이야기해요!";
-          room.hashtags = room.hashtags || [];
-          return room;
-        } catch (e) {
-          console.error(e);
-          return room;
+          const processed = await Promise.all(roomPromises);
+          setRooms(processed);
+        } catch (error) {
+          console.error("Error processing chat rooms:", error);
+          setRooms([]);
+        } finally {
+          setLoading(false);
         }
+      }, (error) => {
+        console.error("Error fetching chat rooms:", error);
+        setLoading(false);
+        setRooms([]);
       });
-      const processed = await Promise.all(roomPromises);
-      setRooms(processed);
+    } catch (error) {
+      console.error("Error setting up chat rooms listener:", error);
       setLoading(false);
-    });
-    return () => unsubscribe();
+    }
+    
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, []);
 
   // 필터 & 검색
@@ -102,7 +140,7 @@ function AllChatRooms() {
       <div className="text-sm text-gray-500 mb-2">방 개수: {filteredRooms.length}</div>
 
       {/* 리스트 */}
-      <div className="flex-1 overflow-y-auto space-y-3 pb-safe">
+      <div className="flex-1 overflow-y-auto space-y-3 pb-20">
         {loading ? (
           <div className="flex flex-col items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-4"></div><div className="text-gray-500">채팅방을 불러오는 중...</div></div>
         ) : filteredRooms.length === 0 ? (

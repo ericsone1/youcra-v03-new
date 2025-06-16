@@ -1,6 +1,6 @@
 import React from 'react';
 
-function BoardHeader({ currentCategory, showCreateForm, onToggleForm }) {
+function BoardHeader({ currentCategory, showCreateForm, onToggleForm, isAuthenticated }) {
   // 카테고리별 고정 버튼 스타일
   const getButtonStyle = (category, isCreateForm) => {
     if (isCreateForm) {
@@ -30,13 +30,15 @@ function BoardHeader({ currentCategory, showCreateForm, onToggleForm }) {
             <p className="text-gray-600 text-sm">유크라 사용자들과 자유롭게 소통해보세요!</p>
           </div>
         </div>
-        <button
-          onClick={onToggleForm}
-          className={`px-4 py-2 rounded-lg font-semibold transition-colors flex items-center gap-2 ${getButtonStyle(currentCategory, showCreateForm)}`}
-        >
-          <span>{showCreateForm ? '❌' : '✏️'}</span>
-          {showCreateForm ? '취소' : '글쓰기'}
-        </button>
+        {isAuthenticated && (
+          <button
+            onClick={onToggleForm}
+            className={`px-4 py-2 rounded-lg font-semibold transition-colors flex items-center gap-2 ${getButtonStyle(currentCategory, showCreateForm)}`}
+          >
+            <span>{showCreateForm ? '❌' : '✏️'}</span>
+            {showCreateForm ? '취소' : '글쓰기'}
+          </button>
+        )}
       </div>
     </div>
   );

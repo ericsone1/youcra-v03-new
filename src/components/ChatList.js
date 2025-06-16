@@ -37,51 +37,53 @@ function ChatList() {
   }
 
   return (
-    <div className="max-w-md mx-auto bg-[#f7faff] rounded-2xl p-3 min-h-screen flex flex-col">
-      {/* 헤더 - 제목과 버튼들 */}
-      <div className="flex items-center justify-between mt-4 mb-4">
-        <h2 className="text-2xl font-bold">내 채팅방</h2>
-        <div className="flex gap-2">
-          <button
-            onClick={() => navigate('/chat/create')}
-            className="flex items-center gap-2 px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all"
-            title="방 만들기"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
-            <span className="text-sm font-medium">방 만들기</span>
-          </button>
-          <button
-            onClick={() => navigate('/chats')}
-            className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 transition-all"
-            title="방 찾기"
-          >
-            <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-            <span className="text-sm font-medium text-gray-600">방 찾기</span>
-          </button>
+    <div className="max-w-md mx-auto bg-[#f7faff] rounded-2xl min-h-screen flex flex-col">
+      {/* 고정 헤더 - 제목과 버튼들 */}
+      <div className="flex-shrink-0 p-3 pt-7 pb-4">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-bold">내 채팅방</h2>
+          <div className="flex gap-2">
+            <button
+              onClick={() => navigate('/chat/create')}
+              className="flex items-center gap-2 px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all"
+              title="방 만들기"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              <span className="text-sm font-medium">방 만들기</span>
+            </button>
+            <button
+              onClick={() => navigate('/chats')}
+              className="flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-gray-200 hover:bg-gray-50 transition-all"
+              title="방 찾기"
+            >
+              <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              <span className="text-sm font-medium text-gray-600">방 찾기</span>
+            </button>
+          </div>
         </div>
+
+        <SearchFilter
+          searchInput={searchInput}
+          setSearchInput={setSearchInput}
+          searchActive={searchActive}
+          onSearch={handleSearch}
+          onClearSearch={handleClearSearch}
+        />
       </div>
 
-      <SearchFilter
-        searchInput={searchInput}
-        setSearchInput={setSearchInput}
-        searchActive={searchActive}
-        onSearch={handleSearch}
-        onClearSearch={handleClearSearch}
-      />
-
-      {/* 내 채팅방 리스트 - 내가 만든 방과 참여중인 방을 통합하여 최신 메시지 순으로 표시 */}
-      <div className="flex flex-col gap-3 mb-safe">
+      {/* 스크롤 가능한 채팅방 리스트 영역 */}
+      <div className="flex-1 overflow-y-auto px-3 pb-20">
         {/* 방 개수 표시 */}
         <div className="text-sm text-gray-500 mb-2">
           내 채팅방: {[...myRooms, ...joinedRooms].length}개
         </div>
 
         {/* 통합된 내 채팅방 목록 */}
-        <div className="space-y-3">
+        <div className="space-y-3 pb-4">
           {[...myRooms, ...joinedRooms]
             .sort((a, b) => b.sortTimestamp - a.sortTimestamp) // 최신 메시지 순으로 정렬
             .map(room => (
@@ -140,8 +142,6 @@ function ChatList() {
           )}
         </div>
       </div>
-
-
     </div>
   );
 }

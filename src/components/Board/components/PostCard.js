@@ -11,10 +11,14 @@ const COLLABORATION_LABELS = {
   commission: '컨텐츠의뢰'
 };
 
-function PostCard({ post, onLike, onDelete, onEdit }) {
+function PostCard({ post, onLike, onDelete, onEdit, isAuthenticated }) {
   const [showComments, setShowComments] = useState(false);
 
   const handleLike = () => {
+    if (!isAuthenticated) {
+      alert('로그인 후 좋아요를 누를 수 있습니다.');
+      return;
+    }
     try {
       onLike(post.id);
     } catch (error) {
@@ -40,6 +44,10 @@ function PostCard({ post, onLike, onDelete, onEdit }) {
 
   // 댓글 토글
   const handleToggleComments = () => {
+    if (!isAuthenticated) {
+      alert('로그인 후 댓글을 확인할 수 있습니다.');
+      return;
+    }
     setShowComments(!showComments);
   };
 
@@ -75,7 +83,7 @@ function PostCard({ post, onLike, onDelete, onEdit }) {
         </div>
         
         {/* 수정/삭제 버튼 (작성자만) */}
-        {auth.currentUser?.uid === post.author.uid && (
+        {isAuthenticated && auth.currentUser?.uid === post.author.uid && (
           <div className="flex items-center gap-2">
             <button
               onClick={handleEdit}
@@ -151,7 +159,13 @@ function PostCard({ post, onLike, onDelete, onEdit }) {
       <div className="flex items-center gap-4 pt-4 border-t border-gray-100">
         <button
           onClick={handleLike}
-          className="flex items-center gap-2 text-gray-600 hover:text-red-500 transition-colors"
+          disabled={!isAuthenticated}
+          className={`flex items-center gap-2 transition-colors ${
+            isAuthenticated 
+              ? 'text-gray-600 hover:text-red-500 cursor-pointer' 
+              : 'text-gray-400 cursor-not-allowed'
+          }`}
+          title={!isAuthenticated ? '로그인 후 이용 가능' : ''}
         >
           <span>❤️</span>
           <span>{post.likes || 0}</span>
@@ -159,9 +173,15 @@ function PostCard({ post, onLike, onDelete, onEdit }) {
         
         <button 
           onClick={handleToggleComments}
+          disabled={!isAuthenticated}
           className={`flex items-center gap-2 transition-colors ${
-            showComments ? 'text-blue-500' : 'text-gray-600 hover:text-blue-500'
+            !isAuthenticated 
+              ? 'text-gray-400 cursor-not-allowed'
+              : showComments 
+                ? 'text-blue-500' 
+                : 'text-gray-600 hover:text-blue-500 cursor-pointer'
           }`}
+          title={!isAuthenticated ? '로그인 후 이용 가능' : ''}
         >
           <span>💬</span>
           <span>{post.comments || 0}</span>
@@ -173,12 +193,14 @@ function PostCard({ post, onLike, onDelete, onEdit }) {
         </span>
       </div>
 
-      {/* 댓글 섹션 */}
-      <CommentSection 
-        postId={post.id}
-        isOpen={showComments}
-        onToggle={handleToggleComments}
-      />
+      {/* 댓글 섹션 (로그인 시에만) */}
+      {isAuthenticated && (
+        <CommentSection 
+          postId={post.id}
+          isOpen={showComments}
+          onToggle={handleToggleComments}
+        />
+      )}
     </motion.div>
   );
 }

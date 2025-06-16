@@ -1,7 +1,7 @@
 import React from 'react';
 import PostCard from './PostCard';
 
-function PostList({ posts, category, onLike, onDelete, onEdit }) {
+function PostList({ posts, category, onLike, onDelete, onEdit, isAuthenticated }) {
   const getCategoryEmptyState = (category) => {
     const emptyStates = {
       promotion: {
@@ -40,6 +40,9 @@ function PostList({ posts, category, onLike, onDelete, onEdit }) {
         <div className="text-6xl mb-4">{emptyState.icon}</div>
         <h3 className="text-xl font-bold text-gray-800 mb-2">{emptyState.title}</h3>
         <p className="text-gray-600">{emptyState.description}</p>
+        {!isAuthenticated && (
+          <p className="text-sm text-blue-600 mt-2">로그인하면 게시글을 작성할 수 있어요!</p>
+        )}
       </div>
     );
   }
@@ -53,6 +56,7 @@ function PostList({ posts, category, onLike, onDelete, onEdit }) {
           onLike={onLike}
           onDelete={onDelete}
           onEdit={onEdit}
+          isAuthenticated={isAuthenticated}
         />
       ))}
     </div>

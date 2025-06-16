@@ -36,41 +36,70 @@ export function extractChannelId(url) {
   try {
     if (!url) return null;
     
+    // URL 정규화 (공백 제거, 프로토콜 추가)
+    let normalizedUrl = url.trim();
+    if (!normalizedUrl.match(/^https?:\/\//)) {
+      normalizedUrl = 'https://' + normalizedUrl.replace(/^\/+/, '');
+    }
+    
     // URL 디코딩 먼저 수행 (한글 등 인코딩된 문자 처리)
-    let decodedUrl = url;
+    let decodedUrl = normalizedUrl;
     try {
-      decodedUrl = decodeURIComponent(url);
+      decodedUrl = decodeURIComponent(normalizedUrl);
     } catch (e) {
       console.warn('URL 디코딩 실패, 원본 URL 사용:', e);
     }
     
     console.log('원본 URL:', url);
+    console.log('정규화된 URL:', normalizedUrl);
     console.log('디코딩된 URL:', decodedUrl);
     
-    // @username 형태 (한글 포함 가능)
-    const usernameMatch = decodedUrl.match(/@([^?&#/]+)/);
+    // @username 형태 (특수문자 포함 - 한글, 영문, 숫자, 언더스코어, 하이픈, 점 허용)
+    const usernameMatch = decodedUrl.match(/@([a-zA-Z0-9가-힣._-]+)/);
     if (usernameMatch) {
       const username = usernameMatch[1];
       console.log('추출된 사용자명:', username);
       return { type: 'username', value: username };
     }
     
-    // channel ID 형태
-    const channelMatch = decodedUrl.match(/channel\/([a-zA-Z0-9_-]+)/);
+    // channel ID 형태 (YouTube 채널 ID는 24자리 영문+숫자+_- 조합)
+    const channelMatch = decodedUrl.match(/channel\/([a-zA-Z0-9_-]{24})/);
     if (channelMatch) {
       return { type: 'channel', value: channelMatch[1] };
     }
     
-    // user 형태
-    const userMatch = decodedUrl.match(/user\/([^?&#/]+)/);
+    // user 형태 (특수문자 포함)
+    const userMatch = decodedUrl.match(/user\/([a-zA-Z0-9가-힣._-]+)/);
     if (userMatch) {
       return { type: 'user', value: userMatch[1] };
     }
     
-    // c/ 형태
-    const cMatch = decodedUrl.match(/\/c\/([^?&#/]+)/);
+    // c/ 형태 (커스텀 URL - 특수문자 포함)
+    const cMatch = decodedUrl.match(/\/c\/([a-zA-Z0-9가-힣._-]+)/);
     if (cMatch) {
       return { type: 'c', value: cMatch[1] };
+    }
+    
+    // 핸들 형태 (새로운 @handle 시스템)
+    const handleMatch = decodedUrl.match(/\/@([a-zA-Z0-9가-힣._-]+)/);
+    if (handleMatch) {
+      return { type: 'handle', value: handleMatch[1] };
+    }
+    
+    // 짧은 URL 형태 (youtu.be 등)
+    const shortMatch = decodedUrl.match(/youtu\.be\/([a-zA-Z0-9가-힣._-]+)/);
+    if (shortMatch) {
+      return { type: 'short', value: shortMatch[1] };
+    }
+    
+    // 단순 채널명만 입력된 경우 (youtube.com 없이)
+    if (!decodedUrl.includes('youtube.com') && !decodedUrl.includes('youtu.be')) {
+      // 특수문자가 포함된 채널명으로 간주
+      const simpleChannelMatch = url.trim().match(/^([a-zA-Z0-9가-힣._-]+)$/);
+      if (simpleChannelMatch) {
+        console.log('단순 채널명으로 인식:', simpleChannelMatch[1]);
+        return { type: 'username', value: simpleChannelMatch[1] };
+      }
     }
     
     return null;
@@ -93,18 +122,43 @@ export async function fetchYouTubeChannelInfo(channelData) {
     let apiUrl = '';
     if (channelData.type === 'channel') {
       apiUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${encodeURIComponent(channelData.value)}&key=${apiKey}`;
-    } else if (channelData.type === 'username') {
-      // @username 형태는 Search API로 먼저 채널 ID 찾기
-      const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q=${encodeURIComponent(channelData.value)}&key=${apiKey}`;
+    } else if (['username', 'user', 'c', 'handle', 'short'].includes(channelData.type)) {
+      // 사용자명, 핸들, 커스텀 URL 등은 Search API로 먼저 채널 ID 찾기
+      let searchQuery = channelData.value;
+      
+      // 특수문자가 포함된 경우 따옴표로 감싸서 정확한 검색
+      if (searchQuery.includes('-') || searchQuery.includes('_') || searchQuery.includes('.')) {
+        searchQuery = `"${searchQuery}"`;
+      }
+      
+      const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=channel&q=${encodeURIComponent(searchQuery)}&key=${apiKey}&maxResults=10`;
       console.log('Search URL:', searchUrl);
+      console.log('Search Query:', searchQuery);
       
       const searchResponse = await fetch(searchUrl);
       const searchData = await searchResponse.json();
       
       if (searchData.items && searchData.items.length > 0) {
-        const foundChannel = searchData.items[0];
-        const channelId = foundChannel.snippet.channelId;
+        // 가장 정확한 매치 찾기
+        let bestMatch = searchData.items[0];
+        
+        // 정확한 이름 매치가 있는지 확인
+        for (const item of searchData.items) {
+          const channelTitle = item.snippet.title.toLowerCase();
+          const originalValue = channelData.value.toLowerCase();
+          
+          // 채널명이 정확히 일치하거나 포함되는 경우
+          if (channelTitle === originalValue || 
+              channelTitle.includes(originalValue) ||
+              originalValue.includes(channelTitle.replace(/[^a-z0-9가-힣]/g, ''))) {
+            bestMatch = item;
+            break;
+          }
+        }
+        
+        const channelId = bestMatch.snippet.channelId;
         console.log('검색으로 찾은 채널 ID:', channelId);
+        console.log('매치된 채널명:', bestMatch.snippet.title);
         
         // 찾은 채널 ID로 상세 정보 조회
         apiUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${channelId}&key=${apiKey}`;

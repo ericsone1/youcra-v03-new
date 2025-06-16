@@ -26,25 +26,38 @@ export const useHomeHandlers = ({
 }) => {
   const navigate = useNavigate();
 
-  // 채팅방 클릭 시 이동
-  const handleRoomClick = (roomId) => {
-    navigate(`/chat/${roomId}/info`);
+  // 검색 핸들러
+  const handleSearchChange = (searchQuery, setSearchQuery) => (e) => {
+    setSearchQuery(e.target.value);
   };
 
-  // 검색 실행 함수
-  const handleSearch = () => {
-    if (searchQuery.trim()) {
-      // 채팅방 검색 결과가 있으면 첫 번째 방으로 이동
-      if (filteredChatRooms.length > 0) {
-        navigate(`/chat/${filteredChatRooms[0].id}/info`);
-      }
+  const handleSearch = (searchQuery, chatRooms) => () => {
+    const filteredChatRooms = chatRooms.filter(
+      (room) =>
+        room.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        room.hashtags?.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase().replace('#', '')))
+    );
+    
+    if (searchQuery.trim() && filteredChatRooms.length > 0) {
+      navigate(`/chat/${filteredChatRooms[0].id}`);
     }
   };
 
-  // 검색창 엔터키 처리 - 채팅방 검색
-  const handleSearchKeyDown = (e) => {
+  const handleSearchKeyDown = (searchQuery, chatRooms) => (e) => {
     if (e.key === 'Enter') {
-      handleSearch();
+      handleSearch(searchQuery, chatRooms)();
+    }
+  };
+
+  // 채팅방 클릭 핸들러
+  const handleRoomClick = (roomId) => {
+    // 더미 채팅방인지 확인 (ID가 'dummy_'로 시작하는 경우)
+    if (roomId.startsWith('dummy_')) {
+      // 더미 채팅방 클릭 시 채팅방 생성 페이지로 이동
+      navigate('/chat/create');
+    } else {
+      // 실제 채팅방으로 이동
+      navigate(`/chat/${roomId}/info`);
     }
   };
 
@@ -148,9 +161,10 @@ export const useHomeHandlers = ({
   };
 
   return {
-    handleRoomClick,
+    handleSearchChange,
     handleSearch,
     handleSearchKeyDown,
+    handleRoomClick,
     handleVideoSelect,
     handleYoutubeReady,
     handleYoutubeStateChange,

@@ -251,7 +251,7 @@ function DMChatRoom() {
         className="flex-1 min-h-0 overflow-y-auto px-3 py-4 hide-scrollbar" 
         style={{
           background: 'linear-gradient(180deg, #FFFEF7 0%, #FEFDF6 50%, #FDF9F0 100%)',
-          paddingBottom: 160, // 입력창 공간 확보
+          paddingBottom: 176, // 입력창 공간 확보 (80 + 96)
           paddingTop: 140,
           position: 'relative',
           zIndex: 10,
@@ -342,7 +342,7 @@ function DMChatRoom() {
         style={{ 
           minHeight: 70, 
           position: 'fixed', 
-          bottom: 72, 
+          bottom: 80, 
           left: '50%', 
           transform: 'translateX(-50%)', 
           zIndex: 50, 

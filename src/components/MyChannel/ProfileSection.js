@@ -21,13 +21,72 @@ const ProfileSection = ({
   handleNicknameKeyDown,
   handleLogout,
   hasBlog,
-  blogLoading
+  blogLoading,
+  isOverlay = false,
+  isKakaoOverlay = false
 }) => {
   const navigate = useNavigate();
+
+  if (isKakaoOverlay) {
+    return (
+      <div className="flex items-center space-x-4">
+        {/* 프로필 이미지 */}
+        <div className="w-16 h-16 rounded-full bg-white bg-opacity-20 border-2 border-white flex items-center justify-center text-2xl font-bold text-white overflow-hidden flex-shrink-0">
+          {previewUrl ? (
+            <img src={previewUrl} alt="프로필" className="w-full h-full object-cover" />
+          ) : (
+            profile.nickname?.slice(0, 2) || "CH"
+          )}
+        </div>
+        
+        {/* 프로필 정보 */}
+        <div className="flex-1 min-w-0">
+          <div className="text-white text-lg font-bold mb-1">
+            {profile.nickname || user?.displayName || "닉네임 없음"}
+          </div>
+          <div className="text-white text-opacity-80 text-sm">
+            {profile.email || user?.email}
+          </div>
+          {profile.point && (
+            <div className="text-white text-opacity-70 text-sm mt-1">
+              포인트: {profile.point}
+            </div>
+          )}
+        </div>
+        
+        {/* 버튼 그룹 */}
+        <div className="flex items-center space-x-2">
+          {/* 로그아웃 버튼 */}
+          <button
+            onClick={handleLogout}
+            className="text-white text-opacity-80 hover:text-opacity-100 transition-opacity p-2"
+            title="로그아웃"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+          </button>
+          
+          {/* 설정 버튼 */}
+          <button
+            onClick={() => navigate('/my/settings')}
+            className="text-white text-opacity-80 hover:text-opacity-100 transition-opacity p-2"
+            title="설정"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="bg-white rounded-2xl shadow p-4 sm:p-6 mx-3 sm:mx-4 mt-4 sm:mt-6 flex flex-col items-center">
+    <div className="flex flex-col items-center w-full">
       {/* 프로필 이미지 - 모바일 최적화 */}
-      <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-blue-100 flex items-center justify-center text-2xl sm:text-3xl font-bold text-blue-500 mb-2 overflow-hidden">
+      <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full ${isOverlay ? 'bg-white bg-opacity-20 border-2 border-white' : 'bg-blue-100'} flex items-center justify-center text-2xl sm:text-3xl font-bold ${isOverlay ? 'text-white' : 'text-blue-500'} mb-2 overflow-hidden`}>
         {previewUrl ? (
           <img src={previewUrl} alt="프로필" className="w-full h-full object-cover" />
         ) : (
@@ -46,7 +105,7 @@ const ProfileSection = ({
       
       {/* 사진 변경 버튼 */}
       <button
-        className="text-xs text-blue-500 underline mb-2"
+        className={`text-xs ${isOverlay ? 'text-white' : 'text-blue-500'} underline mb-2`}
         onClick={() => fileInputRef.current.click()}
       >
         사진 변경
@@ -68,7 +127,7 @@ const ProfileSection = ({
             autoFocus
           />
         ) : (
-          <span>{profile.nickname || user?.displayName || "닉네임 없음"}</span>
+          <span className={isOverlay ? 'text-white' : 'text-gray-900'}>{profile.nickname || user?.displayName || "닉네임 없음"}</span>
         )}
         <button
           onClick={() => {
@@ -80,7 +139,7 @@ const ProfileSection = ({
               }, 0);
             }
           }}
-          className="text-gray-400 hover:text-blue-500 transition-colors p-1"
+          className={`${isOverlay ? 'text-white hover:text-gray-200' : 'text-gray-400 hover:text-blue-500'} transition-colors p-1`}
           title="닉네임 수정"
         >
           <svg 
@@ -101,16 +160,16 @@ const ProfileSection = ({
       </div>
       
       {/* 이메일 정보 - 모바일 최적화 */}
-      <div className="text-gray-500 text-xs sm:text-sm mb-2 text-center">
+      <div className={`${isOverlay ? 'text-white text-opacity-90' : 'text-gray-500'} text-xs sm:text-sm mb-2 text-center`}>
         <div className="break-all">{profile.email || user?.email}</div>
         <div className="mt-1">
           {user?.isTemporaryUser && (
-            <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full">
+            <span className={`text-xs px-2 py-1 rounded-full ${isOverlay ? 'bg-yellow-500 bg-opacity-20 text-yellow-200' : 'bg-yellow-100 text-yellow-700'}`}>
               임시 계정
             </span>
           )}
           {user?.isEmailUser && (
-            <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+            <span className={`text-xs px-2 py-1 rounded-full ${isOverlay ? 'bg-green-500 bg-opacity-20 text-green-200' : 'bg-green-100 text-green-700'}`}>
               인증된 계정
             </span>
           )}
@@ -120,18 +179,20 @@ const ProfileSection = ({
       {/* 포인트 정보 - 모바일 최적화 */}
       <div className="flex gap-4 text-center mb-3 sm:mb-4">
         <div>
-          <div className="font-bold text-blue-600 text-base sm:text-lg">{profile.point || 0}</div>
-          <div className="text-xs text-gray-400">포인트</div>
+          <div className={`font-bold text-base sm:text-lg ${isOverlay ? 'text-white' : 'text-blue-600'}`}>{profile.point || 0}</div>
+          <div className={`text-xs ${isOverlay ? 'text-white text-opacity-70' : 'text-gray-400'}`}>포인트</div>
         </div>
       </div>
-      
-
       
       {/* 프로필 저장 버튼 - 모바일 최적화 */}
       <button
         onClick={handleSave}
         disabled={saving}
-        className="w-full bg-blue-500 text-white py-2.5 sm:py-2 rounded-lg font-bold text-sm sm:text-base hover:bg-blue-600 active:bg-blue-700 transition mb-2"
+        className={`w-full py-2.5 sm:py-2 rounded-lg font-bold text-sm sm:text-base transition mb-2 ${
+          isOverlay 
+            ? 'bg-white bg-opacity-20 text-white hover:bg-opacity-30 active:bg-opacity-40 border border-white border-opacity-30' 
+            : 'bg-blue-500 text-white hover:bg-blue-600 active:bg-blue-700'
+        }`}
       >
         {saving ? "저장 중..." : "프로필 저장"}
       </button>
@@ -139,19 +200,27 @@ const ProfileSection = ({
       {/* 로그아웃 버튼 - 모바일 최적화 */}
       <button
         onClick={handleLogout}
-        className="w-full bg-red-100 text-red-600 py-2.5 sm:py-2 rounded-lg font-bold text-sm sm:text-base hover:bg-red-200 active:bg-red-300 transition-all duration-200 border border-red-200"
+        className={`w-full py-2.5 sm:py-2 rounded-lg font-bold text-sm sm:text-base transition-all duration-200 mb-6 ${
+          isOverlay 
+            ? 'bg-red-500 bg-opacity-20 text-red-200 hover:bg-opacity-30 active:bg-opacity-40 border border-red-300 border-opacity-50' 
+            : 'bg-red-100 text-red-600 hover:bg-red-200 active:bg-red-300 border border-red-200'
+        }`}
       >
         🚪 로그아웃
       </button>
 
       {/* 6개 기능 버튼 그리드 (3x2) - 모바일 최적화 */}
-      <div className="w-full mt-3 sm:mt-4">
+      <div className="w-full mb-8">
         <div className="grid grid-cols-3 gap-1.5 sm:gap-2">
           {/* 첫 번째 줄 */}
           {/* 1번: 내 유튜브 */}
           <button
             onClick={() => navigate('/my/videos')}
-            className="bg-white border border-gray-200 text-gray-700 p-2 sm:p-3 rounded-lg hover:bg-gray-50 active:bg-gray-100 transition-all duration-200 flex flex-col items-center justify-center min-h-[65px] sm:min-h-[75px]"
+            className={`p-2 sm:p-3 rounded-lg transition-all duration-200 flex flex-col items-center justify-center min-h-[65px] sm:min-h-[75px] ${
+              isOverlay 
+                ? 'bg-white bg-opacity-20 text-white hover:bg-opacity-30 border border-white border-opacity-30' 
+                : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 active:bg-gray-100'
+            }`}
           >
             <div className="mb-0.5 sm:mb-1">
               <svg className="w-6 h-6 sm:w-8 sm:h-8" viewBox="0 0 24 24" fill="none">
@@ -165,7 +234,11 @@ const ProfileSection = ({
           {/* 2번: 내 블로그 */}
           <button
             onClick={() => navigate('/my/blog')}
-            className="bg-white border border-gray-200 text-gray-700 p-2 sm:p-3 rounded-lg hover:bg-gray-50 active:bg-gray-100 transition-all duration-200 flex flex-col items-center justify-center min-h-[65px] sm:min-h-[75px]"
+            className={`p-2 sm:p-3 rounded-lg transition-all duration-200 flex flex-col items-center justify-center min-h-[65px] sm:min-h-[75px] ${
+              isOverlay 
+                ? 'bg-white bg-opacity-20 text-white hover:bg-opacity-30 border border-white border-opacity-30' 
+                : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 active:bg-gray-100'
+            }`}
           >
             <div className="text-xl sm:text-2xl mb-0.5 sm:mb-1">📝</div>
             <div className="text-xs text-center leading-tight font-medium">내 블로그</div>
@@ -174,7 +247,11 @@ const ProfileSection = ({
           {/* 3번: 내 채팅방 */}
           <button
             onClick={() => navigate('/my/chatrooms')}
-            className="bg-white border border-gray-200 text-gray-700 p-2 sm:p-3 rounded-lg hover:bg-gray-50 active:bg-gray-100 transition-all duration-200 flex flex-col items-center justify-center min-h-[65px] sm:min-h-[75px]"
+            className={`p-2 sm:p-3 rounded-lg transition-all duration-200 flex flex-col items-center justify-center min-h-[65px] sm:min-h-[75px] ${
+              isOverlay 
+                ? 'bg-white bg-opacity-20 text-white hover:bg-opacity-30 border border-white border-opacity-30' 
+                : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 active:bg-gray-100'
+            }`}
           >
             <div className="text-xl sm:text-2xl mb-0.5 sm:mb-1">💬</div>
             <div className="text-xs text-center leading-tight font-medium">채팅방</div>
@@ -184,7 +261,11 @@ const ProfileSection = ({
           {/* 4번: 통계 */}
           <button
             onClick={() => navigate('/my/stats')}
-            className="bg-white border border-gray-200 text-gray-700 p-2 sm:p-3 rounded-lg hover:bg-gray-50 active:bg-gray-100 transition-all duration-200 flex flex-col items-center justify-center min-h-[65px] sm:min-h-[75px]"
+            className={`p-2 sm:p-3 rounded-lg transition-all duration-200 flex flex-col items-center justify-center min-h-[65px] sm:min-h-[75px] ${
+              isOverlay 
+                ? 'bg-white bg-opacity-20 text-white hover:bg-opacity-30 border border-white border-opacity-30' 
+                : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 active:bg-gray-100'
+            }`}
           >
             <div className="text-xl sm:text-2xl mb-0.5 sm:mb-1">📊</div>
             <div className="text-xs text-center leading-tight font-medium">통계</div>
@@ -193,7 +274,11 @@ const ProfileSection = ({
           {/* 5번: 채널관리 */}
           <button
             onClick={() => navigate('/my/channels')}
-            className="bg-white border border-gray-200 text-gray-700 p-2 sm:p-3 rounded-lg hover:bg-gray-50 active:bg-gray-100 transition-all duration-200 flex flex-col items-center justify-center min-h-[65px] sm:min-h-[75px]"
+            className={`p-2 sm:p-3 rounded-lg transition-all duration-200 flex flex-col items-center justify-center min-h-[65px] sm:min-h-[75px] ${
+              isOverlay 
+                ? 'bg-white bg-opacity-20 text-white hover:bg-opacity-30 border border-white border-opacity-30' 
+                : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 active:bg-gray-100'
+            }`}
           >
             <div className="text-xl sm:text-2xl mb-0.5 sm:mb-1">🔗</div>
             <div className="text-xs text-center leading-tight font-medium">채널관리</div>
@@ -202,7 +287,11 @@ const ProfileSection = ({
           {/* 6번: 설정 */}
           <button
             onClick={() => navigate('/my/settings')}
-            className="bg-white border border-gray-200 text-gray-700 p-2 sm:p-3 rounded-lg hover:bg-gray-50 active:bg-gray-100 transition-all duration-200 flex flex-col items-center justify-center min-h-[65px] sm:min-h-[75px]"
+            className={`p-2 sm:p-3 rounded-lg transition-all duration-200 flex flex-col items-center justify-center min-h-[65px] sm:min-h-[75px] ${
+              isOverlay 
+                ? 'bg-white bg-opacity-20 text-white hover:bg-opacity-30 border border-white border-opacity-30' 
+                : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 active:bg-gray-100'
+            }`}
           >
             <div className="text-xl sm:text-2xl mb-0.5 sm:mb-1">⚙️</div>
             <div className="text-xs text-center leading-tight font-medium">설정</div>
@@ -222,13 +311,7 @@ const ProfileSection = ({
         </a>
       )}
       
-      {/* 
-      ==========================================
-      💾 내 채널 등록 섹션 - 나중에 사용하기 위해 임시 숨김
-      ==========================================
-      
       {/* 내 채널 등록 섹션 - 모바일 최적화 */}
-      {/*
       <div className="w-full mt-3 sm:mt-4">
         <div className="mb-2">
           <span className="text-xs sm:text-sm font-semibold text-gray-700">내 채널 등록하기</span>
@@ -246,8 +329,15 @@ const ProfileSection = ({
         >
           등록
         </button>
+        
+        {/* 유튜브 채널 관리 바로가기 */}
+        <button
+          onClick={() => navigate('/my/youtube-channel')}
+          className="w-full bg-red-500 text-white py-2.5 sm:py-2 rounded-lg font-bold text-xs sm:text-sm hover:bg-red-600 active:bg-red-700 transition mt-2"
+        >
+          🎥 유튜브 채널 관리
+        </button>
       </div>
-      */}
     </div>
   );
 };

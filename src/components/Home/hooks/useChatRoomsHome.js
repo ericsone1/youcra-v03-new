@@ -173,10 +173,10 @@ export function useChatRoomsHome() {
 
   const handleRoomClick = (roomId) => {
     if (roomId.startsWith('dummy_')) {
-      console.log('더미 방 클릭');
-      return;
+      navigate('/chat/create');
+    } else {
+      navigate(`/chat/${roomId}`);
     }
-    navigate(`/chat/${roomId}`);
   };
 
   const handleSearch = () => {

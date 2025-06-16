@@ -140,7 +140,7 @@ function ChatRoomCreate() {
         </button>
       </div>
 
-      <form className="flex flex-col gap-6 p-4" onSubmit={handleCreate}>
+      <form className="flex flex-col gap-6 p-4 pb-20" onSubmit={handleCreate}>
         {/* 방 타입 선택 */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-3">

@@ -29,7 +29,8 @@ export const VideoSection = ({
   videoEnded,
   handleYoutubeReady,
   handleYoutubeStateChange,
-  handleYoutubeEnd
+  handleYoutubeEnd,
+  playerRef  // playerRef 추가
 }) => {
   const navigate = useNavigate();
 
@@ -197,11 +198,12 @@ export const VideoSection = ({
                         height: "200",
                         playerVars: {
                           autoplay: 1,
-                          controls: 1,
-                          modestbranding: 1,
-                          rel: 0,
-                          enablejsapi: 1,
-                          playsinline: 1,
+                          controls: 1,          // YouTube 기본 컨트롤바 활성화
+                          rel: 0,               // 관련 영상 비활성화
+                          modestbranding: 0,    // YouTube 로고 표시 (컨트롤바 가시성 향상)
+                          fs: 1,                // 전체화면 버튼 활성화
+                          cc_load_policy: 0,    // 자막 버튼 표시
+                          iv_load_policy: 3,    // 주석 숨기기
                         },
                       }}
                     />
@@ -262,7 +264,7 @@ export const VideoSection = ({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            navigate(`/chat/${video.roomId}/info`);
+                            navigate(`/chat/${video.roomId}/profile`);
                           }}
                           className="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium flex items-center justify-center gap-2"
                         >

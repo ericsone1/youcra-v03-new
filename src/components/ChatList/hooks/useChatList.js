@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../../contexts/AuthContext";
 import { db, auth } from "../../../firebase";
 import {
   collection,
@@ -12,6 +13,7 @@ import {
 } from "firebase/firestore";
 
 export function useChatList() {
+  const { currentUser, isAuthenticated, loading: authLoading } = useAuth();
   const [rooms, setRooms] = useState([]);
   const [roomsLoading, setRoomsLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -23,8 +25,6 @@ export function useChatList() {
   const [joinedRoomsVisibleCount, setJoinedRoomsVisibleCount] = useState(5);
   const navigate = useNavigate();
 
-
-
   // 최근 활동 기준 정렬 함수
   const getLastActiveAt = (room) => {
     return room.sortTimestamp || 0;
@@ -32,6 +32,21 @@ export function useChatList() {
 
   // 채팅방 데이터 실시간 구독
   useEffect(() => {
+    // 인증 로딩 중이면 대기
+    if (authLoading) {
+      return;
+    }
+
+    // 로그아웃 상태면 빈 배열 설정
+    if (!isAuthenticated) {
+      console.log("로그아웃 상태 - 채팅방 목록 초기화");
+      setRooms([]);
+      setRoomsLoading(false);
+      return;
+    }
+
+    // 로그인 상태에서만 Firestore 쿼리 실행
+    console.log("로그인 상태 - 채팅방 데이터 구독 시작");
     const q = query(collection(db, "chatRooms"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       console.log("chatRooms snapshot docs:", snapshot.docs.length);
@@ -164,9 +179,7 @@ export function useChatList() {
     });
 
     return () => unsubscribe();
-  }, [search]); // filter 의존성도 제거
-
-
+  }, [search, isAuthenticated, authLoading]); // 인증 상태 의존성 추가
 
   // 검색 핸들러
   const handleSearch = (searchText) => {
@@ -213,7 +226,7 @@ export function useChatList() {
   return {
     // 상태
     rooms,
-    roomsLoading,
+    roomsLoading: authLoading || roomsLoading, // 인증 로딩도 포함
     search,
     searchInput,
     setSearchInput,

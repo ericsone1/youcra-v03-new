@@ -83,7 +83,7 @@ function UserProfile() {
   const profileInitial = user.email?.slice(0, 2).toUpperCase() || 'US';
 
   return (
-    <div className="max-w-md mx-auto bg-white rounded-2xl shadow-lg overflow-hidden">
+    <div className="max-w-md mx-auto bg-white rounded-2xl shadow-lg overflow-hidden pb-20">
       {/* 커버 */}
       <div className="relative h-52 bg-gradient-to-r from-blue-400 to-purple-500">
         {coverUrl && (

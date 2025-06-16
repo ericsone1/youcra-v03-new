@@ -39,6 +39,8 @@ const AllChatRooms = React.lazy(() => import("./components/AllChatRooms"));
 const ChatRoomNotice = React.lazy(() => import("./components/ChatRoomNotice"));
 const ChatRoomParticipants = React.lazy(() => import("./components/ChatRoomParticipants"));
 const ChatRoomContacts = React.lazy(() => import("./components/ChatRoomContacts"));
+const YouTubeChannelManager = React.lazy(() => import("./components/MyChannel/YouTubeChannelManager"));
+const ChatRoomProfile = React.lazy(() => import("./components/ChatRoomProfile"));
 
 // Fallback 컴포넌트만 유지
 
@@ -150,6 +152,14 @@ function App() {
                   }
                 />
                 <Route
+                  path="/my/youtube-channel"
+                  element={
+                    <ProtectedRoute>
+                      <YouTubeChannelManager />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
                   path="/chat"
                   element={
                     <ProtectedRoute>
@@ -178,6 +188,14 @@ function App() {
                   element={
                     <ProtectedRoute>
                       <ChatRoomInfo />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/chat/:roomId/profile"
+                  element={
+                    <ProtectedRoute>
+                      <ChatRoomProfile />
                     </ProtectedRoute>
                   }
                 />

@@ -8,8 +8,6 @@ import PopularChatRooms from "./PopularChatRooms";
 import VideoRankingList from "./VideoRankingList";
 
 function Home() {
-  console.log("🔥 리팩토링된 홈탭이 실행되었습니다!");
-  
   const navigate = useNavigate();
   const playerRef = useRef(null);
   

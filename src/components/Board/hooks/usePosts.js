@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '../../../contexts/AuthContext';
 import { auth, db, storage } from '../../../firebase';
 import { 
   collection, 
@@ -17,15 +18,25 @@ import {
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 export default function usePosts(category = null) {
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // 게시글 목록 실시간 구독 (임시로 클라이언트 사이드 필터링)
+  // 게시글 목록 실시간 구독 (로그인 여부와 관계없이 게시글은 모두 볼 수 있음)
   useEffect(() => {
+    // 인증 로딩이 완료된 후에 데이터 로드
+    if (authLoading) {
+      return;
+    }
+
+    console.log("게시판 데이터 로딩 시작...");
+    
     // 모든 게시글을 가져온 후 클라이언트에서 필터링
     const q = query(collection(db, "posts"), orderBy("createdAt", "desc"));
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      console.log("게시글 데이터 수신:", snapshot.docs.length + "개");
+      
       const allPosts = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
@@ -36,16 +47,22 @@ export default function usePosts(category = null) {
         ? allPosts.filter(post => post.category === category)
         : allPosts;
       
+      console.log("필터된 게시글:", filteredPosts.length + "개");
       setPosts(filteredPosts);
+      setLoading(false);
+    }, (error) => {
+      console.error("게시글 로딩 오류:", error);
+      // 오류 발생 시 빈 배열로 설정하고 로딩 완료
+      setPosts([]);
       setLoading(false);
     });
 
     return () => unsubscribe();
-  }, [category]);
+  }, [category, authLoading]);
 
   // 게시글 작성
   const createPost = async (postData, file = null) => {
-    if (!auth.currentUser) {
+    if (!isAuthenticated || !auth.currentUser) {
       throw new Error('로그인이 필요합니다.');
     }
 
@@ -108,7 +125,7 @@ export default function usePosts(category = null) {
 
   // 게시글 수정
   const updatePost = async (postId, updatedData, file = null) => {
-    if (!auth.currentUser) {
+    if (!isAuthenticated || !auth.currentUser) {
       throw new Error('로그인이 필요합니다.');
     }
 
@@ -162,7 +179,7 @@ export default function usePosts(category = null) {
 
   // 게시글 좋아요 토글
   const toggleLike = async (postId) => {
-    if (!auth.currentUser) {
+    if (!isAuthenticated || !auth.currentUser) {
       throw new Error('로그인이 필요합니다.');
     }
 
@@ -195,7 +212,7 @@ export default function usePosts(category = null) {
 
   // 게시글 삭제
   const deletePost = async (postId, authorUid) => {
-    if (!auth.currentUser || auth.currentUser.uid !== authorUid) {
+    if (!isAuthenticated || !auth.currentUser || auth.currentUser.uid !== authorUid) {
       throw new Error('권한이 없습니다.');
     }
 

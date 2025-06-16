@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Components
 import BoardHeader from './components/BoardHeader';
@@ -15,6 +16,7 @@ import { BOARD_CATEGORIES } from './utils/boardCategories';
 
 function Board() {
   const navigate = useNavigate();
+  const { currentUser, isAuthenticated, loading: authLoading } = useAuth();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('collaboration');
   const [editingPost, setEditingPost] = useState(null);
@@ -24,24 +26,44 @@ function Board() {
 
   // 게시글 작성 핸들러
   const handleCreatePost = async (postData, fileUrl) => {
+    if (!isAuthenticated) {
+      alert('로그인 후 게시글을 작성할 수 있습니다.');
+      navigate('/login');
+      return;
+    }
     await createPost({ ...postData, category: selectedCategory }, fileUrl);
     setShowCreateForm(false);
   };
 
   // 게시글 수정 핸들러
   const handleUpdatePost = async (postData, fileUrl) => {
+    if (!isAuthenticated) {
+      alert('로그인 후 게시글을 수정할 수 있습니다.');
+      navigate('/login');
+      return;
+    }
     await updatePost(editingPost.id, { ...postData, category: selectedCategory }, fileUrl);
     setEditingPost(null);
   };
 
   // 게시글 수정 시작
   const handleEditPost = (post) => {
+    if (!isAuthenticated) {
+      alert('로그인 후 게시글을 수정할 수 있습니다.');
+      navigate('/login');
+      return;
+    }
     setEditingPost(post);
     setShowCreateForm(false);
   };
 
   // 좋아요 핸들러
   const handleLikeToggle = async (postId) => {
+    if (!isAuthenticated) {
+      alert('로그인 후 좋아요를 누를 수 있습니다.');
+      navigate('/login');
+      return;
+    }
     try {
       await toggleLike(postId);
     } catch (error) {
@@ -51,12 +73,27 @@ function Board() {
 
   // 삭제 핸들러
   const handleDeletePost = async (postId, authorUid) => {
+    if (!isAuthenticated) {
+      alert('로그인이 필요합니다.');
+      navigate('/login');
+      return;
+    }
     try {
       await deletePost(postId, authorUid);
       alert('게시글이 삭제되었습니다.');
     } catch (error) {
       alert(error.message);
     }
+  };
+
+  // 글쓰기 버튼 클릭 핸들러
+  const handleCreateButtonClick = () => {
+    if (!isAuthenticated) {
+      alert('로그인 후 게시글을 작성할 수 있습니다.');
+      navigate('/login');
+      return;
+    }
+    setShowCreateForm(!showCreateForm);
   };
 
   // 카테고리 변경 핸들러
@@ -86,7 +123,7 @@ function Board() {
     return `${baseClasses} bg-gray-100 text-gray-600 hover:bg-gray-200`;
   };
 
-  // 로딩 상태
+  // 로딩 상태 (인증 로딩은 포함하지 않음 - 게시판은 비로그인도 볼 수 있음)
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-purple-50 flex flex-col items-center justify-center">
@@ -105,7 +142,8 @@ function Board() {
         <BoardHeader 
           currentCategory={currentCategory}
           showCreateForm={showCreateForm}
-          onToggleForm={() => setShowCreateForm(!showCreateForm)}
+          onToggleForm={handleCreateButtonClick}
+          isAuthenticated={isAuthenticated}
         />
 
         {/* 카테고리 탭 */}
@@ -114,6 +152,26 @@ function Board() {
           selectedCategory={selectedCategory}
           onCategoryChange={handleCategoryChange}
         />
+
+        {/* 로그인 유도 메시지 (비로그인 상태) */}
+        {!isAuthenticated && (
+          <div className="mb-6">
+            <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl shadow-lg p-6 text-white text-center">
+              <div className="text-4xl mb-3">✨</div>
+              <h3 className="text-lg font-bold mb-2">게시판에 참여해보세요!</h3>
+              <p className="text-blue-100 text-sm mb-4">
+                게시글을 읽는 것은 누구나 가능하지만,<br/>
+                글 작성, 댓글, 좋아요는 로그인이 필요해요
+              </p>
+              <button
+                onClick={() => navigate('/login')}
+                className="bg-white text-blue-600 px-6 py-3 rounded-full font-bold hover:bg-gray-100 transition-colors shadow"
+              >
+                로그인 / 회원가입
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* 인기게시물 카드 */}
         <div className="mb-6">
@@ -152,17 +210,19 @@ function Board() {
           </div>
         </div>
 
-        {/* 게시글 작성/수정 폼 */}
-        <PostForm 
-          show={showCreateForm || editingPost}
-          category={selectedCategory}
-          editingPost={editingPost}
-          onSubmit={editingPost ? handleUpdatePost : handleCreatePost}
-          onCancel={() => {
-            setShowCreateForm(false);
-            setEditingPost(null);
-          }}
-        />
+        {/* 게시글 작성/수정 폼 (로그인 시에만) */}
+        {isAuthenticated && (
+          <PostForm 
+            show={showCreateForm || editingPost}
+            category={selectedCategory}
+            editingPost={editingPost}
+            onSubmit={editingPost ? handleUpdatePost : handleCreatePost}
+            onCancel={() => {
+              setShowCreateForm(false);
+              setEditingPost(null);
+            }}
+          />
+        )}
 
         {/* 게시글 목록 */}
         <PostList 
@@ -171,6 +231,7 @@ function Board() {
           onLike={handleLikeToggle}
           onDelete={handleDeletePost}
           onEdit={handleEditPost}
+          isAuthenticated={isAuthenticated}
         />
       </div>
     </div>
