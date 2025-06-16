@@ -56,8 +56,8 @@ export const useHomeHandlers = ({
       // 더미 채팅방 클릭 시 채팅방 생성 페이지로 이동
       navigate('/chat/create');
     } else {
-      // 실제 채팅방으로 이동
-      navigate(`/chat/${roomId}/info`);
+      // 채팅방 프로필 페이지로 이동 (방입장하기 버튼이 있는 페이지)
+      navigate(`/chat/${roomId}/profile`);
     }
   };
 

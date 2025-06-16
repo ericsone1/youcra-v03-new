@@ -229,6 +229,7 @@ function ChatRoom() {
   const [minimized, setMinimized] = useState(false);
   const [popupPos, setPopupPos] = useState({ x: 100, y: 100 });
   const [showDelete, setShowDelete] = useState(null);
+  const [showImageModal, setShowImageModal] = useState(null); // 이미지 모달
   
   // === Refs ===
   const messagesEndRef = useRef(null);
@@ -719,15 +720,83 @@ function ChatRoom() {
       return;
     }
 
+    console.log('📤 파일 업로드 시작:', { fileName: file.name, fileSize: file.size, fileType: type });
     setUploading(true);
+    
+    // 이미지 파일인 경우 우선 Base64로 처리 (CORS 회피)
+    if (type === 'image' && file.type.startsWith('image/')) {
+      try {
+        console.log('🖼️ 이미지 파일 - Base64 처리 시작');
+        
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+          try {
+            const dataURL = e.target.result;
+            
+            // Base64 데이터URL로 메시지 저장
+            const messageRef = await addDoc(collection(db, "chatRooms", roomId, "messages"), {
+              fileType: type,
+              fileName: file.name,
+              fileUrl: dataURL, // Base64 데이터URL 사용
+              fileSize: file.size,
+              email: auth.currentUser.email,
+              createdAt: serverTimestamp(),
+              uid: auth.currentUser.uid,
+              photoURL: auth.currentUser.photoURL || "",
+              uploadMethod: 'base64', // 업로드 방식 표시
+            });
+            
+            // 읽음 처리
+            await setDoc(doc(db, "chatRooms", roomId, "messages", messageRef.id, "readBy", auth.currentUser.uid), {
+              uid: auth.currentUser.uid,
+              readAt: serverTimestamp()
+            });
+            
+            console.log('✅ Base64 이미지 업로드 완료:', messageRef.id);
+            setUploading(false);
+          } catch (dbError) {
+            console.error('❌ Firestore 저장 오류:', dbError);
+            setUploading(false);
+            alert('이미지 저장 중 오류가 발생했습니다. 네트워크를 확인해주세요.');
+          }
+        };
+        
+        reader.onerror = () => {
+          console.error('❌ FileReader 오류');
+          setUploading(false);
+          alert('이미지 읽기 중 오류가 발생했습니다.');
+        };
+        
+        reader.readAsDataURL(file);
+        return; // 이미지는 여기서 처리 완료
+        
+      } catch (error) {
+        console.error('❌ Base64 변환 오류:', error);
+        setUploading(false);
+        alert('이미지 처리 중 오류가 발생했습니다.');
+        return;
+      }
+    }
+    
+    // 비이미지 파일의 경우 Firebase Storage 시도
     try {
-      // Firebase Storage에 파일 업로드
+      console.log('📁 파일 업로드 - Firebase Storage 시도');
+      
       const timestamp = Date.now();
       const fileName = `${timestamp}_${file.name}`;
       const storageRef = ref(storage, `chatrooms/${roomId}/${fileName}`);
       
-      const snapshot = await uploadBytes(storageRef, file);
+      // 업로드 타임아웃 설정 (15초로 단축)
+      const uploadPromise = uploadBytes(storageRef, file);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('업로드 타임아웃 (15초 초과)')), 15000)
+      );
+      
+      const snapshot = await Promise.race([uploadPromise, timeoutPromise]);
+      console.log('✅ Firebase Storage 업로드 완료');
+      
       const downloadURL = await getDownloadURL(snapshot.ref);
+      console.log('🔗 다운로드 URL 생성 완료');
       
       // 메시지로 파일 정보 저장
       const messageRef = await addDoc(collection(db, "chatRooms", roomId, "messages"), {
@@ -739,17 +808,37 @@ function ChatRoom() {
         createdAt: serverTimestamp(),
         uid: auth.currentUser.uid,
         photoURL: auth.currentUser.photoURL || "",
+        uploadMethod: 'firebase_storage',
       });
       
-      // 내가 보낸 파일 메시지는 자동으로 읽음 처리
+      console.log('💬 메시지 저장 완료:', messageRef.id);
+      
+      // 읽음 처리
       await setDoc(doc(db, "chatRooms", roomId, "messages", messageRef.id, "readBy", auth.currentUser.uid), {
         uid: auth.currentUser.uid,
         readAt: serverTimestamp()
       });
       
     } catch (error) {
-      console.error('파일 업로드 중 오류:', error);
-      alert('파일 업로드 중 오류가 발생했습니다.');
+      console.error('❌ 파일 업로드 오류:', {
+        message: error.message,
+        code: error.code,
+        name: error.name
+      });
+      
+      // CORS 또는 네트워크 오류 처리
+      const isNetworkError = error.message.includes('CORS') || 
+                            error.message.includes('blocked') || 
+                            error.message.includes('타임아웃') ||
+                            error.message.includes('network') ||
+                            error.code === 'storage/unauthorized' ||
+                            error.name === 'TypeError';
+      
+      if (isNetworkError) {
+        alert('⚠️ 파일 업로드에 실패했습니다.\n\n가능한 원인:\n• 네트워크 연결 문제\n• 파일 크기가 너무 큼\n• Firebase 서버 일시적 오류\n\n잠시 후 다시 시도해주세요.');
+      } else {
+        alert(`파일 업로드 중 오류가 발생했습니다: ${error.message}`);
+      }
     } finally {
       setUploading(false);
     }
@@ -775,8 +864,9 @@ function ChatRoom() {
               <img 
                 src={msg.fileUrl} 
                 alt="첨부 이미지"
-                className="rounded-lg max-w-full h-auto cursor-pointer"
-                onClick={() => window.open(msg.fileUrl, '_blank')}
+                className="rounded-lg max-w-full h-auto cursor-pointer hover:opacity-80 transition-opacity"
+                onClick={() => setShowImageModal({ url: msg.fileUrl, name: msg.fileName || '이미지' })}
+                title="클릭하여 크게 보기"
               />
             </div>
           );
@@ -1320,19 +1410,33 @@ function ChatRoom() {
 
   // 붙여넣기 핸들러 (이미지/파일 클립보드 업로드)
   const handlePaste = (e) => {
-    if (!e.clipboardData || !e.clipboardData.items) return;
+    console.log('📋 붙여넣기 이벤트 감지');
+    if (!e.clipboardData || !e.clipboardData.items) {
+      console.log('❌ 클립보드 데이터 없음');
+      return;
+    }
+    
     const items = e.clipboardData.items;
+    console.log('📄 클립보드 아이템 수:', items.length);
+    
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
+      console.log(`📄 아이템 ${i}:`, { kind: item.kind, type: item.type });
+      
       if (item.kind === 'file') {
         const file = item.getAsFile();
         if (file) {
+          console.log('📎 파일 감지:', { name: file.name, size: file.size, type: file.type });
           const mime = file.type;
           let fileType = 'file';
           if (mime.startsWith('image/')) fileType = 'image';
           else if (mime.startsWith('video/')) fileType = 'video';
+          
+          console.log('🚀 파일 업로드 시작:', fileType);
           handleFileUpload(file, fileType);
           e.preventDefault();
+        } else {
+          console.log('❌ 파일 객체 생성 실패');
         }
       }
     }
@@ -1917,6 +2021,73 @@ function ChatRoom() {
           userNickMap={userNickMap}
         />
       )} */}
+
+      {/* 이미지 모달 */}
+      {showImageModal && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowImageModal(null)}
+        >
+          <div 
+            className="relative bg-white rounded-lg max-w-4xl max-h-full overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 모달 헤더 */}
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="text-lg font-bold text-gray-800 truncate">
+                {showImageModal.name}
+              </h3>
+              <button
+                onClick={() => setShowImageModal(null)}
+                className="text-gray-400 hover:text-gray-600 text-2xl"
+                title="닫기"
+              >
+                ×
+              </button>
+            </div>
+            
+            {/* 이미지 영역 */}
+            <div className="p-4 max-h-[80vh] overflow-auto">
+              <img
+                src={showImageModal.url}
+                alt={showImageModal.name}
+                className="max-w-full h-auto mx-auto block rounded"
+                style={{ maxHeight: '70vh' }}
+              />
+            </div>
+            
+            {/* 모달 푸터 */}
+            <div className="flex items-center justify-between p-4 border-t bg-gray-50">
+              <button
+                onClick={() => {
+                  // Base64 이미지는 다운로드 링크를 생성
+                  if (showImageModal.url.startsWith('data:')) {
+                    const link = document.createElement('a');
+                    link.href = showImageModal.url;
+                    link.download = showImageModal.name || 'image.png';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  } else {
+                    // Firebase Storage URL은 새 창에서 열기
+                    window.open(showImageModal.url, '_blank');
+                  }
+                }}
+                className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+              >
+                📥 다운로드
+              </button>
+              
+              <button
+                onClick={() => setShowImageModal(null)}
+                className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Hidden file input for React-style file upload */}
       <input
