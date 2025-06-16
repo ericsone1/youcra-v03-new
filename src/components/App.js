@@ -14,6 +14,7 @@ import VideoListPage from "./VideoListPage"; // 새로 만들 파일
 import AddVideoPage from "./AddVideoPage"; // 새 파일
 import SearchResult from "./SearchResult";
 import ChatRoomManage from "./ChatRoomManage";
+import ChatRoomHost from "./ChatRoomHost";
 import ChatRoomCreate from "./ChatRoomCreate";
 import ProductDetail from "./ProductDetail";
 import AdminPage from "./AdminPage";
@@ -183,7 +184,7 @@ function App() {
           <Route path="/chat/create" element={<ChatRoomCreate />} />
           <Route path="/chat/:roomId" element={<ChatRoom />} />
           <Route path="/chat/:roomId/info" element={<ChatRoomInfo />} />
-          <Route path="/chat/:roomId/manage" element={<ChatRoomManage />} />
+          <Route path="/chat/:roomId/manage" element={<ChatRoomHost />} />
           <Route path="/chat/:roomId/videos" element={<VideoListPage />} />
           <Route path="/chat/:roomId/certification-settings" element={<CertificationSettings />} />
           <Route path="/chat/:roomId/menu" element={<ChatRoomMenu />} />
