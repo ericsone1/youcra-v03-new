@@ -27,7 +27,7 @@ function VideoPlayer({
       transition={{ duration: 0.3 }}
       className="mt-3"
     >
-      <div className="rounded-lg shadow-lg">
+      <div className="rounded-lg shadow-lg youtube-player">
         <YouTube
           key={video.id}
           videoId={video.id}
@@ -36,12 +36,17 @@ function VideoPlayer({
           onEnd={onYoutubeEnd}
           opts={{
             width: "100%",
-            height: "200",
+            height: "100%",
             playerVars: {
               autoplay: 1,
-              controls: 1,
-              modestbranding: 1,
-              rel: 0,
+              controls: 1, // 플레이어 컨트롤 표시
+              modestbranding: 0, // YouTube 로고 표시
+              rel: 0, // 관련 동영상 숨김
+              enablejsapi: 1,
+              playsinline: 1, // 모바일에서 인라인 재생
+              fs: 1, // 전체화면 활성화
+              disablekb: 0, // 키보드 컨트롤 활성화
+              start: 0 // 처음부터 재생
             },
           }}
         />
