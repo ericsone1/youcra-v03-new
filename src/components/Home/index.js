@@ -187,6 +187,24 @@ function Home() {
         {/* 헤더 */}
         <Header />
 
+        {/* 개발용 관리자 버튼 */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="bg-red-100 border-2 border-red-300 rounded-xl p-3 mb-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-bold text-red-800">🔧 개발자 도구</h3>
+                <p className="text-sm text-red-600">게시판 더미 데이터 생성</p>
+              </div>
+              <button
+                onClick={() => navigate('/admin')}
+                className="bg-red-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-600 transition-colors"
+              >
+                관리자 페이지
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* 실시간 인기 채팅방 */}
         <PopularChatRooms
           chatRooms={chatRooms}

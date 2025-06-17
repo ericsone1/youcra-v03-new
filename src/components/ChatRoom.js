@@ -1387,7 +1387,7 @@ function ChatRoom() {
   }, [messagesLoaded, messages.length]);
 
   useEffect(() => {
-    inputRef.current?.focus();
+    // inputRef.current?.focus(); // 키보드 자동 열림 방지
   }, [loading, messages, error]);
 
   // cleanup

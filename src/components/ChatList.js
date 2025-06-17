@@ -19,12 +19,17 @@ function ChatList() {
     // 핸들러
     handleSearch,
     handleClearSearch,
-    handleEnterRoom,
 
     // 계산된 값
     myRooms,
     joinedRooms,
   } = useChatList();
+
+  // 내 채팅방 페이지에서는 바로 채팅방으로 입장
+  const handleEnterRoom = (roomId) => {
+    console.log('내 채팅방에서 바로 입장:', roomId, '→ /chat/' + roomId);
+    navigate(`/chat/${roomId}`);
+  };
 
   const { loading } = useAuth();
 
