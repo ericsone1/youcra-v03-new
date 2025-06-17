@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../../contexts/AuthContext';
 
 export const useHomeHandlers = ({
   searchQuery,
@@ -25,6 +26,7 @@ export const useHomeHandlers = ({
   saveFanCertificationStatus
 }) => {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
 
   // 검색 핸들러
   const handleSearchChange = (searchQuery, setSearchQuery) => (e) => {
@@ -51,13 +53,56 @@ export const useHomeHandlers = ({
 
   // 채팅방 클릭 핸들러
   const handleRoomClick = (roomId) => {
-    // 더미 채팅방인지 확인 (ID가 'dummy_'로 시작하는 경우)
-    if (roomId.startsWith('dummy_')) {
-      // 더미 채팅방 클릭 시 채팅방 생성 페이지로 이동
-      navigate('/chat/create');
+    // 로그인하지 않은 상태에서는 로그인 페이지로 이동
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+
+    // 채팅방 프로필로 이동
+    navigate(`/chat/${roomId}/profile`);
+  };
+
+  const handleCreateRoomClick = () => {
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+    navigate('/chat/create');
+  };
+
+  const handleHashtagClick = (hashtag) => {
+    console.log('해시태그 클릭:', hashtag);
+    // 향후 해시태그 필터링 기능 구현 예정
+  };
+
+  const handleLikeToggle = async (roomId, currentLiked) => {
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+    
+    console.log('좋아요 토글:', { roomId, currentLiked });
+    // 좋아요 기능은 채팅방 내부에서 처리됨
+  };
+
+  const handleVideoPlay = (videoUrl) => {
+    console.log('영상 재생:', videoUrl);
+    // 영상 재생 로직
+  };
+
+  const handleShare = (roomId) => {
+    const shareUrl = `${window.location.origin}/chat/${roomId}`;
+    
+    if (navigator.share) {
+      navigator.share({
+        title: '유크라 채팅방',
+        url: shareUrl,
+      }).catch(console.error);
     } else {
-      // 채팅방 프로필 페이지로 이동 (방입장하기 버튼이 있는 페이지)
-      navigate(`/chat/${roomId}/profile`);
+      navigator.clipboard.writeText(shareUrl)
+        .then(() => alert('링크가 클립보드에 복사되었습니다!'))
+        .catch(console.error);
     }
   };
 
@@ -194,6 +239,11 @@ export const useHomeHandlers = ({
     handleSearch,
     handleSearchKeyDown,
     handleRoomClick,
+    handleCreateRoomClick,
+    handleHashtagClick,
+    handleLikeToggle,
+    handleVideoPlay,
+    handleShare,
     handleVideoSelect,
     handleYoutubeReady,
     handleYoutubeStateChange,

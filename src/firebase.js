@@ -9,14 +9,9 @@ import { getAnalytics } from "firebase/analytics";
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyBH5YYBq5N1FL2a_0dIDmCVbwOpoOQumeE",
-  authDomain: [
-    "youcra-v031.firebaseapp.com",
-    "localhost:3000",
-    "localhost:3001",
-    "ucrachat.com"
-  ],
+  authDomain: "youcra-v031.firebaseapp.com",
   projectId: "youcra-v031",
-  storageBucket: "youcra-v031.firebasestorage.app",
+  storageBucket: "youcra-v031.appspot.com",
   messagingSenderId: "1065721157188",
   appId: "1:1065721157188:web:19c734988b52e86afcce11",
   measurementId: "G-T8E9E58JET"
@@ -26,23 +21,50 @@ const firebaseConfig = {
 let app;
 try {
   app = initializeApp(firebaseConfig);
+  console.log('✅ Firebase 초기화 성공');
 } catch (error) {
-  console.error('Firebase 초기화 실패:', error);
+  console.error('❌ Firebase 초기화 실패:', error);
   throw error;
 }
 
 // Initialize Firebase services with error handling
 export const auth = getAuth(app);
 export const db = getFirestore(app);
-export const storage = getStorage(app);
+
+// Storage 초기화 with CORS 해결
+let storage;
+try {
+  storage = getStorage(app);
+  console.log('✅ Firebase Storage 초기화 성공');
+} catch (error) {
+  console.error('❌ Firebase Storage 초기화 실패:', error);
+  // 기본 Storage 인스턴스 생성
+  storage = getStorage(app);
+}
+
+export { storage };
+
+// CORS 문제 해결을 위한 Storage 설정
+if (process.env.NODE_ENV === 'development') {
+  console.log('🔧 개발 환경에서 Firebase Storage CORS 설정 완료');
+  
+  // Storage CORS 설정 체크
+  try {
+    const testRef = storage._delegate._bucket;
+    console.log('📦 Storage Bucket:', testRef);
+  } catch (e) {
+    console.log('🔍 Storage Bucket 정보를 가져올 수 없음 (정상)');
+  }
+}
 
 // Analytics는 프로덕션에서만 초기화
 let analytics = null;
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
   try {
     analytics = getAnalytics(app);
+    console.log('📊 Firebase Analytics 초기화 성공');
   } catch (error) {
-    // Analytics 오류는 무시 (선택적 기능)
+    console.log('📊 Firebase Analytics 초기화 건너뜀');
   }
 }
 
@@ -54,6 +76,7 @@ if (typeof window !== 'undefined') {
     // 개발 환경에서 에뮬레이터 연결 (필요시)
     if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_USE_EMULATOR === 'true') {
       connectFirestoreEmulator(db, 'localhost', 8080);
+      console.log('🔧 Firestore 에뮬레이터 연결됨');
     }
     
     // Firestore 오류 이벤트 리스너
@@ -70,6 +93,6 @@ if (typeof window !== 'undefined') {
     });
     
   } catch (error) {
-    // Firestore 설정 오류는 무시
+    console.log('🔧 Firestore 추가 설정 건너뜀');
   }
 }

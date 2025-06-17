@@ -22,6 +22,7 @@ import ChatRoomInfo from "./ChatRoomInfo";
 import CertificationSettings from "./CertificationSettings";
 import ChatRoomMenu from "./ChatRoomMenu";
 import MyVideosPage from "./MyVideosPage";
+import ChatRoomProfile from "./ChatRoomProfile";
 
 function App() {
   const location = useLocation();
@@ -184,6 +185,7 @@ function App() {
           <Route path="/chat/create" element={<ChatRoomCreate />} />
           <Route path="/chat/:roomId" element={<ChatRoom />} />
           <Route path="/chat/:roomId/info" element={<ChatRoomInfo />} />
+          <Route path="/chat/:roomId/profile" element={<ChatRoomProfile />} />
           <Route path="/chat/:roomId/manage" element={<ChatRoomHost />} />
           <Route path="/chat/:roomId/videos" element={<VideoListPage />} />
           <Route path="/chat/:roomId/certification-settings" element={<CertificationSettings />} />

@@ -17,8 +17,7 @@ import AnnouncementManagement from "./ChatRoomHost/AnnouncementManagement";
 import RoomSettings from "./ChatRoomHost/RoomSettings";
 import RoomDeletion from "./ChatRoomHost/RoomDeletion";
 
-// 더미 유저 추가 함수
-import { setupDummyUser } from "../scripts/addDummyUser";
+// 더미 유저 관련 import 제거됨
 
 // 모달들
 import TransferOwnershipModal from "./ChatRoomHost/modals/TransferOwnershipModal";
@@ -72,19 +71,7 @@ function ChatRoomHost() {
     await handleSaveCertificationSettings(certificationEnabled, newMode);
   };
 
-  // 더미 유저 추가 함수
-  const handleAddDummyUser = async () => {
-    try {
-      const confirmAdd = window.confirm("테스트용 더미 유저를 이 채팅방에 추가하시겠습니까?");
-      if (!confirmAdd) return;
-
-      await setupDummyUser(roomId);
-      alert("✅ 더미 유저가 성공적으로 추가되었습니다!\n참여자 관리에서 확인해보세요.");
-    } catch (error) {
-      console.error("더미 유저 추가 실패:", error);
-      alert("❌ 더미 유저 추가에 실패했습니다.");
-    }
-  };
+  // 더미 유저 추가 함수 제거됨
 
   // 로딩 중이거나 방장이 아닌 경우
   if (roomHook.loading) {
@@ -273,24 +260,7 @@ function ChatRoomHost() {
                       </div>
           </section>
 
-        {/* 테스트용 더미 유저 추가 */}
-        <section className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-bold text-sm text-yellow-800 flex items-center gap-2">
-                <span>🧪</span>
-                테스트용 더미 유저
-              </h3>
-              <p className="text-xs text-yellow-700 mt-1">참여자 관리 기능을 테스트하기 위한 더미 유저를 추가합니다.</p>
-            </div>
-            <button
-              onClick={handleAddDummyUser}
-              className="px-3 py-1.5 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium rounded-lg transition-colors"
-            >
-              + 더미유저 추가
-            </button>
-          </div>
-        </section>
+        {/* 더미 유저 추가 섹션 제거됨 */}
 
         {/* 참여자 관리 */}
         <ParticipantManagement

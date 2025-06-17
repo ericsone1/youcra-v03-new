@@ -139,7 +139,7 @@ function ChatList() {
           room.buttonWrapper = "flex items-center";
           room.roomWrapper = "mb-3";
           room.roomKey = room.id;
-          room.onEnter = () => navigate(`/chat/${room.id}`);
+          room.onEnter = () => navigate(`/chat/${room.id}/profile`);
           room.showButton = true;
           room.showMeta = true;
           room.showDesc = true;
@@ -212,7 +212,7 @@ function ChatList() {
     setNewRoomHashtags("");
     setCreating(false);
     setShowCreateModal(false);
-    navigate(`/chat/${docRef.id}`); // 방 생성 후 곧바로 입장
+    navigate(`/chat/${docRef.id}/profile`); // 방 생성 후 곧바로 프로필 화면으로
   };
 
   // 최근 활동 기준 정렬 함수

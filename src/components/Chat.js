@@ -44,7 +44,7 @@ function Chat() {
 
   // 채팅방 입장
   const handleEnterRoom = (roomId) => {
-    navigate(`/chat/${roomId}`);
+    navigate(`/chat/${roomId}/profile`);
   };
 
   return (

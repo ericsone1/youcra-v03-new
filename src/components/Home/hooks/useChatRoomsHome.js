@@ -175,7 +175,7 @@ export function useChatRoomsHome() {
     if (roomId.startsWith('dummy_')) {
       navigate('/chat/create');
     } else {
-      navigate(`/chat/${roomId}`);
+      navigate(`/chat/${roomId}/profile`);
     }
   };
 

@@ -50,19 +50,8 @@ function ChatRoomMenu() {
         })
       );
       
-      // 더미 데이터와 실제 데이터 병합 (중복 제거)
-      const dummyUsers = [
-        { id: 'user1', name: 'aeasd', avatar: null, isOwner: true },
-        { id: 'user2', name: '사용자2', avatar: null, isOwner: false },
-        { id: 'user3', name: '사용자3', avatar: null, isOwner: false },
-        { id: 'user4', name: '사용자4', avatar: null, isOwner: false },
-        { id: 'user5', name: '사용자5', avatar: null, isOwner: false },
-      ];
-      
-      const existingIds = list.map(user => user.id);
-      const filteredDummyUsers = dummyUsers.filter(dummy => !existingIds.includes(dummy.id));
-      
-      setParticipants([...list, ...filteredDummyUsers]);
+      // 실제 참여자만 설정
+      setParticipants(list);
     });
     return () => unsub();
   }, [roomId]);

@@ -196,7 +196,8 @@ export function useChatList() {
 
   // 방 입장 핸들러
   const handleEnterRoom = (roomId) => {
-    navigate(`/chat/${roomId}`);
+    console.log('ChatList handleEnterRoom 호출됨:', roomId, '→ /chat/' + roomId + '/profile');
+    navigate(`/chat/${roomId}/profile`);
   };
 
   // 필터된 방 목록 계산 (사용하지 않음 - 내 채팅방만 표시)
