@@ -32,6 +32,7 @@ function ChatRoomHost() {
   // 시청인증 설정 state
   const [certificationEnabled, setCertificationEnabled] = useState(true);
   const [watchMode, setWatchMode] = useState('partial'); // 'partial' | 'full'
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   // 커스텀 훅들 사용
   const roomHook = useRoomData(roomId, navigate);
@@ -40,21 +41,35 @@ function ChatRoomHost() {
   const announcementsHook = useAnnouncements(roomId, roomHook.isOwner, roomHook.myUid, roomHook.myEmail);
   const roomDeletionHook = useRoomDeletion(roomId, roomHook.roomData, navigate);
 
-
+  // 기존 시청 설정 불러오기
+  useEffect(() => {
+    if (roomHook.roomData && !settingsLoaded) {
+      const watchSettings = roomHook.roomData.watchSettings;
+      if (watchSettings) {
+        setCertificationEnabled(watchSettings.enabled || true);
+        setWatchMode(watchSettings.watchMode || 'partial');
+        console.log('🔄 시청 설정 불러옴:', watchSettings);
+      }
+      setSettingsLoaded(true);
+    }
+  }, [roomHook.roomData, settingsLoaded]);
 
   // 시청인증 설정 자동 저장
   const handleSaveCertificationSettings = async (enabled, mode) => {
     try {
+      const settings = {
+        enabled: enabled,
+        watchMode: mode,
+        updatedAt: new Date()
+      };
+      
       await setDoc(doc(db, "chatRooms", roomId), {
-        watchSettings: {
-          enabled: enabled,
-          watchMode: mode,
-          updatedAt: new Date()
-        }
+        watchSettings: settings
       }, { merge: true });
-      // console.log("시청 설정이 자동 저장되었습니다.");
+      
+      console.log("✅ 시청 설정이 자동 저장되었습니다:", settings);
     } catch (error) {
-      console.error("시청 설정 저장 오류:", error);
+      console.error("❌ 시청 설정 저장 오류:", error);
       alert("설정 저장 중 오류가 발생했습니다.");
     }
   };

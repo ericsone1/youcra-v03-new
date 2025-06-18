@@ -173,10 +173,10 @@ function MyChannel() {
         </div>
       </div>
 
-      {/* 영상 리스트 섹션 */}
-      <div className="bg-white mt-2 pb-8">
+      {/* 영상 리스트 섹션 - 임시 숨김 처리 */}
+      {/* <div className="bg-white mt-2 pb-8">
       <VideoListSection />
-      </div>
+      </div> */}
 
       {/* 하단 탭바 */}
       <BottomTabBar />

@@ -39,7 +39,7 @@ const TransferOwnershipModal = ({
                     onClick={() => setSelectedTransferUser(participant)}
                     className="w-full text-left p-3 bg-gray-50 hover:bg-blue-50 rounded-lg transition"
                   >
-                    <div className="font-semibold text-sm">{participant.email}</div>
+                    <div className="font-semibold text-sm">{participant.email || participant.displayName || `사용자 ${participant.id?.slice(0, 8)}`}</div>
                     <div className="text-xs text-gray-500">
                       입장: {formatJoinTime(participant.joinedAt)}
                     </div>
@@ -52,7 +52,7 @@ const TransferOwnershipModal = ({
           <div className="space-y-4">
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
               <p className="text-sm font-semibold text-yellow-800 mb-1">선택된 사용자:</p>
-              <p className="text-sm text-yellow-700">{selectedTransferUser.email}</p>
+              <p className="text-sm text-yellow-700">{selectedTransferUser.email || selectedTransferUser.displayName || `사용자 ${selectedTransferUser.id?.slice(0, 8)}`}</p>
             </div>
 
             <div className="bg-red-50 border border-red-200 rounded-lg p-3">

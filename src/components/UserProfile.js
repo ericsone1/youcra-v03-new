@@ -19,19 +19,56 @@ function UserProfile() {
   const [loading, setLoading] = useState(true);
   const [registeredVideos, setRegisteredVideos] = useState([]);
   const [activeTab, setActiveTab] = useState('watched'); // 'watched' | 'registered'
+  const [myChannel, setMyChannel] = useState(null); // 내 유튜브 채널 정보
+  const [isSubscribedToMe, setIsSubscribedToMe] = useState(null); // 상대방이 내 채널 구독 여부
 
   // 유저 정보 불러오기
   useEffect(() => {
     async function fetchUser() {
+      console.log('🔍 [프로필] 상대방 사용자 정보 로딩 시작:', uid);
       const userDoc = await getDoc(doc(db, "users", uid));
       if (userDoc.exists()) {
-        setUser(userDoc.data());
+        const userData = userDoc.data();
+        setUser(userData);
+        console.log('✅ [프로필] 상대방 사용자 데이터:', userData);
+        if (userData.youtubeChannel) {
+          console.log('✅ [프로필] 상대방 유튜브 채널:', userData.youtubeChannel);
+        } else {
+          console.log('❌ [프로필] 상대방 유튜브 채널 없음');
+        }
       } else {
         setUser(null);
+        console.log('❌ [프로필] 상대방 사용자 문서 없음');
       }
     }
     fetchUser();
   }, [uid]);
+
+  // 내 유튜브 채널 정보 불러오기
+  useEffect(() => {
+    async function fetchMyChannel() {
+      if (!auth.currentUser) {
+        console.log('🔍 [프로필] 로그인된 사용자 없음');
+        return;
+      }
+      
+      console.log('🔍 [프로필] 내 채널 정보 로딩 시작:', auth.currentUser.uid);
+      const myUserDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
+      if (myUserDoc.exists()) {
+        const myData = myUserDoc.data();
+        console.log('🔍 [프로필] 내 사용자 데이터:', myData);
+        if (myData.youtubeChannel) {
+          setMyChannel(myData.youtubeChannel);
+          console.log('✅ [프로필] 내 유튜브 채널 정보 설정:', myData.youtubeChannel);
+        } else {
+          console.log('❌ [프로필] 내 유튜브 채널 정보 없음');
+        }
+      } else {
+        console.log('❌ [프로필] 내 사용자 문서 없음');
+      }
+    }
+    fetchMyChannel();
+  }, []);
 
   // 영상 리스트 불러오기
   useEffect(() => {
@@ -69,6 +106,44 @@ function UserProfile() {
     return () => unsubscribes.forEach((unsub) => unsub());
   }, [roomId, videos, uid]);
 
+  // 상대방이 내 채널을 구독중인지 확인
+  useEffect(() => {
+    async function checkSubscription() {
+      console.log('🔍 [프로필] 구독 여부 확인 시작');
+      console.log('- 내 채널:', myChannel);
+      console.log('- 상대방 유튜브 채널:', user?.youtubeChannel);
+      console.log('- 현재 사용자 ID:', auth.currentUser?.uid);
+      console.log('- 프로필 사용자 ID:', uid);
+      
+      if (!myChannel || !user?.youtubeChannel) {
+        console.log('❌ [프로필] 구독 여부 확인 불가 - 채널 정보 부족');
+        setIsSubscribedToMe(null);
+        return;
+      }
+
+      try {
+        console.log('✅ [프로필] 구독 여부 확인 진행');
+        // TODO: 실제 YouTube API 연동 시 여기에 구독 여부 확인 로직 추가
+        // 현재는 시뮬레이션된 로직 사용
+        
+        // 예시: 데이터베이스에서 구독 관계 확인
+        // const subscriptionDoc = await getDoc(doc(db, "subscriptions", `${uid}_${myChannel.channelId}`));
+        // setIsSubscribedToMe(subscriptionDoc.exists());
+        
+        // 임시로 랜덤하게 구독 여부 결정 (실제 구현 시 제거)
+        const randomSubscribed = Math.random() > 0.5;
+        setIsSubscribedToMe(randomSubscribed);
+        
+        console.log(`🎯 [프로필] 구독 여부 결과: 상대방(${user.displayName})이 내 채널(${myChannel.channelTitle}) 구독 여부:`, randomSubscribed);
+      } catch (error) {
+        console.error("❌ [프로필] 구독 여부 확인 오류:", error);
+        setIsSubscribedToMe(null);
+      }
+    }
+
+    checkSubscription();
+  }, [myChannel, user]);
+
   useEffect(() => {
     setLoading(false);
   }, [user]);
@@ -103,11 +178,37 @@ function UserProfile() {
       <div className="pt-14 pb-4 text-center">
         <div className="font-bold text-lg">{user.displayName || user.email}</div>
         {user.youtubeChannel && (
-          <div className="flex items-center justify-center gap-2 mt-1">
-            <img src={user.youtubeChannel.channelThumbnail} alt="채널" className="w-8 h-8 rounded-full" />
-            <span className="font-semibold text-sm">{user.youtubeChannel.channelTitle}</span>
-            <span className="text-xs text-gray-500">구독자 {user.youtubeChannel.subscriberCount?.toLocaleString()}</span>
-            <a href={`https://www.youtube.com/channel/${user.youtubeChannel.channelId}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline text-xs">방문</a>
+          <div className="mt-1">
+            <div className="flex items-center justify-center gap-2">
+              <img src={user.youtubeChannel.channelThumbnail} alt="채널" className="w-8 h-8 rounded-full" />
+              <span className="font-semibold text-sm">{user.youtubeChannel.channelTitle}</span>
+              <span className="text-xs text-gray-500">구독자 {user.youtubeChannel.subscriberCount?.toLocaleString()}</span>
+              <a href={`https://www.youtube.com/channel/${user.youtubeChannel.channelId}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline text-xs">방문</a>
+            </div>
+            
+            {/* 내 채널 구독 여부 표시 */}
+            {myChannel && auth.currentUser?.uid !== uid && (
+              <div className="flex items-center justify-center mt-2">
+                {isSubscribedToMe === true && (
+                  <div className="flex items-center gap-1 bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-semibold">
+                    <span>✅</span>
+                    <span>내 채널({myChannel.channelTitle}) 구독중</span>
+                  </div>
+                )}
+                {isSubscribedToMe === false && (
+                  <div className="flex items-center gap-1 bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs">
+                    <span>📺</span>
+                    <span>내 채널({myChannel.channelTitle}) 미구독</span>
+                  </div>
+                )}
+                {isSubscribedToMe === null && myChannel && (
+                  <div className="flex items-center gap-1 bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-xs">
+                    <span>🔍</span>
+                    <span>구독 여부 확인 중...</span>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

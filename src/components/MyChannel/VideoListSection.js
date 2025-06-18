@@ -6,28 +6,47 @@ const VideoListSection = () => {
   const [activeTab, setActiveTab] = useState('registered'); // 'registered' | 'watched'
   const [registeredVideos, setRegisteredVideos] = useState([]);
   const [watchedVideos, setWatchedVideos] = useState([]);
+  const [groupedVideos, setGroupedVideos] = useState({}); // 채팅방별로 그룹화된 영상
   const [loading, setLoading] = useState(true);
 
   // 등록한 영상 목록 가져오기
   const fetchRegisteredVideos = async () => {
-    if (!auth.currentUser) return;
+    if (!auth.currentUser) {
+      console.log('📹 [마이채널] 로그인된 사용자 없음');
+      return;
+    }
+    
+    console.log('📹 [마이채널] 등록한 영상 목록 로딩 시작:', auth.currentUser.uid);
     
     try {
       // chatRooms의 모든 videos 서브컬렉션에서 내가 등록한 영상 찾기
       const chatRoomsRef = collection(db, 'chatRooms');
       const chatRoomsSnap = await getDocs(chatRoomsRef);
       
+      console.log('📹 [마이채널] 전체 채팅방 수:', chatRoomsSnap.size);
+      
       const allVideos = [];
       
       for (const chatRoomDoc of chatRoomsSnap.docs) {
+        // 먼저 해당 채팅방의 모든 영상을 가져와서 registeredBy 값들을 확인
+        const allVideosInRoom = await getDocs(collection(db, 'chatRooms', chatRoomDoc.id, 'videos'));
+        console.log(`📹 [마이채널] 채팅방 ${chatRoomDoc.data().name}(${chatRoomDoc.id})의 전체 영상 수: ${allVideosInRoom.size}`);
+        
+        if (allVideosInRoom.size > 0) {
+          allVideosInRoom.forEach(doc => {
+            const videoData = doc.data();
+            console.log(`📹 [영상확인] 영상 "${videoData.title}" - registeredBy: "${videoData.registeredBy}", 내ID: "${auth.currentUser.uid}"`);
+          });
+        }
+        
         const videosQuery = query(
           collection(db, 'chatRooms', chatRoomDoc.id, 'videos'),
-          where('registeredBy', '==', auth.currentUser.uid),
-          orderBy('registeredAt', 'desc'),
-          limit(10)
+          where('registeredBy', '==', auth.currentUser.uid)
         );
         
         const videosSnap = await getDocs(videosQuery);
+        console.log(`📹 [마이채널] 채팅방 ${chatRoomDoc.data().name}(${chatRoomDoc.id})에서 내 영상 ${videosSnap.size}개 발견`);
+        
         videosSnap.forEach(doc => {
           allVideos.push({
             id: doc.id,
@@ -38,6 +57,8 @@ const VideoListSection = () => {
         });
       }
       
+      console.log('📹 [마이채널] 총 발견된 내 영상 수:', allVideos.length);
+      
       // 시간순으로 정렬
       allVideos.sort((a, b) => {
         const aTime = a.registeredAt?.seconds || 0;
@@ -45,7 +66,29 @@ const VideoListSection = () => {
         return bTime - aTime;
       });
       
-      setRegisteredVideos(allVideos.slice(0, 20)); // 최대 20개
+      console.log('📹 [마이채널] 정렬된 영상 목록:', allVideos);
+      
+      setRegisteredVideos(allVideos.slice(0, 50)); // 최대 50개
+      
+      // 채팅방별로 그룹화 (각 채팅방당 최대 10개 영상)
+      const grouped = allVideos.reduce((acc, video) => {
+        const roomId = video.roomId;
+        if (!acc[roomId]) {
+          acc[roomId] = {
+            roomName: video.roomName,
+            roomId: roomId,
+            videos: []
+          };
+        }
+        // 각 채팅방당 최대 10개까지만 추가
+        if (acc[roomId].videos.length < 10) {
+          acc[roomId].videos.push(video);
+        }
+        return acc;
+      }, {});
+      
+      setGroupedVideos(grouped);
+      console.log('📹 [마이채널] 채팅방별 그룹화된 영상:', grouped);
     } catch (error) {
       console.error('등록한 영상 목록 조회 실패:', error);
     }
@@ -194,75 +237,139 @@ const VideoListSection = () => {
 
       {/* 영상 리스트 */}
       <div className="p-4">
-        {currentVideos.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <div className="text-4xl mb-3">
-              {activeTab === 'registered' ? '📹' : '👀'}
+{activeTab === 'registered' ? (
+          // 등록한 영상 - 채팅방별로 그룹화해서 표시
+          Object.keys(groupedVideos).length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <div className="text-4xl mb-3">📹</div>
+              <div className="text-sm">아직 등록한 영상이 없습니다.</div>
+              <div className="text-xs text-gray-400 mt-1">채팅방에서 YouTube 영상을 공유해보세요!</div>
             </div>
-            <div className="text-sm">
-              {activeTab === 'registered' 
-                ? '아직 등록한 영상이 없습니다.' 
-                : '아직 시청한 영상이 없습니다.'}
-            </div>
-            <div className="text-xs text-gray-400 mt-1">
-              {activeTab === 'registered' 
-                ? '채팅방에서 YouTube 영상을 공유해보세요!' 
-                : 'YouTube 영상을 시청하면 여기에 기록됩니다.'}
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {currentVideos.map((video, index) => (
-              <div
-                key={`${video.videoId}_${index}`}
-                onClick={() => handleVideoClick(video)}
-                className="flex gap-3 p-2 rounded-lg hover:bg-gray-50 active:bg-gray-100 transition-colors cursor-pointer"
-              >
-                {/* 썸네일 */}
-                <div className="flex-shrink-0 w-20 h-15 sm:w-24 sm:h-18 rounded-lg overflow-hidden bg-gray-200">
-                  <img
-                    src={getThumbnailUrl(video.videoId)}
-                    alt={video.title}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik04IDYuNVYxNy41TDE2IDEyTDggNi41WiIgZmlsbD0iI0Q1RDVENSIvPgo8L3N2Zz4K';
-                    }}
-                  />
-                </div>
-
-                {/* 영상 정보 */}
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-medium text-gray-900 line-clamp-2 mb-1">
-                    {video.title}
-                  </h4>
-                  
-                  <div className="text-xs text-gray-500 space-y-0.5">
-                    {video.channelTitle && (
-                      <div className="truncate">📺 {video.channelTitle}</div>
-                    )}
-                    
-                    {activeTab === 'registered' && video.roomName && (
-                      <div className="truncate">💬 {video.roomName}</div>
-                    )}
-                    
-                    <div>
-                      {activeTab === 'registered' 
-                        ? `등록 ${formatTime(video.registeredAt)}`
-                        : `시청 ${formatTime(video.watchedAt)}`
-                      }
+          ) : (
+            <div className="space-y-6">
+              {Object.values(groupedVideos).map((roomGroup) => (
+                <div key={roomGroup.roomId} className="bg-gray-50 rounded-xl p-4">
+                  {/* 채팅방 헤더 */}
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center text-sm font-bold text-gray-700">
+                        {roomGroup.roomName?.slice(0, 2).toUpperCase() || 'CH'}
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-gray-800">{roomGroup.roomName}</h3>
+                        <p className="text-xs text-gray-500">{roomGroup.videos.length}개 영상</p>
+                      </div>
                     </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.location.href = `/chat/${roomGroup.roomId}`;
+                      }}
+                      className="px-3 py-1.5 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition-colors"
+                    >
+                      채팅방 입장
+                    </button>
+                  </div>
+                  
+                  {/* 영상 리스트 */}
+                  <div className="space-y-2">
+                    {roomGroup.videos.map((video, index) => (
+                      <div
+                        key={`${video.videoId}_${index}`}
+                        onClick={() => handleVideoClick(video)}
+                        className="flex gap-3 p-2 bg-white rounded-lg hover:bg-blue-50 active:bg-blue-100 transition-colors cursor-pointer"
+                      >
+                        {/* 썸네일 */}
+                        <div className="flex-shrink-0 w-16 h-12 rounded-lg overflow-hidden bg-gray-200">
+                          <img
+                            src={getThumbnailUrl(video.videoId)}
+                            alt={video.title}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik04IDYuNVYxNy41TDE2IDEyTDggNi41WiIgZmlsbD0iI0Q1RDVENSIvPgo8L3N2Zz4K';
+                            }}
+                          />
+                        </div>
+
+                        {/* 영상 정보 */}
+                        <div className="flex-1 min-w-0">
+                          <h4 className="text-sm font-medium text-gray-900 line-clamp-2 mb-1">
+                            {video.title}
+                          </h4>
+                          
+                          <div className="text-xs text-gray-500 space-y-0.5">
+                            {video.channelTitle && (
+                              <div className="truncate">📺 {video.channelTitle}</div>
+                            )}
+                            <div>등록 {formatTime(video.registeredAt)}</div>
+                          </div>
+                        </div>
+
+                        {/* 재생 아이콘 */}
+                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-red-500 bg-opacity-10 flex items-center justify-center">
+                          <svg className="w-4 h-4 text-red-500" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M8 6.5v11l8-5.5-8-5.5z"/>
+                          </svg>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
+              ))}
+            </div>
+          )
+        ) : (
+          // 시청한 영상 - 기존 방식 유지
+          currentVideos.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <div className="text-4xl mb-3">👀</div>
+              <div className="text-sm">아직 시청한 영상이 없습니다.</div>
+              <div className="text-xs text-gray-400 mt-1">YouTube 영상을 시청하면 여기에 기록됩니다.</div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {currentVideos.map((video, index) => (
+                <div
+                  key={`${video.videoId}_${index}`}
+                  onClick={() => handleVideoClick(video)}
+                  className="flex gap-3 p-2 rounded-lg hover:bg-gray-50 active:bg-gray-100 transition-colors cursor-pointer"
+                >
+                  {/* 썸네일 */}
+                  <div className="flex-shrink-0 w-20 h-15 sm:w-24 sm:h-18 rounded-lg overflow-hidden bg-gray-200">
+                    <img
+                      src={getThumbnailUrl(video.videoId)}
+                      alt={video.title}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjI0IiBoZWlnaHQ9IjI0IiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik04IDYuNVYxNy41TDE2IDEyTDggNi41WiIgZmlsbD0iI0Q1RDVENSIvPgo8L3N2Zz4K';
+                      }}
+                    />
+                  </div>
 
-                {/* 재생 아이콘 */}
-                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-red-500 bg-opacity-10 flex items-center justify-center">
-                  <svg className="w-4 h-4 text-red-500" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M8 6.5v11l8-5.5-8-5.5z"/>
-                  </svg>
+                  {/* 영상 정보 */}
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-sm font-medium text-gray-900 line-clamp-2 mb-1">
+                      {video.title}
+                    </h4>
+                    
+                    <div className="text-xs text-gray-500 space-y-0.5">
+                      {video.channelTitle && (
+                        <div className="truncate">📺 {video.channelTitle}</div>
+                      )}
+                      <div>시청 {formatTime(video.watchedAt)}</div>
+                    </div>
+                  </div>
+
+                  {/* 재생 아이콘 */}
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-red-500 bg-opacity-10 flex items-center justify-center">
+                    <svg className="w-4 h-4 text-red-500" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M8 6.5v11l8-5.5-8-5.5z"/>
+                    </svg>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )
         )}
       </div>
     </div>

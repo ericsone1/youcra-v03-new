@@ -621,8 +621,8 @@ const YouTubeChannelManager = () => {
         />
       )}
 
-      {/* 탭 메뉴 */}
-      <div className="flex gap-2 mb-6 mt-4 bg-white p-1 rounded-lg shadow">
+      {/* 탭 메뉴 - 임시 숨김 처리 */}
+      {/* <div className="flex gap-2 mb-6 mt-4 bg-white p-1 rounded-lg shadow">
         <button
           className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all focus:outline-none ${activeTab === 'registered' ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
           onClick={() => setActiveTab('registered')}
@@ -635,10 +635,10 @@ const YouTubeChannelManager = () => {
         >
           내가 시청한 영상
         </button>
-      </div>
+      </div> */}
 
-      {/* 탭 컨텐츠 */}
-      <div className="bg-white border border-gray-200 shadow rounded-lg p-4 min-h-[120px]">
+      {/* 탭 컨텐츠 - 임시 숨김 처리 */}
+      {/* <div className="bg-white border border-gray-200 shadow rounded-lg p-4 min-h-[120px]">
         {activeTab === 'registered' ? (
           !videoStats || !videoStats.videos || videoStats.videos.length === 0 ? (
             <div className="text-sm text-gray-400">등록한 영상이 없습니다.</div>
@@ -698,7 +698,7 @@ const YouTubeChannelManager = () => {
             ))
           )
         )}
-      </div>
+      </div> */}
     </div>
   );
 };

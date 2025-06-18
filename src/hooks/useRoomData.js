@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 
 export const useRoomData = (roomId, navigate) => {
@@ -18,6 +18,8 @@ export const useRoomData = (roomId, navigate) => {
   const [savingSettings, setSavingSettings] = useState(false);
 
   useEffect(() => {
+    let unsubscribe = null;
+    
     const checkOwnership = async () => {
       try {
         const user = auth.currentUser;
@@ -50,6 +52,15 @@ export const useRoomData = (roomId, navigate) => {
         setEditedDesc(data.description || '');
         setEditedHashtags((data.hashtags || []).join(', '));
         setEditedMaxParticipants(data.maxParticipants || 20);
+
+        // 실시간 방 데이터 구독 시작 (방장 권한 확인 후)
+        unsubscribe = onSnapshot(doc(db, 'chatRooms', roomId), (doc) => {
+          if (doc.exists()) {
+            const updatedData = doc.data();
+            setRoomData(updatedData);
+            console.log('🔄 방 데이터 실시간 업데이트:', updatedData.watchSettings);
+          }
+        });
       } catch (error) {
         console.error('권한 확인 오류:', error);
         navigate('/chat');
@@ -61,6 +72,13 @@ export const useRoomData = (roomId, navigate) => {
     if (roomId) {
       checkOwnership();
     }
+
+    // cleanup: 컴포넌트 언마운트 시 구독 해제
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, [roomId, navigate]);
 
   const handleSaveSettings = async () => {

@@ -27,28 +27,46 @@ function ChatRoomMenu() {
   }, [roomId]);
 
   useEffect(() => {
-    if (!roomId) return;
+    if (!roomId) {
+      console.log('🔍 [방메뉴] roomId 없음');
+      return;
+    }
+    
+    console.log('🔍 [방메뉴] 참여자 목록 로딩 시작:', roomId);
+    
     const q = collection(db, 'chatRooms', roomId, 'participants');
     const unsub = onSnapshot(q, async (snap) => {
+      console.log('🔍 [방메뉴] participants 컬렉션 문서 수:', snap.size);
+      
       const list = await Promise.all(
         snap.docs.map(async (d) => {
           const uid = d.id;
+          console.log('🔍 [방메뉴] 참여자 ID:', uid);
+          
           // 사용자 정보 시도적으로 가져오기
           try {
             const userDoc = await getDoc(doc(db, 'users', uid));
             if (userDoc.exists()) {
               const u = userDoc.data();
+              console.log('🔍 [방메뉴] 사용자 정보:', u);
               return {
                 id: uid,
                 name: u.displayName || u.nick || u.email?.split('@')[0] || '익명',
                 avatar: u.photoURL || null,
                 isOwner: u.role === 'owner' || false,
               };
+            } else {
+              console.log('🔍 [방메뉴] 사용자 문서 없음:', uid);
             }
-          } catch {}
+          } catch (error) {
+            console.log('🔍 [방메뉴] 사용자 정보 가져오기 실패:', error);
+          }
           return { id: uid, name: uid.slice(0, 6), avatar: null, isOwner: false };
         })
       );
+      
+      console.log('🔍 [방메뉴] 최종 참여자 목록:', list);
+      console.log('🔍 [방메뉴] 참여자 수:', list.length);
       
       // 실제 참여자만 설정
       setParticipants(list);

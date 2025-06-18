@@ -90,44 +90,6 @@ function MyVideosPage() {
         <YouTubeChannelManager />
       </div>
 
-      {/* 메뉴 버튼들 */}
-      <div className="bg-white mx-4 mt-4 p-4 rounded-xl shadow-sm">
-        <h3 className="font-bold text-gray-800 mb-4">빠른 메뉴</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <button 
-            onClick={() => navigate('/my/youtube-channel')}
-            className="flex flex-col items-center p-4 bg-red-50 rounded-xl hover:bg-red-100 transition-colors"
-          >
-            <div className="text-2xl mb-2">🔗</div>
-            <span className="text-sm font-medium text-gray-700">채널 등록</span>
-          </button>
-          
-          <button 
-            onClick={() => navigate('/chat')}
-            className="flex flex-col items-center p-4 bg-purple-50 rounded-xl hover:bg-purple-100 transition-colors"
-          >
-            <div className="text-2xl mb-2">💬</div>
-            <span className="text-sm font-medium text-gray-700">채팅방</span>
-          </button>
-          
-          <button 
-            onClick={() => navigate('/videos')}
-            className="flex flex-col items-center p-4 bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors"
-          >
-            <div className="text-2xl mb-2">🎬</div>
-            <span className="text-sm font-medium text-gray-700">영상 목록</span>
-          </button>
-          
-          <button 
-            onClick={() => navigate('/my')}
-            className="flex flex-col items-center p-4 bg-green-50 rounded-xl hover:bg-green-100 transition-colors"
-          >
-            <div className="text-2xl mb-2">🏠</div>
-            <span className="text-sm font-medium text-gray-700">마이채널</span>
-          </button>
-        </div>
-      </div>
-
       {/* 하단 탭바 */}
       <BottomTabBar />
     </div>

@@ -115,14 +115,76 @@ export default function ChatRoomInfo() {
     };
 
     // 참여자 실시간 구독
+    console.log('🔍 [방정보] 참여자 실시간 구독 시작:', roomId);
+    
     const unsubscribeParticipants = onSnapshot(
       collection(db, 'chatRooms', roomId, 'participants'),
-      (snapshot) => {
-        const participantsList = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        setParticipants(participantsList);
+      async (snapshot) => {
+        console.log('🔍 [방정보] participants 컬렉션 문서 수:', snapshot.size);
+        
+        try {
+          const participantsList = await Promise.all(
+            snapshot.docs.map(async (participantDoc) => {
+              const uid = participantDoc.id;
+              const participantData = participantDoc.data();
+              console.log('🔍 [방정보] 참여자 처리 중:', uid, participantData);
+              
+              // 사용자 정보 가져오기
+              try {
+                const userRef = doc(db, 'users', uid);
+                const userSnapshot = await getDoc(userRef);
+                
+                if (userSnapshot.exists()) {
+                  const userData = userSnapshot.data();
+                  console.log('🔍 [방정보] 사용자 정보 발견:', userData);
+                  return {
+                    id: uid,
+                    name: userData.displayName || userData.nick || userData.name || userData.email?.split('@')[0] || '익명',
+                    email: userData.email || '이메일 없음',
+                    avatar: userData.photoURL || userData.profileImage || null,
+                    joinedAt: participantData.joinedAt,
+                    role: participantData.role || 'member',
+                    isOwner: participantData.role === 'owner' || uid === roomData?.createdBy,
+                    isOnline: participantData.isOnline || false
+                  };
+                } else {
+                  console.log('🔍 [방정보] 사용자 문서 없음:', uid);
+                }
+              } catch (userError) {
+                console.error('🔍 [방정보] 사용자 정보 로딩 실패:', userError);
+              }
+              
+              // 사용자 정보를 찾을 수 없는 경우 기본값 반환
+              console.log('🔍 [방정보] 기본값 사용자 정보 반환:', uid);
+              return {
+                id: uid,
+                name: uid.slice(0, 8) + '...',
+                email: '정보 없음',
+                avatar: null,
+                joinedAt: participantData.joinedAt,
+                role: participantData.role || 'member',
+                isOwner: participantData.role === 'owner',
+                isOnline: participantData.isOnline || false
+              };
+            })
+          );
+          
+          console.log('🔍 [방정보] 처리된 참여자 목록:', participantsList);
+          
+          // 방장을 맨 위로, 나머지는 이름순으로 정렬
+          participantsList.sort((a, b) => {
+            if (a.isOwner && !b.isOwner) return -1;
+            if (!a.isOwner && b.isOwner) return 1;
+            return a.name.localeCompare(b.name);
+          });
+          
+          console.log('🔍 [방정보] 최종 참여자 목록:', participantsList);
+          console.log('🔍 [방정보] 참여자 수:', participantsList.length);
+          
+          setParticipants(participantsList);
+        } catch (error) {
+          console.error('🔍 [방정보] 참여자 목록 로딩 실패:', error);
+        }
       }
     );
 
@@ -235,14 +297,87 @@ export default function ChatRoomInfo() {
           </div>
         )}
 
-        {/* 메뉴 리스트 */}
+        {/* 참여자 목록 */}
+        <div className="bg-white mb-4">
+          <div className="px-6 py-4 border-b border-gray-100">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">👥</span>
+              <span className="font-medium text-gray-800">방 참여 인원</span>
+            </div>
+          </div>
+          
+          {participants.length === 0 ? (
+            <div className="px-6 py-8 text-center text-gray-500">
+              <div className="text-4xl mb-2">👥</div>
+              <div className="text-sm">아직 참여자가 없습니다</div>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {participants.map((participant) => (
+                <div key={participant.id} className="px-6 py-4 hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      {/* 프로필 이미지 */}
+                      <div className="relative">
+                        {participant.avatar ? (
+                          <img 
+                            src={participant.avatar} 
+                            alt={participant.name} 
+                            className="w-10 h-10 rounded-full object-cover border-2 border-gray-200"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              e.target.nextElementSibling.style.display = 'flex';
+                            }}
+                          />
+                        ) : null}
+                        <div 
+                          className={`w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold ${participant.avatar ? 'hidden' : 'flex'}`}
+                        >
+                          {participant.name?.slice(0, 2).toUpperCase() || '?'}
+                        </div>
+                        
+                        {/* 온라인 상태 표시 */}
+                        {participant.isOnline && (
+                          <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
+                        )}
+                      </div>
+
+                      {/* 사용자 정보 */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-gray-800 truncate">{participant.name}</span>
+                          {participant.isOwner && (
+                            <span className="text-yellow-500 text-lg" title="방장">👑</span>
+                          )}
+                          {participant.role === 'admin' && (
+                            <span className="text-blue-500 text-sm" title="관리자">🛡️</span>
+                          )}
+                        </div>
+                        <div className="text-sm text-gray-500 truncate">{participant.email}</div>
+                      </div>
+                    </div>
+
+                    {/* 액션 버튼 */}
+                    <button
+                      className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // TODO: 유저별 메뉴 액션 구현
+                        console.log('유저 메뉴 클릭:', participant.name);
+                        alert(`${participant.name}님의 메뉴 (구현 예정)`);
+                      }}
+                    >
+                      <span className="text-lg">⋮</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 기타 메뉴 */}
         <div className="bg-white">
-          <MenuItem 
-            icon="👥" 
-            label="방 참여 인원" 
-            subtitle={`${participants.length}명`}
-            onClick={() => navigate(`/chat/${roomId}/participants`)}
-          />
           <MenuItem 
             icon="📺" 
             label="실시간 시청" 
