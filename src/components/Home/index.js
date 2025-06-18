@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useVideos } from "./hooks/useVideos";
 import { useChatRooms } from "./hooks/useChatRooms";
 import { parseDuration } from "./utils/videoUtils";
+import { motion, AnimatePresence } from "framer-motion";
 import Header from "./Header";
 import PopularChatRooms from "./PopularChatRooms";
 import VideoRankingList from "./VideoRankingList";
@@ -26,6 +27,10 @@ function Home() {
   const [fanCertified, setFanCertified] = useState(false);
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
+
+  // 시청인증 완료 모달 상태
+  const [showCertificationModal, setShowCertificationModal] = useState(false);
+  const [certificationVideoTitle, setCertificationVideoTitle] = useState("");
 
   // 영상 선택 핸들러
   const handleVideoSelect = (videoId) => {
@@ -80,12 +85,46 @@ function Home() {
     if (event.data === 0) { // 종료
       setVideoEnded(true);
       resetPlayerTimer();
+      // 영상 종료 시 자동 인증 처리
+      handleAutoWatchCompletion();
     }
   };
 
   const handleYoutubeEnd = () => {
     setVideoEnded(true);
     resetPlayerTimer();
+    // 영상 종료 시 자동 인증 처리
+    handleAutoWatchCompletion();
+  };
+
+  // 자동 시청 완료 처리 함수
+  const handleAutoWatchCompletion = () => {
+    // 인증 조건 확인
+    const canAutoVerify = (() => {
+      if (videoDuration > 1800) {
+        // 30분 초과 영상: 30분(1800초) 시청 후 인증 가능
+        return watchSeconds >= 1800;
+      } else {
+        // 30분 이하 영상: 끝까지 시청 후 인증 가능 (영상이 끝났으므로 조건 충족)
+        return true;
+      }
+    })();
+
+    // 자동 인증 처리
+    if (canAutoVerify && !fanCertified) {
+      setFanCertified(true);
+      
+      // 현재 영상 제목 가져오기
+      const currentVideo = videos.find(v => v.id === selectedVideoId);
+      setCertificationVideoTitle(currentVideo?.snippet?.title || "영상");
+      
+      // 팝업 모달 표시 (0.5초 딜레이)
+      setTimeout(() => {
+        setShowCertificationModal(true);
+      }, 500);
+      
+      console.log('✅ 자동 시청 인증 완료:', selectedVideoId);
+    }
   };
 
   const resetPlayerTimer = () => {
@@ -95,14 +134,28 @@ function Home() {
     }
   };
 
-  // 인증 조건 확인
-  const canCertify = videoDuration >= 180 ? watchSeconds >= 180 : videoEnded;
+  // 인증 조건 확인 - 30분 기준 조건
+  const canCertify = (() => {
+    if (videoDuration > 1800) {
+      // 30분 초과 영상: 30분(1800초) 시청 후 인증 가능
+      return watchSeconds >= 1800;
+    } else {
+      // 30분 이하 영상: 끝까지 시청 후 인증 가능
+      return videoEnded;
+    }
+  })();
 
-  // 인증 버튼 클릭
+  // 인증 버튼 클릭 (수동 인증)
   const handleFanCertification = () => {
     if (canCertify && !fanCertified) {
       setFanCertified(true);
-      alert('🎉 시청인증이 완료되었습니다!');
+      
+      // 현재 영상 제목 가져오기
+      const currentVideo = videos.find(v => v.id === selectedVideoId);
+      setCertificationVideoTitle(currentVideo?.snippet?.title || "영상");
+      
+      // 팝업 모달 표시
+      setShowCertificationModal(true);
     }
   };
 
@@ -145,6 +198,72 @@ function Home() {
       resetPlayerTimer();
     };
   }, []);
+
+  // 시청인증 완료 모달 컴포넌트
+  const CertificationModal = () => (
+    <AnimatePresence>
+      {showCertificationModal && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowCertificationModal(false)}
+        >
+          <motion.div
+            initial={{ scale: 0.7, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.7, opacity: 0 }}
+            transition={{ type: "spring", duration: 0.5 }}
+            className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 헤더 */}
+            <div className="bg-gradient-to-r from-green-500 to-emerald-500 text-white p-6 text-center">
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.2, type: "spring" }}
+                className="w-16 h-16 bg-white bg-opacity-20 rounded-full flex items-center justify-center mx-auto mb-3"
+              >
+                <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              </motion.div>
+              <h2 className="text-xl font-bold">🎉 시청인증 완료!</h2>
+            </div>
+            
+            {/* 내용 */}
+            <div className="p-6">
+              <div className="text-center mb-6">
+                <p className="text-gray-700 font-medium mb-2">
+                  영상 시청이 완료되었습니다!
+                </p>
+                <div className="bg-gray-50 rounded-lg p-3 mb-4">
+                  <p className="text-sm text-gray-600 font-medium line-clamp-2">
+                    "{certificationVideoTitle}"
+                  </p>
+                </div>
+                <div className="bg-blue-50 border-l-4 border-blue-400 p-4 rounded">
+                  <p className="text-blue-800 font-semibold text-sm">
+                    📤 상대방에게 시청인증 결과가 전송되었습니다
+                  </p>
+                </div>
+              </div>
+              
+              {/* 버튼 */}
+              <button
+                onClick={() => setShowCertificationModal(false)}
+                className="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white py-3 px-4 rounded-xl font-semibold hover:from-green-600 hover:to-emerald-600 transition-all duration-200 transform hover:scale-105"
+              >
+                확인
+              </button>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
 
   // 로딩 상태
   if (videosLoading) {
@@ -235,6 +354,7 @@ function Home() {
           onFanCertification={handleFanCertification}
         />
       </div>
+      <CertificationModal />
     </div>
   );
 }

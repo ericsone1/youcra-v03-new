@@ -69,7 +69,8 @@ function ChatList() {
       <div className="text-base text-gray-500 mb-2">방 개수: {rooms.length}</div>
 
       {/* 채팅방 리스트 */}
-      <div className="flex flex-col gap-3 mb-24">
+      <div className="flex-1 overflow-y-auto scroll-optimized">
+        <div className="flex flex-col gap-3 pb-safe">
         {activeTab === "전체" ? (
           // 전체 탭
           <div className="space-y-3">
@@ -117,6 +118,7 @@ function ChatList() {
             />
           </>
         )}
+        </div>
       </div>
 
       {/* 방 생성 모달 */}

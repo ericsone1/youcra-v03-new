@@ -1,7 +1,8 @@
 import React from 'react';
 import { useNavigate } from "react-router-dom";
 import SearchFilter from './ChatList/components/SearchFilter';
-import RoomCard from './ChatList/components/RoomCard';
+import LazyRoomCard from './ChatList/components/LazyRoomCard';
+import { useLazyList } from '../hooks/useIntersectionObserver';
 
 import { useChatList } from './ChatList/hooks/useChatList';
 import { useAuth } from "../contexts/AuthContext";
@@ -24,6 +25,18 @@ function ChatList() {
     myRooms,
     joinedRooms,
   } = useChatList();
+
+  // 통합된 내 채팅방 목록 (정렬된)
+  const allMyRooms = [...myRooms, ...joinedRooms]
+    .sort((a, b) => b.sortTimestamp - a.sortTimestamp);
+
+  // 지연 로딩 적용
+  const { 
+    visibleItems: visibleMyRooms, 
+    hasMore, 
+    isLoading: lazyLoading, 
+    targetRef: loadMoreRef 
+  } = useLazyList(allMyRooms, 8, 4);
 
   // 내 채팅방 페이지에서는 바로 채팅방으로 입장
   const handleEnterRoom = (roomId) => {
@@ -81,19 +94,17 @@ function ChatList() {
       </div>
 
       {/* 스크롤 가능한 채팅방 리스트 영역 */}
-      <div className="flex-1 overflow-y-auto px-3 pb-20">
+      <div className="flex-1 overflow-y-auto px-3 pb-safe scroll-optimized">
         {/* 방 개수 표시 */}
         <div className="text-sm text-gray-500 mb-2">
-          내 채팅방: {[...myRooms, ...joinedRooms].length}개
+          내 채팅방: {allMyRooms.length}개
         </div>
 
         {/* 통합된 내 채팅방 목록 */}
         <div className="space-y-3 pb-4">
-          {[...myRooms, ...joinedRooms]
-            .sort((a, b) => b.sortTimestamp - a.sortTimestamp) // 최신 메시지 순으로 정렬
-            .map(room => (
+          {visibleMyRooms.map(room => (
             <div key={room.id} className="relative">
-              <RoomCard 
+              <LazyRoomCard 
                 room={{
                   ...room,
                   // 방장 표시를 위한 추가 정보
@@ -110,8 +121,24 @@ function ChatList() {
             </div>
           ))}
           
+          {/* 더 보기 로딩 트리거 */}
+          {hasMore && !roomsLoading && (
+            <div ref={loadMoreRef} className="flex justify-center py-4">
+              {lazyLoading ? (
+                <div className="flex items-center gap-2 text-gray-500">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+                  <span className="text-sm">더 많은 채팅방을 불러오는 중...</span>
+                </div>
+              ) : (
+                <div className="text-sm text-gray-400">
+                  {allMyRooms.length - visibleMyRooms.length}개 더 보기
+                </div>
+              )}
+            </div>
+          )}
+          
           {/* 채팅방이 없을 때 */}
-          {[...myRooms, ...joinedRooms].length === 0 && (
+          {allMyRooms.length === 0 && (
             <div className="flex flex-col items-center justify-center py-16">
               <div className="text-6xl mb-4">💬</div>
               {!isAuthenticated ? (

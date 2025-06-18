@@ -1,6 +1,6 @@
 import MyChannel from "./MyChannel";
 import { BrowserRouter as Router, Routes, Route, Link, NavLink, useLocation, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { AuthProvider } from "../contexts/AuthContext";
 import Home from "./Home";
 import ChatList from "./ChatList";
@@ -23,10 +23,23 @@ import CertificationSettings from "./CertificationSettings";
 import ChatRoomMenu from "./ChatRoomMenu";
 import MyVideosPage from "./MyVideosPage";
 import ChatRoomProfile from "./ChatRoomProfile";
+import SettingsPage from "./SettingsPage";
+import { ToastProvider } from "../contexts/ToastContext";
+import ToastContainer from "./common/ToastContainer";
+import { AnimatePresence } from 'framer-motion';
+import PageWrapper from './common/PageWrapper';
+import { VideoPlayerProvider } from "../contexts/VideoPlayerContext";
+import GlobalVideoPlayer from "./GlobalVideoPlayer";
+import MyPointsPage from "./MyPointsPage";
+import MyFeedViewersPage from "./MyFeedViewersPage";
+import { db, auth } from "../firebase";
+import { collection, query, where, onSnapshot, orderBy, updateDoc } from "firebase/firestore";
+import useNotification from "../hooks/useNotification";
 
 function App() {
   const location = useLocation();
   const navigate = useNavigate();
+  const notify = useNotification();
 
   // 탭 순서 정의
   const tabs = [
@@ -161,8 +174,41 @@ function App() {
     setTouchEnd(null);
   };
 
+  useEffect(() => {
+    if (!auth.currentUser) return;
+
+    const q = query(
+      collection(db, "subscribeRequests"),
+      where("toUid", "==", auth.currentUser.uid),
+      where("notified", "==", false),
+      orderBy("createdAt", "desc")
+    );
+
+    const unsub = onSnapshot(q, (snapshot) => {
+      snapshot.docChanges().forEach(async (change) => {
+        if (change.type === "added") {
+          const data = change.doc.data();
+          // 알림 표시
+          notify("구독 요청", {
+            body: `${data.fromName || '사용자'}님이 당신의 채널 구독을 요청했습니다`,
+            icon: "/favicon.ico",
+          });
+          // notified true
+          try {
+            await updateDoc(change.doc.ref, { notified: true });
+          } catch (err) {
+            console.error("알림 플래그 업데이트 실패", err);
+          }
+        }
+      });
+    });
+
+    return () => unsub();
+  }, [auth.currentUser?.uid]);
+
   return (
     <AuthProvider>
+      <ToastProvider>
       <div 
         className="bg-blue-100 min-h-screen pb-20"
         onTouchStart={handleTouchStart}
@@ -176,10 +222,12 @@ function App() {
           msUserSelect: 'none'
         }}
       >
-        <Routes>
-          <Route path="/my" element={<MyChannel />} />
-          <Route path="/" element={<Home />} />
-          <Route path="/chat" element={<ChatList />} />
+          <AnimatePresence mode="wait" initial={false}>
+            <Routes location={location} key={location.pathname}>
+              <Route path="/" element={<PageWrapper><Home /></PageWrapper>} />
+              <Route path="/chat" element={<PageWrapper><ChatList /></PageWrapper>} />
+              <Route path="/board" element={<PageWrapper><Board /></PageWrapper>} />
+              <Route path="/my" element={<PageWrapper><MyChannel /></PageWrapper>} />
           <Route path="/chats" element={<AllChatRooms />} />
           <Route path="/Chats" element={<AllChatRooms />} />
           <Route path="/chat/create" element={<ChatRoomCreate />} />
@@ -190,7 +238,6 @@ function App() {
           <Route path="/chat/:roomId/videos" element={<VideoListPage />} />
           <Route path="/chat/:roomId/certification-settings" element={<CertificationSettings />} />
           <Route path="/chat/:roomId/menu" element={<ChatRoomMenu />} />
-          <Route path="/board" element={<Board />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/profile/:roomId/:uid" element={<UserProfile />} />
           <Route path="/dm/:uid" element={<DMChatRoom />} />
@@ -200,7 +247,12 @@ function App() {
           <Route path="/product/:id" element={<ProductDetail />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/my/videos" element={<MyVideosPage />} />
+              <Route path="/my/settings" element={<SettingsPage />} />
+          <Route path="/my/points" element={<MyPointsPage />} />
+          <Route path="/my/viewers" element={<MyFeedViewersPage />} />
+          <Route path="/my/feed-viewers" element={<MyFeedViewersPage />} />
         </Routes>
+          </AnimatePresence>
         
         {/* 스와이프 피드백 */}
         {swipeDirection && (
@@ -228,14 +280,20 @@ function App() {
           </NavLink>
         </footer>
       </div>
+        <ToastContainer />
+      </ToastProvider>
     </AuthProvider>
   );
 }
 
 export default function AppWrapper() {
   return (
-    <Router>
-      <App />
-    </Router>
+    <VideoPlayerProvider>
+      <Router>
+        <App />
+        {/* 전역 비디오 플레이어 */}
+        <GlobalVideoPlayer />
+      </Router>
+    </VideoPlayerProvider>
   );
 }

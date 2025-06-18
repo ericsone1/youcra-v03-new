@@ -54,7 +54,8 @@ function ChatRoomParticipants() {
                   joinedAt: participantData.joinedAt,
                   role: participantData.role || 'member',
                   isOwner: participantData.role === 'owner' || uid === roomData?.createdBy,
-                  isOnline: participantData.isOnline || false
+                  isOnline: participantData.isOnline || false,
+                  watchRate: participantData.watchRate || 0,
                 };
               }
             } catch (userError) {
@@ -70,7 +71,8 @@ function ChatRoomParticipants() {
               joinedAt: participantData.joinedAt,
               role: participantData.role || 'member',
               isOwner: participantData.role === 'owner',
-              isOnline: participantData.isOnline || false
+              isOnline: participantData.isOnline || false,
+              watchRate: participantData.watchRate || 0,
             };
           })
         );
@@ -115,104 +117,121 @@ function ChatRoomParticipants() {
 
   if (loading) {
     return (
-      <div className="flex flex-col h-screen max-w-md mx-auto bg-white relative">
-        <header className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md flex items-center justify-between px-4 py-3 border-b z-30 bg-white">
-          <button onClick={() => navigate(-1)} className="text-2xl text-gray-600 hover:text-blue-600" aria-label="뒤로가기">←</button>
-          <div className="flex-1 text-center font-bold text-lg">참여자</div>
-          <div className="w-8" />
+      <div className="flex flex-col h-screen max-w-md mx-auto bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 relative">
+        <header className="flex items-center justify-between px-4 py-3 border-b border-blue-200 z-30 bg-gradient-to-r from-blue-100 to-indigo-100">
+          <button 
+            onClick={() => navigate(-1)}
+            className="text-2xl text-blue-600 hover:text-blue-800"
+          >
+            ←
+          </button>
+          <h1 className="font-bold text-lg text-blue-800">참여자 목록</h1>
+          <div className="w-8"></div>
         </header>
-        <main className="flex-1 pt-20 pb-8 px-4 overflow-y-auto flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-4 mx-auto"></div>
-            <div className="text-gray-500">참여자 목록을 불러오는 중...</div>
-          </div>
-        </main>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-screen max-w-md mx-auto bg-white relative">
-      {/* 상단 헤더 */}
-      <header className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md flex items-center justify-between px-4 py-3 border-b z-30 bg-white">
-        <button onClick={() => navigate(-1)} className="text-2xl text-gray-600 hover:text-blue-600" aria-label="뒤로가기">←</button>
-        <div className="flex-1 text-center font-bold text-lg">참여자 ({participants.length}명)</div>
-        <div className="w-8" />
+    <div className="flex flex-col h-screen max-w-md mx-auto bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 relative">
+      {/* 헤더 */}
+      <header className="flex items-center justify-between px-4 py-3 border-b border-blue-200 z-30 bg-gradient-to-r from-blue-100 to-indigo-100">
+        <button 
+          onClick={() => navigate(-1)}
+          className="text-2xl text-blue-600 hover:text-blue-800"
+        >
+          ←
+        </button>
+        <h1 className="font-bold text-lg text-blue-800">참여자 목록 ({participants.length}명)</h1>
+        <div className="w-8"></div>
       </header>
 
-      <main className="flex-1 pt-20 pb-8 px-4 overflow-y-auto">
+      {/* 참여자 목록 */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {participants.length === 0 ? (
-          <div className="text-center mt-20">
-            <div className="text-6xl mb-4">👥</div>
-            <div className="text-gray-500">
-              <div className="font-medium mb-1">참여자가 없습니다</div>
-              <div className="text-sm">아직 이 채팅방에 참여한 사람이 없어요</div>
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center text-blue-600">
+              <p className="text-lg mb-2">👥</p>
+              <p>아직 참여자가 없습니다</p>
             </div>
           </div>
         ) : (
-          <div className="space-y-3">
-            {participants.map((user) => (
-              <div key={user.id} className="bg-white rounded-xl border border-gray-200 hover:border-blue-200 transition-colors">
-                <button
-                  className="w-full p-4 text-left hover:bg-gray-50 rounded-xl transition-colors"
-                  onClick={() => navigate(`/profile/${roomId}/${user.id}`)}
-                >
-                  <div className="flex items-center gap-3">
-                    {/* 프로필 이미지 */}
-                    <div className="relative">
-                      {user.avatar ? (
-                        <img 
-                          src={user.avatar} 
-                          alt={user.name} 
-                          className="w-12 h-12 rounded-full object-cover border-2 border-gray-200"
-                          onError={(e) => {
-                            e.target.style.display = 'none';
-                            e.target.nextElementSibling.style.display = 'flex';
-                          }}
-                        />
-                      ) : null}
-                      <div 
-                        className={`w-12 h-12 rounded-full bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold ${user.avatar ? 'hidden' : 'flex'}`}
-                      >
-                        {user.name.slice(0, 2).toUpperCase()}
+          participants.map((user) => (
+            <div key={user.id} className="bg-white/80 backdrop-blur-sm border border-blue-100 rounded-xl shadow-lg hover:border-blue-200 transition-colors">
+              <button
+                className="w-full p-4 text-left hover:bg-blue-50/50 rounded-xl transition-colors"
+                onClick={() => {
+                  if (!user.id || user.id === 'undefined' || user.id === 'null') {
+                    alert('이 사용자의 프로필 정보를 찾을 수 없습니다.');
+                    return;
+                  }
+                  navigate(`/profile/${roomId}/${user.id}`);
+                }}
+              >
+                <div className="flex items-center gap-3">
+                  {/* 프로필 이미지 */}
+                  <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-blue-200">
+                    {user.avatar ? (
+                      <img 
+                        src={user.avatar} 
+                        alt={user.name} 
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          e.target.parentElement.innerHTML = `
+                            <div class="w-full h-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-sm font-bold">
+                              ${user.name?.slice(0, 2).toUpperCase() || '?'}
+                            </div>
+                          `;
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-sm font-bold">
+                        {user.name?.slice(0, 2).toUpperCase() || '?'}
                       </div>
-                      
-                      {/* 온라인 상태 표시 */}
+                    )}
+                  </div>
+
+                  {/* 사용자 정보 */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-medium text-blue-800 truncate">{user.name}</span>
+                      {user.isOwner && (
+                        <span className="text-yellow-500 flex-shrink-0 text-lg" title="방장">👑</span>
+                      )}
+                      {user.role === 'admin' && (
+                        <span className="text-blue-500 flex-shrink-0" title="관리자">🛡️</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-blue-600">
+                      <span>시청률 {user.watchRate || 0}%</span>
                       {user.isOnline && (
-                        <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
+                        <span className="flex items-center gap-1">
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          온라인
+                        </span>
                       )}
-                    </div>
-
-                    {/* 사용자 정보 */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium text-gray-800 truncate">{user.name}</span>
-                        {user.isOwner && (
-                          <span className="text-yellow-500 text-lg" title="방장">👑</span>
-                        )}
-                        {user.role === 'admin' && (
-                          <span className="text-blue-500 text-sm" title="관리자">🛡️</span>
-                        )}
-                      </div>
-                      <div className="text-sm text-gray-500 truncate">{user.email}</div>
-                      {user.joinedAt && (
-                        <div className="text-xs text-gray-400 mt-1">
-                          {formatJoinTime(user.joinedAt)} 참여
-                        </div>
-                      )}
-                    </div>
-
-                    {/* 화살표 */}
-                    <div className="text-gray-400 flex-shrink-0">
-                      ›
                     </div>
                   </div>
-                </button>
-              </div>
-            ))}
-          </div>
+
+                  {/* 화살표 */}
+                  <div className="text-blue-400 flex-shrink-0">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </div>
+              </button>
+            </div>
+          ))
         )}
-      </main>
+      </div>
+
+      {/* 하단 여백 */}
+      <div className="h-4"></div>
     </div>
   );
 }

@@ -1,15 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from "react-router-dom";
 import { db, auth } from "../firebase";
 import { collection, onSnapshot, query, orderBy, getDocs } from "firebase/firestore";
 import RoomCard from './ChatList/components/RoomCard';
+import LazyRoomCard from './ChatList/components/LazyRoomCard';
+import VirtualizedRoomList from './ChatList/components/VirtualizedRoomList';
+import { useLazyList } from '../hooks/useIntersectionObserver';
+import { useScrollOptimization } from '../hooks/useScrollTransition';
 
 function AllChatRooms() {
   const navigate = useNavigate();
+  const scrollContainerRef = useRef(null);
+  
+  // 스크롤 최적화 훅
+  const { isPending, deferredUpdate } = useScrollOptimization(scrollContainerRef);
+  
   const [rooms, setRooms] = useState([]);
   const [searchInput, setSearchInput] = useState("");
   const [filter, setFilter] = useState("최신순");
   const [loading, setLoading] = useState(true);
+  const [useVirtualization, setUseVirtualization] = useState(false);
 
   // 채팅방 데이터 실시간 구독
   useEffect(() => {
@@ -105,6 +115,19 @@ function AllChatRooms() {
       return b.sortTimestamp - a.sortTimestamp;
     });
 
+  // 지연 로딩 적용
+  const { 
+    visibleItems: visibleRooms, 
+    hasMore, 
+    isLoading: lazyLoading, 
+    targetRef: loadMoreRef 
+  } = useLazyList(filteredRooms, 10, 5);
+
+  // 가상화 모드 자동 전환 (100개 이상일 때)
+  useEffect(() => {
+    setUseVirtualization(filteredRooms.length > 100);
+  }, [filteredRooms.length]);
+
   return (
     <div className="max-w-md mx-auto bg-[#f7faff] rounded-2xl p-3 min-h-screen flex flex-col">
       {/* 헤더 */}
@@ -119,43 +142,97 @@ function AllChatRooms() {
         <input
           type="text"
           value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
+          onChange={(e) => {
+            const newValue = e.target.value;
+            deferredUpdate(() => setSearchInput(newValue));
+          }}
           placeholder="채팅방 이름, 키워드, #해시태그 검색"
           className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         {searchInput && (
-          <button onClick={() => setSearchInput("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">✕</button>
+          <button onClick={() => deferredUpdate(() => setSearchInput(""))} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">✕</button>
         )}
       </div>
 
       {/* 정렬 */}
       <div className="mb-4">
-        <select value={filter} onChange={(e) => setFilter(e.target.value)} className="w-full px-4 py-2 bg-white rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500">
+        <select 
+          value={filter} 
+          onChange={(e) => {
+            const newFilter = e.target.value;
+            deferredUpdate(() => setFilter(newFilter));
+          }} 
+          className="w-full px-4 py-2 bg-white rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
           <option value="최신순">최신순</option>
           <option value="좋아요순">좋아요순</option>
           <option value="참여인원순">참여인원순</option>
         </select>
       </div>
 
-      <div className="text-sm text-gray-500 mb-2">방 개수: {filteredRooms.length}</div>
+      <div className="flex justify-between items-center mb-2">
+        <div className="text-sm text-gray-500">방 개수: {filteredRooms.length}</div>
+        {filteredRooms.length > 50 && (
+          <button
+            onClick={() => setUseVirtualization(!useVirtualization)}
+            className="text-xs px-2 py-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 transition-colors"
+          >
+            {useVirtualization ? '🚀 가상화 ON' : '⚡ 가상화 OFF'}
+          </button>
+        )}
+      </div>
 
       {/* 리스트 */}
-      <div className="flex-1 overflow-y-auto space-y-3 pb-20">
-        {loading ? (
-          <div className="flex flex-col items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-4"></div><div className="text-gray-500">채팅방을 불러오는 중...</div></div>
-        ) : filteredRooms.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-gray-500">검색 결과가 없습니다</div>
-        ) : (
-          filteredRooms.map((room) => (
-            <RoomCard
+      {loading ? (
+        <div className="flex-1 flex flex-col items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-4"></div>
+          <div className="text-gray-500">채팅방을 불러오는 중...</div>
+        </div>
+      ) : filteredRooms.length === 0 ? (
+        <div className="flex-1 flex flex-col items-center justify-center text-gray-500">
+          검색 결과가 없습니다
+        </div>
+      ) : useVirtualization ? (
+        <VirtualizedRoomList
+          rooms={filteredRooms}
+          onEnter={(id) => navigate(`/chat/${id}`)}
+          variant="all"
+          estimatedSize={120}
+          overscan={8}
+          className={isPending ? 'opacity-90' : ''}
+        />
+      ) : (
+        <div 
+          ref={scrollContainerRef}
+          className="flex-1 overflow-y-auto space-y-3 pb-safe scroll-optimized"
+        >
+          {visibleRooms.map((room) => (
+            <LazyRoomCard
               key={room.id}
               room={room}
               onEnter={(id) => navigate(`/chat/${id}`)}
               variant="all"
+              className={isPending ? 'opacity-90' : ''}
             />
-          ))
-        )}
-      </div>
+          ))}
+          
+          {/* 더 보기 로딩 트리거 */}
+          {hasMore && !loading && (
+            <div ref={loadMoreRef} className="flex justify-center py-4">
+              {lazyLoading ? (
+                <div className="flex items-center gap-2 text-gray-500">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+                  <span className="text-sm">더 많은 채팅방을 불러오는 중...</span>
+                </div>
+              ) : (
+                <div className="text-sm text-gray-400">
+                  {filteredRooms.length - visibleRooms.length}개 더 보기
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

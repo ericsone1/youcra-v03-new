@@ -26,9 +26,13 @@ function ChatRoomHostVideos() {
   // 영상 리스트 실시간 구독
   useEffect(() => {
     if (!roomId) return;
-    const q = query(collection(db, "chatRooms", roomId, "videos"), orderBy("registeredAt", "desc"));
+    const q = query(
+      collection(db, "chatRooms", roomId, "videos"),
+      orderBy("duration", "asc") // Firestore에서 직접 duration 기준 오름차순 정렬
+    );
     const unsub = onSnapshot(q, (snapshot) => {
-      setVideoList(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+      const videosSorted = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      setVideoList(videosSorted);
     });
     return () => unsub();
   }, [roomId]);

@@ -1,13 +1,15 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { auth } from '../../firebase';
 import { useChat } from '../../hooks/useChat';
 import { MessageList } from './MessageList';
+import VirtualizedMessageList from './VirtualizedMessageList';
 import { MessageInput } from './MessageInput';
 
 export function ChatRoom() {
   const { roomId } = useParams();
   const navigate = useNavigate();
+  const [useVirtualization, setUseVirtualization] = useState(false);
   const {
     loading,
     error,
@@ -19,6 +21,11 @@ export function ChatRoom() {
     joinRoom,
     leaveRoom,
   } = useChat(roomId);
+
+  // 가상화 모드 자동 전환 (500개 이상 메시지일 때)
+  useEffect(() => {
+    setUseVirtualization(messages.length > 500);
+  }, [messages.length]);
 
   // 비로그인 접근 제한
   useEffect(() => {
@@ -90,7 +97,7 @@ export function ChatRoom() {
     <div className="flex flex-col h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
       {/* 개선된 상단 바 */}
       <div className="flex items-center justify-between px-4 py-4 bg-white shadow-lg border-b border-gray-200">
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-3 flex-1">
           <button 
             onClick={() => navigate(-1)} 
             className="p-2 text-blue-600 hover:bg-blue-50 rounded-full transition-colors duration-200 flex items-center justify-center"
@@ -100,13 +107,24 @@ export function ChatRoom() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <div>
+          <div className="flex-1">
             <h1 className="font-bold text-lg text-gray-800">
               {roomInfo?.name || "채팅방"}
             </h1>
-            <p className="text-sm text-gray-500">
-              {participants.length}명이 대화 중
-            </p>
+            <div className="flex items-center space-x-2">
+              <p className="text-sm text-gray-500">
+                {participants.length}명이 대화 중 · {messages.length}개 메시지
+              </p>
+              {messages.length > 200 && (
+                <button
+                  onClick={() => setUseVirtualization(!useVirtualization)}
+                  className="text-xs px-2 py-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200 transition-colors"
+                  title={useVirtualization ? '가상화 모드 ON - 성능 최적화 활성화' : '가상화 모드 OFF'}
+                >
+                  {useVirtualization ? '🚀' : '⚡'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
         
@@ -118,7 +136,20 @@ export function ChatRoom() {
       </div>
 
       {/* 메시지 목록 */}
-      <MessageList messages={messages} myJoinedAt={myJoinedAt} />
+      {useVirtualization ? (
+        <VirtualizedMessageList
+          messages={messages.filter(msg => {
+            if (!myJoinedAt) return true;
+            return msg.createdAt?.seconds >= myJoinedAt.seconds;
+          })}
+          currentUser={auth.currentUser}
+          estimatedSize={80}
+          overscan={15}
+          autoScrollToBottom={true}
+        />
+      ) : (
+        <MessageList messages={messages} myJoinedAt={myJoinedAt} />
+      )}
 
       {/* 메시지 입력 */}
       <div className="bg-white border-t border-gray-200 shadow-lg">

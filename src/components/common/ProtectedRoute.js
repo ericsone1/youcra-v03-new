@@ -4,10 +4,17 @@ import { useAuth } from '../../contexts/AuthContext';
 import { LoadingSpinner } from './LoadingSpinner';
 
 export function ProtectedRoute({ children }) {
-  const { currentUser, loading } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
   const location = useLocation();
 
-  // 임시로 모든 라우트 접근 허용 (Google OAuth 제거됨)
-  console.log('🔄 임시 모드: 모든 라우트 접근 허용');
+  if (loading) {
+    return <LoadingSpinner />;
+  }
+
+  if (!isAuthenticated) {
+    // 현재 경로를 redirect 파라미터로 전달하여 로그인 후 원래 페이지로 돌아가기
+    return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname)}`} replace />;
+  }
+
   return children;
 } 

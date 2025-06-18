@@ -1,8 +1,19 @@
 [
   {
-    "origin": ["http://localhost:3000"],
-    "method": ["GET", "POST", "PUT", "DELETE", "HEAD"],
+    "origin": [
+      "http://localhost:3000",
+      "https://youcra-v03.vercel.app",
+      "https://ucrachat.com",
+      "https://*.vercel.app"
+    ],
+    "method": ["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"],
     "maxAgeSeconds": 3600,
-    "responseHeader": ["Content-Type", "Authorization"]
+    "responseHeader": [
+      "Content-Type", 
+      "Authorization",
+      "Access-Control-Allow-Origin",
+      "Access-Control-Allow-Methods",
+      "Access-Control-Allow-Headers"
+    ]
   }
 ]

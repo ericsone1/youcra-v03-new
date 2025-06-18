@@ -92,11 +92,14 @@ function VideoListPage() {
   // 영상 리스트 불러오기
   useEffect(() => {
     if (!roomId) return;
-    const q = query(collection(db, "chatRooms", roomId, "videos"), orderBy("registeredAt", "desc"));
+    const q = query(
+      collection(db, "chatRooms", roomId, "videos"),
+      orderBy("duration", "asc") // Firestore에서 직접 duration 기준 오름차순 정렬
+    );
     const unsub = onSnapshot(q, (snapshot) => {
-      const list = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-      setVideoList(list);
-      setVideoListState(list);
+      const videosSorted = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      setVideoList(videosSorted);
+      setVideoListState(videosSorted);
     });
     return () => unsub();
   }, [roomId]);
@@ -185,14 +188,24 @@ function VideoListPage() {
     setVideoLoading(false);
   };
 
-  // 영상 삭제 (방장만 가능)
+  // 영상 삭제 (방장은 모든 영상, 일반 유저는 자신의 영상만)
   const handleDeleteVideo = async (videoId, videoTitle) => {
-    if (!isOwner) return;
+    // 현재 영상 정보 찾기
+    const video = videoList.find(v => v.id === videoId);
+    if (!video) return;
+    
+    // 권한 체크: 방장이거나 본인이 등록한 영상인 경우만 삭제 가능
+    const canDelete = isOwner || video.registeredBy === auth.currentUser?.email;
+    if (!canDelete) {
+      alert("이 영상을 삭제할 권한이 없습니다.");
+      return;
+    }
     
     if (!window.confirm(`"${videoTitle}" 영상을 삭제하시겠습니까?`)) return;
     
     try {
       await deleteDoc(doc(db, "chatRooms", roomId, "videos", videoId));
+      console.log("영상 삭제 완료:", videoId);
     } catch (error) {
       console.error("영상 삭제 오류:", error);
       alert("영상 삭제 중 오류가 발생했습니다.");

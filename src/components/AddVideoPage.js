@@ -19,11 +19,12 @@ async function fetchYoutubeMeta(videoId) {
     const snippet = data.items[0].snippet;
     const duration = data.items[0].contentDetails.duration;
     let seconds = 0;
-    const match = duration.match(/PT(?:(\d+)M)?(?:(\d+)S)?/);
+    const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
     if (match) {
-      const min = parseInt(match[1] || "0", 10);
-      const sec = parseInt(match[2] || "0", 10);
-      seconds = min * 60 + sec;
+      const hour = parseInt(match[1] || "0", 10);
+      const min = parseInt(match[2] || "0", 10);
+      const sec = parseInt(match[3] || "0", 10);
+      seconds = hour * 3600 + min * 60 + sec;
     }
     return {
       title: snippet.title,

@@ -1,5 +1,35 @@
-import React, { Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
+import React, { Suspense, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate } from "react-router-dom";
+import SettingsPage from "./components/SettingsPage";
+import { useAuth } from "./contexts/AuthContext";
+
+// 공유 링크 처리 컴포넌트
+const SharedLinkHandler = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  useEffect(() => {
+    const urlParams = new URLSearchParams(location.search);
+    const isShared = urlParams.get('shared') === 'true';
+    
+    if (isShared && location.pathname.includes('/chat/')) {
+      // URL에서 방 ID 추출
+      const roomId = location.pathname.split('/chat/')[1];
+      if (roomId) {
+        // 공유된 방 정보를 localStorage에 저장
+        localStorage.setItem('sharedRoomId', roomId);
+        
+        // 로그인하지 않은 상태라면 로그인 페이지로 이동
+        const isLoggedIn = localStorage.getItem('tempUser') || localStorage.getItem('isLoggedOut') !== 'true';
+        if (!isLoggedIn) {
+          navigate('/login?from=shared');
+        }
+      }
+    }
+  }, [location, navigate]);
+  
+  return null;
+};
 
 // 현재 위치를 표시하는 디버그 컴포넌트
 const LocationDisplay = () => {
@@ -11,6 +41,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { ProtectedRoute } from "./components/common/ProtectedRoute";
 import { LoadingSpinner } from "./components/common/LoadingSpinner";
 import Navigation from "./components/common/Navigation";
+import PerformanceMonitor from "./components/common/PerformanceMonitor";
 
 // 컴포넌트 지연 로딩
 import Home from "./components/Home";
@@ -41,6 +72,9 @@ const ChatRoomParticipants = React.lazy(() => import("./components/ChatRoomParti
 const ChatRoomContacts = React.lazy(() => import("./components/ChatRoomContacts"));
 const YouTubeChannelManager = React.lazy(() => import("./components/MyChannel/YouTubeChannelManager"));
 const ChatRoomProfile = React.lazy(() => import("./components/ChatRoomProfile"));
+const MyPointsPage = React.lazy(() => import("./components/MyPointsPage"));
+const MyViewersPage = React.lazy(() => import("./components/MyFeedViewersPage"));
+const MyFeedViewersPage = React.lazy(() => import("./components/MyFeedViewersPage"));
 
 // Fallback 컴포넌트만 유지
 
@@ -69,6 +103,7 @@ function App() {
           {/* 메인 콘텐츠 */}
           <div className="relative z-10 pb-20">
             <LocationDisplay />
+            <SharedLinkHandler />
             <Suspense 
               fallback={
                 <div className="flex items-center justify-center min-h-screen">
@@ -147,7 +182,7 @@ function App() {
                   path="/my/settings"
                   element={
                     <ProtectedRoute>
-                      <FallbackComponent componentName="설정" />
+                      <SettingsPage />
                     </ProtectedRoute>
                   }
                 />
@@ -295,12 +330,43 @@ function App() {
                     </ProtectedRoute>
                   }
                 />
+                <Route
+                  path="/my/points"
+                  element={
+                    <ProtectedRoute>
+                      <MyPointsPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/my/viewers"
+                  element={
+                    <ProtectedRoute>
+                      <MyFeedViewersPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/my/feed-viewers"
+                  element={
+                    <ProtectedRoute>
+                      <MyFeedViewersPage />
+                    </ProtectedRoute>
+                  }
+                />
               </Routes>
             </Suspense>
           </div>
 
           {/* 하단 네비게이션 */}
           <Navigation />
+          
+          {/* 성능 모니터 (개발 모드에서만) */}
+          <PerformanceMonitor 
+            enabled={process.env.NODE_ENV === 'development'}
+            position="bottom-left"
+            minimized={true}
+          />
         </div>
       </Router>
     </AuthProvider>

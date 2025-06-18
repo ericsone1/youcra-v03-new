@@ -8,6 +8,7 @@ import {
   query,
   orderBy,
   onSnapshot,
+  addDoc,
 } from "firebase/firestore";
 
 function UserProfile() {
@@ -21,24 +22,38 @@ function UserProfile() {
   const [activeTab, setActiveTab] = useState('watched'); // 'watched' | 'registered'
   const [myChannel, setMyChannel] = useState(null); // 내 유튜브 채널 정보
   const [isSubscribedToMe, setIsSubscribedToMe] = useState(null); // 상대방이 내 채널 구독 여부
+  const [isOwner, setIsOwner] = useState(false);
 
   // 유저 정보 불러오기
   useEffect(() => {
     async function fetchUser() {
-      console.log('🔍 [프로필] 상대방 사용자 정보 로딩 시작:', uid);
-      const userDoc = await getDoc(doc(db, "users", uid));
-      if (userDoc.exists()) {
-        const userData = userDoc.data();
-        setUser(userData);
-        console.log('✅ [프로필] 상대방 사용자 데이터:', userData);
-        if (userData.youtubeChannel) {
-          console.log('✅ [프로필] 상대방 유튜브 채널:', userData.youtubeChannel);
-        } else {
-          console.log('❌ [프로필] 상대방 유튜브 채널 없음');
-        }
-      } else {
+      // uid 유효성 검사
+      if (!uid || uid === 'undefined' || uid === 'null' || uid.trim() === '') {
+        console.log('❌ [프로필] 유효하지 않은 uid:', uid);
         setUser(null);
-        console.log('❌ [프로필] 상대방 사용자 문서 없음');
+        setLoading(false);
+        return;
+      }
+
+      try {
+        console.log('🔍 [프로필] 상대방 사용자 정보 로딩 시작:', uid);
+        const userDoc = await getDoc(doc(db, "users", uid));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          setUser(userData);
+          console.log('✅ [프로필] 상대방 사용자 데이터:', userData);
+          if (userData.youtubeChannel) {
+            console.log('✅ [프로필] 상대방 유튜브 채널:', userData.youtubeChannel);
+          } else {
+            console.log('❌ [프로필] 상대방 유튜브 채널 없음');
+          }
+        } else {
+          setUser(null);
+          console.log('❌ [프로필] 상대방 사용자 문서 없음 - uid:', uid);
+        }
+      } catch (error) {
+        console.error('❌ [프로필] 사용자 정보 로딩 오류:', error);
+        setUser(null);
       }
     }
     fetchUser();
@@ -56,7 +71,7 @@ function UserProfile() {
       const myUserDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
       if (myUserDoc.exists()) {
         const myData = myUserDoc.data();
-        console.log('🔍 [프로필] 내 사용자 데이터:', myData);
+        console.log('✅ [프로필] 내 사용자 데이터:', myData);
         if (myData.youtubeChannel) {
           setMyChannel(myData.youtubeChannel);
           console.log('✅ [프로필] 내 유튜브 채널 정보 설정:', myData.youtubeChannel);
@@ -144,12 +159,110 @@ function UserProfile() {
     checkSubscription();
   }, [myChannel, user]);
 
+  // 방장 여부 확인
+  useEffect(() => {
+    async function checkOwner() {
+      if (!roomId || !uid) {
+        setIsOwner(false);
+        return;
+      }
+      try {
+        // 방 정보 확인
+        const roomDoc = await getDoc(doc(db, 'chatRooms', roomId));
+        const roomData = roomDoc.exists() ? roomDoc.data() : null;
+        if (roomData && roomData.createdBy === uid) {
+          setIsOwner(true);
+          return;
+        }
+        // participants 서브컬렉션 role 확인
+        const participantDoc = await getDoc(doc(db, 'chatRooms', roomId, 'participants', uid));
+        if (participantDoc.exists()) {
+          const pData = participantDoc.data();
+          if (pData.role === 'owner') {
+            setIsOwner(true);
+            return;
+          }
+        }
+        setIsOwner(false);
+      } catch (err) {
+        console.error('방장 여부 확인 오류:', err);
+        setIsOwner(false);
+      }
+    }
+    checkOwner();
+  }, [roomId, uid]);
+
   useEffect(() => {
     setLoading(false);
   }, [user]);
 
-  if (loading) return <div>로딩 중...</div>;
-  if (!user) return <div>유저 정보를 찾을 수 없습니다.</div>;
+  // 구독 요청 처리
+  const handleSubscribeRequest = async () => {
+    if (!auth.currentUser) {
+      alert("로그인이 필요합니다.");
+      return;
+    }
+
+    try {
+      await addDoc(collection(db, "subscribeRequests"), {
+        fromUid: auth.currentUser.uid,
+        fromName: auth.currentUser.displayName || auth.currentUser.email,
+        toUid: uid,
+        createdAt: new Date(),
+        notified: false,
+      });
+      alert("구독 요청을 보냈습니다!");
+    } catch (err) {
+      console.error("구독 요청 실패", err);
+      alert("구독 요청 중 오류가 발생했습니다.");
+    }
+  };
+
+  if (loading) return (
+    <div className="max-w-md mx-auto bg-white rounded-2xl shadow-lg overflow-hidden min-h-screen flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <div className="text-gray-600">프로필을 불러오는 중...</div>
+      </div>
+    </div>
+  );
+
+  if (!user) return (
+    <div className="max-w-md mx-auto bg-white rounded-2xl shadow-lg overflow-hidden min-h-screen">
+      {/* 상단 헤더 */}
+      <div className="flex items-center justify-between px-4 py-4 border-b">
+        <button 
+          onClick={() => navigate(-1)} 
+          className="text-2xl text-gray-600 hover:text-blue-600 transition-colors" 
+          aria-label="뒤로가기"
+        >
+          ←
+        </button>
+        <h1 className="font-bold text-lg">프로필</h1>
+        <div className="w-8" />
+      </div>
+
+      {/* 오류 메시지 */}
+      <div className="flex flex-col items-center justify-center h-96">
+        <div className="text-6xl mb-4">😵</div>
+        <div className="text-gray-600 text-center px-4">
+          <div className="font-medium mb-2">유저 정보를 찾을 수 없습니다</div>
+          <div className="text-sm text-gray-500 mb-6">
+            다음과 같은 이유일 수 있습니다:<br/>
+            • 사용자가 프로필을 삭제했거나<br/>
+            • 임시 사용자이거나<br/>
+            • 연결 오류가 발생했습니다
+          </div>
+          <button
+            onClick={() => navigate(-1)}
+            className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors"
+          >
+            이전으로 돌아가기
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   // 커버 이미지 (채널 배너 or 그라데이션)
   const coverUrl = user.youtubeChannel?.channelBanner || undefined;
@@ -176,7 +289,12 @@ function UserProfile() {
         </div>
       </div>
       <div className="pt-14 pb-4 text-center">
-        <div className="font-bold text-lg">{user.displayName || user.email}</div>
+        <div className="font-bold text-lg flex items-center justify-center gap-1">
+          {user.displayName || user.email}
+          {isOwner && (
+            <span className="text-yellow-500 text-xl" title="방장">👑</span>
+          )}
+        </div>
         {user.youtubeChannel && (
           <div className="mt-1">
             <div className="flex items-center justify-center gap-2">
@@ -196,9 +314,17 @@ function UserProfile() {
                   </div>
                 )}
                 {isSubscribedToMe === false && (
-                  <div className="flex items-center gap-1 bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs">
-                    <span>📺</span>
-                    <span>내 채널({myChannel.channelTitle}) 미구독</span>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 bg-red-50 text-red-600 px-3 py-1 rounded-full text-xs font-semibold">
+                      <span>❌</span>
+                      <span>내 채널({myChannel.channelTitle}) 미구독</span>
+                    </div>
+                    <button
+                      onClick={handleSubscribeRequest}
+                      className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-full text-xs font-semibold"
+                    >
+                      구독요청
+                    </button>
                   </div>
                 )}
                 {isSubscribedToMe === null && myChannel && (

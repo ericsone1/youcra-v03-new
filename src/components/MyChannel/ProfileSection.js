@@ -22,6 +22,7 @@ const ProfileSection = ({
   handleLogout,
   hasBlog,
   blogLoading,
+  onEditProfile,
   isOverlay = false,
   isKakaoOverlay = false
 }) => {
@@ -41,43 +42,35 @@ const ProfileSection = ({
         
         {/* 프로필 정보 */}
         <div className="flex-1 min-w-0">
-          <div className="text-white text-lg font-bold mb-1">
-            {profile.nickname || user?.displayName || "닉네임 없음"}
+          <div className="flex items-center gap-2 mb-1">
+            <div className="text-white text-lg font-bold">
+              {profile.nickname || user?.displayName || "닉네임 없음"}
+            </div>
+            {/* 편집 버튼 */}
+            <button
+              onClick={onEditProfile}
+              className="text-white text-opacity-80 hover:text-opacity-100 transition-opacity p-1"
+              title="프로필 편집"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+            </button>
           </div>
           <div className="text-white text-opacity-80 text-sm">
             {profile.email || user?.email}
           </div>
+          {/* 자기소개 표시 */}
+          {profile.introduction && (
+            <div className="text-white text-opacity-70 text-sm mt-1 line-clamp-2">
+              {profile.introduction}
+            </div>
+          )}
           {profile.point && (
             <div className="text-white text-opacity-70 text-sm mt-1">
               포인트: {profile.point}
             </div>
           )}
-        </div>
-        
-        {/* 버튼 그룹 */}
-        <div className="flex items-center space-x-2">
-          {/* 로그아웃 버튼 */}
-          <button
-            onClick={handleLogout}
-            className="text-white text-opacity-80 hover:text-opacity-100 transition-opacity p-2"
-            title="로그아웃"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-          </button>
-          
-          {/* 설정 버튼 */}
-          <button
-            onClick={() => navigate('/my/settings')}
-            className="text-white text-opacity-80 hover:text-opacity-100 transition-opacity p-2"
-            title="설정"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </button>
         </div>
       </div>
     );
@@ -175,6 +168,15 @@ const ProfileSection = ({
           )}
         </div>
       </div>
+      
+      {/* 자기소개 - 모바일 최적화 */}
+      {profile.introduction && (
+        <div className={`${isOverlay ? 'text-white text-opacity-80' : 'text-gray-600'} text-xs sm:text-sm mb-3 text-center px-2`}>
+          <div className="line-clamp-3 break-words">
+            {profile.introduction}
+          </div>
+        </div>
+      )}
       
       {/* 포인트 정보 - 모바일 최적화 */}
       <div className="flex gap-4 text-center mb-3 sm:mb-4">

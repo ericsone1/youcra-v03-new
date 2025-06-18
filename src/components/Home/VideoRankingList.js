@@ -38,9 +38,29 @@ function VideoRankingList({
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, delay: 0.2 }}
       >
-        <h3 className="text-lg font-bold text-gray-800 mb-3 text-center">
-          📺 실시간 UCRA 시청순위
-        </h3>
+        {/* 헤더 섹션 */}
+        <div className="bg-gradient-to-r from-purple-600 via-pink-500 to-red-500 rounded-2xl p-6 shadow-xl">
+          <div className="text-center">
+            <div className="flex items-center justify-center mb-3">
+              <div className="bg-white bg-opacity-20 rounded-full p-3 mr-3">
+                <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-2xl font-black text-white leading-tight">
+                  콘텐츠 시청리스트
+                </h2>
+                <p className="text-purple-100 text-sm font-medium mt-1">
+                  📱 UCRA 인기 영상 순위
+                </p>
+              </div>
+            </div>
+            <div className="bg-white bg-opacity-15 rounded-xl px-4 py-2 inline-block">
+              <span className="text-white font-bold text-lg">0개 영상</span>
+            </div>
+          </div>
+        </div>
         
         <div className="card p-8 text-center">
           <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 rounded-full flex items-center justify-center">
@@ -63,14 +83,34 @@ function VideoRankingList({
 
   return (
     <motion.div 
-      className="space-y-3"
+      className="space-y-4"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, delay: 0.2 }}
     >
-      <h3 className="text-lg font-bold text-gray-800 mb-3 text-center">
-        📺 실시간 UCRA 시청순위
-      </h3>
+      {/* 헤더 섹션 - 매우 눈에 띄게 */}
+      <div className="bg-gradient-to-r from-purple-600 via-pink-500 to-red-500 rounded-2xl p-6 shadow-xl">
+        <div className="text-center">
+          <div className="flex items-center justify-center mb-3">
+            <div className="bg-white bg-opacity-20 rounded-full p-3 mr-3">
+              <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+              </svg>
+            </div>
+            <div>
+              <h2 className="text-2xl font-black text-white leading-tight">
+                콘텐츠 시청리스트
+              </h2>
+              <p className="text-purple-100 text-sm font-medium mt-1">
+                📱 UCRA 인기 영상 순위
+              </p>
+            </div>
+          </div>
+          <div className="bg-white bg-opacity-15 rounded-xl px-4 py-2 inline-block">
+            <span className="text-white font-bold text-lg">{filteredVideos.length}개 영상</span>
+          </div>
+        </div>
+      </div>
       
       <div className="space-y-3">
         {filteredVideos.slice(0, visibleCount).map((video, idx) => (
@@ -104,7 +144,7 @@ function VideoRankingList({
           >
             <button
               onClick={() => setVisibleCount(prev => prev + 5)}
-              className="btn-secondary text-sm py-2 px-4"
+              className="bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold py-3 px-6 rounded-xl hover:from-purple-600 hover:to-pink-600 transition-all duration-200 transform hover:scale-105 shadow-lg"
             >
               더 많은 영상 보기 ({filteredVideos.length - visibleCount}개 남음)
             </button>

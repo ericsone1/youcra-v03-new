@@ -22,9 +22,34 @@ export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true); // 초기 로딩 상태
   const [authMethod, setAuthMethod] = useState(null);
+  const [sharedRoomId, setSharedRoomId] = useState(null); // 공유된 방 ID 저장
+
+  // 공유된 방 정보 저장
+  const setSharedRoom = (roomId) => {
+    setSharedRoomId(roomId);
+    if (roomId) {
+      localStorage.setItem('sharedRoomId', roomId);
+    } else {
+      localStorage.removeItem('sharedRoomId');
+    }
+  };
+
+  // 공유된 방 정보 가져오기 및 초기화
+  const getAndClearSharedRoom = () => {
+    const roomId = sharedRoomId || localStorage.getItem('sharedRoomId');
+    setSharedRoomId(null);
+    localStorage.removeItem('sharedRoomId');
+    return roomId;
+  };
 
   // Firebase Auth 상태 감지 및 임시 사용자 관리
   useEffect(() => {
+    // 페이지 로드 시 공유된 방 ID 복원
+    const savedSharedRoomId = localStorage.getItem('sharedRoomId');
+    if (savedSharedRoomId) {
+      setSharedRoomId(savedSharedRoomId);
+    }
+
     // Firebase Auth 상태 감지
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
@@ -153,7 +178,10 @@ export function AuthProvider({ children }) {
     logout,
     emailLogin,
     emailSignup,
-    isAuthenticated: !!currentUser // currentUser가 있으면 true, 없으면 false
+    isAuthenticated: !!currentUser, // currentUser가 있으면 true, 없으면 false
+    sharedRoomId,
+    setSharedRoom,
+    getAndClearSharedRoom
   };
 
   return (

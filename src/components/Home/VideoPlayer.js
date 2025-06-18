@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import YouTube from 'react-youtube';
 import { useNavigate } from 'react-router-dom';
+import formatTime from '../../utils/formatTime';
 
 function VideoPlayer({ 
   video,
@@ -55,10 +56,10 @@ function VideoPlayer({
       <div className="mt-2 flex flex-col gap-2">
         <div className="flex items-center justify-between text-sm">
           <span className="text-blue-600 font-medium">
-            시청 시간: {Math.floor(watchSeconds / 60)}:{(watchSeconds % 60).toString().padStart(2, '0')}
+            시청 시간: {formatTime(watchSeconds)}
           </span>
           <span className="text-gray-500">
-            전체: {Math.floor(videoDuration / 60)}:{(videoDuration % 60).toString().padStart(2, '0')}
+            전체: {formatTime(videoDuration)}
           </span>
         </div>
         
@@ -72,8 +73,8 @@ function VideoPlayer({
         
         {/* 안내 문구 */}
         <div className="text-xs text-gray-500 text-center">
-          {videoDuration >= 180
-            ? `3분 이상 시청 시 인증 가능`
+          {videoDuration > 1800
+            ? `30분 시청 시 인증 가능`
             : `영상 끝까지 시청 시 인증 가능`}
         </div>
         

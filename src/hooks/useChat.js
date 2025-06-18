@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { auth, db } from '../firebase';
 import {
   doc,
@@ -14,6 +14,7 @@ import {
   arrayRemove,
   getDoc
 } from 'firebase/firestore';
+import useNotification from './useNotification';
 
 export function useChat(roomId) {
   const [loading, setLoading] = useState(true);
@@ -22,10 +23,25 @@ export function useChat(roomId) {
   const [messages, setMessages] = useState([]);
   const [participants, setParticipants] = useState([]);
   const [myJoinedAt, setMyJoinedAt] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
+  const notify = useNotification();
+  const prevLastMsgRef = useRef(null);
+
+  // Auth 상태 준비 확인
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      setAuthReady(true);
+      if (!user) {
+        setError('로그인이 필요합니다.');
+        setLoading(false);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   // 채팅방 정보 로드
   useEffect(() => {
-    if (!roomId || !auth.currentUser) return;
+    if (!roomId || !authReady) return;
 
     const roomRef = doc(db, 'chatRooms', roomId);
     
@@ -48,11 +64,11 @@ export function useChat(roomId) {
     );
 
     return () => unsubscribe();
-  }, [roomId]);
+  }, [roomId, authReady]);
 
   // 메시지 로드
   useEffect(() => {
-    if (!roomId || !auth.currentUser) return;
+    if (!roomId || !authReady) return;
 
     const messagesRef = collection(db, 'chatRooms', roomId, 'messages');
     const q = query(messagesRef, orderBy('createdAt', 'desc'), limit(50));
@@ -64,6 +80,22 @@ export function useChat(roomId) {
           newMessages.push({ id: doc.id, ...doc.data() });
         });
         setMessages(newMessages.reverse());
+        
+        // 알림: 새 메시지 감지 (로그인된 사용자만)
+        if (auth.currentUser) {
+          const newest = newMessages[newMessages.length - 1];
+          if (newest && prevLastMsgRef.current) {
+            // 새 메시지가 추가됐는지 판단
+            if (newest.id !== prevLastMsgRef.current.id && newest.uid !== auth.currentUser.uid) {
+              notify('새 메시지', {
+                body: newest.text?.slice(0, 50) || '새 메시지가 도착했습니다',
+                icon: newest.photoURL || '/favicon.ico',
+                tag: roomId
+              });
+            }
+          }
+          if (newest) prevLastMsgRef.current = newest;
+        }
         setError(null);
       },
       (error) => {
@@ -73,7 +105,7 @@ export function useChat(roomId) {
     );
 
     return () => unsubscribe();
-  }, [roomId]);
+  }, [roomId, authReady]);
 
   // 메시지 전송
   const sendMessage = useCallback(async (text) => {
@@ -100,7 +132,6 @@ export function useChat(roomId) {
 
     try {
       const roomRef = doc(db, 'chatRooms', roomId);
-      const timestamp = serverTimestamp();
       
       await updateDoc(roomRef, {
         participants: arrayUnion(auth.currentUser.uid)

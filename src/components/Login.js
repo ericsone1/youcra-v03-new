@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import BottomTabBar from './MyChannel/BottomTabBar';
 
@@ -14,6 +14,20 @@ function Login() {
 
   const { emailLogin, emailSignup } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
+
+  // URL에서 리다이렉트 정보 추출
+  const redirectTo = searchParams.get('redirect') || location.state?.from;
+  const isFromSharedLink = redirectTo && redirectTo.startsWith('/chat/') || localStorage.getItem('sharedRoomId');
+
+  // 공유 링크에서 온 경우 알림 표시
+  useEffect(() => {
+    if (isFromSharedLink) {
+      // 회원가입 모드로 기본 설정 (새 사용자일 가능성이 높음)
+      setIsLogin(false);
+    }
+  }, [isFromSharedLink]);
 
   // 이메일 로그인/회원가입 처리
   const handleSubmit = async (e) => {
@@ -25,7 +39,6 @@ function Login() {
       if (isLogin) {
         // 로그인
         await emailLogin(email, password);
-        navigate('/my');
       } else {
         // 회원가입
         if (password !== confirmPassword) {
@@ -37,6 +50,19 @@ function Login() {
           return;
         }
         await emailSignup(email, password, displayName);
+      }
+      
+      // 로그인/회원가입 성공 후 리다이렉트 처리
+      const sharedRoomId = localStorage.getItem('sharedRoomId');
+      if (sharedRoomId) {
+        // 공유된 방이 있는 경우 해당 방으로 이동
+        localStorage.removeItem('sharedRoomId');
+        navigate(`/chat/${sharedRoomId}`);
+      } else if (redirectTo) {
+        // URL 파라미터로 리다이렉트 정보가 있는 경우
+        navigate(redirectTo);
+      } else {
+        // 기본적으로 마이채널로 이동
         navigate('/my');
       }
     } catch (error) {
@@ -52,7 +78,7 @@ function Login() {
           setError('이미 사용 중인 이메일입니다.');
           break;
         case 'auth/weak-password':
-          setError('비밀번호가 너무 약합니다.');
+          setError('비밀번호가 너무 약습니다.');
           break;
         case 'auth/invalid-email':
           setError('유효하지 않은 이메일 형식입니다.');
@@ -87,6 +113,20 @@ function Login() {
 
       {/* 로그인/회원가입 폼 */}
       <div className="bg-white rounded-2xl shadow-lg p-6 w-full">
+        {/* 공유 링크 안내 메시지 */}
+        {isFromSharedLink && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-2xl">🎉</span>
+              <h3 className="font-bold text-blue-800">채팅방 초대</h3>
+            </div>
+            <p className="text-sm text-blue-700">
+              친구가 채팅방에 초대했어요! <br />
+              {isLogin ? '로그인' : '회원가입'} 후 바로 채팅방에 입장할 수 있습니다.
+            </p>
+          </div>
+        )}
+
         {/* 브랜드 로고 */}
         <div className="text-center mb-6">
           <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-2xl font-bold mx-auto mb-3">

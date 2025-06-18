@@ -105,7 +105,7 @@ function ChatRoomHost() {
   }
 
   return (
-    <div className="max-w-md mx-auto bg-white min-h-screen pb-20">
+    <div className="max-w-md mx-auto bg-white min-h-screen pb-safe">
       <style jsx>{`
         .slider::-webkit-slider-thumb {
           appearance: none;

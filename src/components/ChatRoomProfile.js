@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { db, auth } from "../firebase";
+import { db, auth, storage } from "../firebase";
 import {
   doc,
   getDoc,
@@ -8,7 +8,9 @@ import {
   query,
   orderBy,
   onSnapshot,
+  updateDoc,
 } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 function ChatRoomProfile() {
   const { roomId } = useParams();
@@ -18,6 +20,20 @@ function ChatRoomProfile() {
   const [participants, setParticipants] = useState([]);
   const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  // 수정 모달 상태
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    name: "",
+    description: "",
+    profileImage: "",
+    coverImage: "",
+    roomType: "",
+    isPrivate: false,
+    password: "",
+    hashtags: ""
+  });
+  const [uploading, setUploading] = useState(false);
 
   // 방 정보 및 방장 정보 불러오기
   useEffect(() => {
@@ -110,22 +126,171 @@ function ChatRoomProfile() {
   const roomTypeInfo = getRoomTypeInfo(roomData.roomType);
   const isOwner = auth.currentUser?.uid === roomData.createdBy;
 
+  // 방 정보 수정 모달 열기
+  const openEditModal = () => {
+    const hashtagsString = roomData.hashtags && roomData.hashtags.length > 0 
+      ? roomData.hashtags.map(tag => `#${tag}`).join(' ') 
+      : "";
+    
+    setEditFormData({
+      name: roomData.name || "",
+      description: roomData.description || roomData.desc || "",
+      profileImage: roomData.profileImage || "",
+      coverImage: roomData.coverImage || "",
+      roomType: roomData.roomType || "chat",
+      isPrivate: roomData.isPrivate || false,
+      password: roomData.password || "",
+      hashtags: hashtagsString
+    });
+    setIsEditModalOpen(true);
+  };
+
+  // 이미지 업로드 함수
+  const uploadImage = async (file, path) => {
+    try {
+      const imageRef = ref(storage, `chatrooms/${roomId}/${path}/${Date.now()}_${file.name}`);
+      const snapshot = await uploadBytes(imageRef, file);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      return downloadURL;
+    } catch (error) {
+      console.error("이미지 업로드 실패:", error);
+      throw error;
+    }
+  };
+
+  // 프로필 이미지 변경
+  const handleProfileImageChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert("이미지 크기는 5MB 이하로 업로드해주세요.");
+      return;
+    }
+
+    try {
+      setUploading(true);
+      const imageUrl = await uploadImage(file, "profile");
+      setEditFormData(prev => ({ ...prev, profileImage: imageUrl }));
+    } catch (error) {
+      alert("이미지 업로드에 실패했습니다.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // 커버 이미지 변경
+  const handleCoverImageChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert("이미지 크기는 5MB 이하로 업로드해주세요.");
+      return;
+    }
+
+    try {
+      setUploading(true);
+      const imageUrl = await uploadImage(file, "cover");
+      setEditFormData(prev => ({ ...prev, coverImage: imageUrl }));
+    } catch (error) {
+      alert("이미지 업로드에 실패했습니다.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // 해시태그 파싱 함수
+  const parseHashtags = (text) => {
+    const hashtagRegex = /#[\w가-힣]+/g;
+    const matches = text.match(hashtagRegex);
+    return matches ? matches.map(tag => tag.substring(1).toLowerCase()) : [];
+  };
+
+  // 추천 해시태그 추가
+  const addRecommendedHashtag = (tag) => {
+    const currentTags = parseHashtags(editFormData.hashtags);
+    if (!currentTags.includes(tag.toLowerCase())) {
+      const newHashtags = editFormData.hashtags + (editFormData.hashtags ? " " : "") + "#" + tag;
+      setEditFormData(prev => ({ ...prev, hashtags: newHashtags }));
+    }
+  };
+
+  // 방 정보 저장
+  const handleSaveRoomInfo = async () => {
+    try {
+      setUploading(true);
+      
+      // 유효성 검사
+      if (!editFormData.name.trim()) {
+        alert("방 이름을 입력해주세요.");
+        return;
+      }
+      if (!editFormData.roomType) {
+        alert("방 타입을 선택해주세요.");
+        return;
+      }
+      if (editFormData.isPrivate && !editFormData.password.trim()) {
+        alert("비밀방의 경우 비밀번호를 입력해주세요.");
+        return;
+      }
+      if (editFormData.isPrivate && editFormData.password.length < 4) {
+        alert("비밀번호는 4자리 이상 입력해주세요.");
+        return;
+      }
+
+      const updateData = {
+        name: editFormData.name.trim(),
+        description: editFormData.description.trim(),
+        roomType: editFormData.roomType,
+        isPrivate: editFormData.isPrivate,
+        password: editFormData.isPrivate ? editFormData.password : null,
+        hashtags: parseHashtags(editFormData.hashtags),
+        updatedAt: new Date()
+      };
+
+      if (editFormData.profileImage) {
+        updateData.profileImage = editFormData.profileImage;
+      }
+
+      if (editFormData.coverImage) {
+        updateData.coverImage = editFormData.coverImage;
+      }
+
+      await updateDoc(doc(db, "chatRooms", roomId), updateData);
+      
+      // 로컬 상태 업데이트
+      setRoomData(prev => ({
+        ...prev,
+        ...updateData
+      }));
+      
+      setIsEditModalOpen(false);
+      alert("방 정보가 성공적으로 수정되었습니다!");
+    } catch (error) {
+      console.error("방 정보 수정 실패:", error);
+      alert("방 정보 수정에 실패했습니다.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
   return (
-    <div className="max-w-md mx-auto bg-white rounded-2xl shadow-lg overflow-hidden pb-20">
+    <div className="max-w-md mx-auto bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 min-h-screen pb-safe">
       {/* 상단 헤더 */}
-      <div className="flex items-center justify-between px-4 py-3 border-b bg-white sticky top-0 z-10">
-        <button onClick={() => navigate(-1)} className="text-2xl text-gray-600 hover:text-blue-600">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-blue-200 bg-gradient-to-r from-blue-100 to-indigo-100 sticky top-0 z-10">
+        <button onClick={() => navigate(-1)} className="text-2xl text-blue-600 hover:text-blue-800">
           ←
         </button>
-        <div className="flex-1 text-center font-bold text-lg">채팅방 프로필</div>
+        <div className="flex-1 text-center font-bold text-lg text-blue-800">채팅방 프로필</div>
         <div className="w-8" />
       </div>
 
       {/* 커버 이미지 */}
       <div className="relative h-52 bg-gradient-to-r from-blue-400 to-purple-500">
-        {roomData.youtubeVideoId && (
+        {(roomData.coverImage || roomData.youtubeVideoId) && (
           <img 
-            src={`https://img.youtube.com/vi/${roomData.youtubeVideoId}/maxresdefault.jpg`} 
+            src={roomData.coverImage || `https://img.youtube.com/vi/${roomData.youtubeVideoId}/maxresdefault.jpg`} 
             alt="방 커버" 
             className="w-full h-full object-cover" 
           />
@@ -142,7 +307,21 @@ function ChatRoomProfile() {
 
       {/* 방 정보 */}
       <div className="pt-14 pb-4 text-center px-4">
-        <div className="font-bold text-lg mb-1">{roomData.name}</div>
+        <div className="flex items-center justify-center gap-2 mb-1">
+          <div className="font-bold text-lg">{roomData.name}</div>
+          {/* 방장인 경우 수정 버튼 표시 */}
+          {isOwner && (
+            <button
+              onClick={openEditModal}
+              className="bg-blue-500 text-white w-8 h-8 rounded-full flex items-center justify-center hover:bg-blue-600 transition-colors shadow-sm"
+              title="방 정보 수정"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+            </button>
+          )}
+        </div>
         <div className="text-sm text-gray-500 mb-2">
           {roomTypeInfo.name} • 참여자 {participants.length}명
         </div>
@@ -207,77 +386,324 @@ function ChatRoomProfile() {
 
       {/* 방 통계 */}
       <div className="px-4 mb-4">
-        <div className="bg-gray-50 rounded-xl p-4">
-          <h3 className="font-bold text-gray-800 mb-3 text-center">방 통계</h3>
+        <div className="bg-white/80 backdrop-blur-sm border border-blue-100 rounded-xl shadow-lg p-4">
+          <h3 className="font-bold text-blue-800 mb-3 text-center">방 통계</h3>
           <div className="grid grid-cols-3 gap-4 text-center">
             <div>
               <div className="text-2xl font-bold text-blue-600">{participants.length}</div>
-              <div className="text-xs text-gray-500">참여자</div>
+              <div className="text-xs text-blue-500">참여자</div>
             </div>
             <div>
               <div className="text-2xl font-bold text-purple-600">{videos.length}</div>
-              <div className="text-xs text-gray-500">영상</div>
+              <div className="text-xs text-blue-500">영상</div>
             </div>
             <div>
               <div className="text-2xl font-bold text-green-600">{roomData.viewCount || 0}</div>
-              <div className="text-xs text-gray-500">조회수</div>
+              <div className="text-xs text-blue-500">조회수</div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* 빠른 메뉴 */}
-      <div className="px-4 mb-4">
-        <div className="bg-white rounded-xl border border-gray-200">
-          <div className="px-4 py-3 border-b border-gray-100">
-            <h3 className="font-bold text-gray-800">빠른 메뉴</h3>
-          </div>
-          
-          <button
-            className="flex items-center justify-between w-full px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-100"
-            onClick={() => navigate(`/chat/${roomId}/videos`)}
-          >
-            <div className="flex items-center gap-3">
-              <span className="text-xl">🎬</span>
-              <div>
-                <div className="font-medium text-gray-800 text-left">시청 영상 목록</div>
-                <div className="text-sm text-gray-500">{videos.length}개 영상</div>
-              </div>
-            </div>
-            <span className="text-gray-400">›</span>
-          </button>
-
-          <button
-            className="flex items-center justify-between w-full px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-100"
-            onClick={() => navigate(`/chat/${roomId}/menu`)}
-          >
-            <div className="flex items-center gap-3">
-              <span className="text-xl">👥</span>
-              <div>
-                <div className="font-medium text-gray-800 text-left">참여자 목록</div>
-                <div className="text-sm text-gray-500">{participants.length}명 참여중</div>
-              </div>
-            </div>
-            <span className="text-gray-400">›</span>
-          </button>
-
-          {isOwner && (
+      {/* 방장 전용 관리 메뉴 */}
+      {isOwner && (
+        <div className="px-4 mb-4">
+          <div className="bg-white/80 backdrop-blur-sm border border-blue-100 rounded-xl shadow-lg">
             <button
-              className="flex items-center justify-between w-full px-4 py-3 hover:bg-gray-50 transition-colors"
+              className="flex items-center justify-between w-full px-4 py-3 hover:bg-blue-50/50 transition-colors"
               onClick={() => navigate(`/chat/${roomId}/manage`)}
             >
               <div className="flex items-center gap-3">
                 <span className="text-xl">⚙️</span>
                 <div>
-                  <div className="font-medium text-gray-800 text-left">방 관리</div>
-                  <div className="text-sm text-gray-500">방장 전용</div>
+                  <div className="font-medium text-blue-800 text-left">방 관리</div>
+                  <div className="text-sm text-blue-600">방장 전용</div>
                 </div>
               </div>
-              <span className="text-gray-400">›</span>
+              <span className="text-blue-400">›</span>
             </button>
-          )}
+          </div>
         </div>
-      </div>
+      )}
+
+      {/* 방 정보 수정 모달 */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white/95 backdrop-blur rounded-2xl max-w-md w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-blue-200">
+            <div className="sticky top-0 bg-gradient-to-r from-blue-100 to-indigo-100 border-b border-blue-200 px-6 py-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold">방 정보 수정</h2>
+                <button
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="text-gray-500 hover:text-gray-700 text-2xl"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              {/* 방 타입 선택 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  🏷️ 방 타입 선택 (필수)
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: "collaboration", name: "🤝 협업방", desc: "프로젝트나 스터디를 함께해요" },
+                    { id: "subscribe", name: "📺 맞구독방", desc: "서로 구독하며 소통해요" },
+                    { id: "youtube", name: "🎬 YouTube 시청방", desc: "영상을 함께 시청해요" },
+                    { id: "gaming", name: "🎮 게임방", desc: "게임 이야기를 나눠요" },
+                    { id: "study", name: "📚 스터디방", desc: "함께 공부해요" },
+                    { id: "chat", name: "💬 자유채팅방", desc: "자유롭게 대화해요" },
+                    { id: "fan", name: "⭐ 팬클럽방", desc: "팬들끼리 모여요" },
+                    { id: "event", name: "🎉 이벤트방", desc: "특별한 이벤트를 진행해요" }
+                  ].map((type) => (
+                    <button
+                      key={type.id}
+                      type="button"
+                      onClick={() => setEditFormData(prev => ({ ...prev, roomType: type.id }))}
+                      className={`p-3 rounded-lg border-2 text-left transition-all ${
+                        editFormData.roomType === type.id
+                          ? 'border-blue-500 bg-blue-50 text-blue-700'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                      disabled={uploading}
+                    >
+                      <div className="font-medium text-xs">{type.name}</div>
+                      <div className="text-xs text-gray-500 mt-1">{type.desc}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 공개/비밀방 설정 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  🔒 방 공개 설정
+                </label>
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditFormData(prev => ({ ...prev, isPrivate: false, password: "" }))}
+                    className={`w-full p-3 rounded-lg border-2 text-left transition-all ${
+                      !editFormData.isPrivate
+                        ? 'border-green-500 bg-green-50 text-green-700'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                    disabled={uploading}
+                  >
+                    <div className="font-medium text-sm">🌍 공개방</div>
+                    <div className="text-xs text-gray-500 mt-1">누구나 참여할 수 있어요</div>
+                  </button>
+                  
+                  <button
+                    type="button"
+                    onClick={() => setEditFormData(prev => ({ ...prev, isPrivate: true }))}
+                    className={`w-full p-3 rounded-lg border-2 text-left transition-all ${
+                      editFormData.isPrivate
+                        ? 'border-red-500 bg-red-50 text-red-700'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                    disabled={uploading}
+                  >
+                    <div className="font-medium text-sm">🔐 비밀방</div>
+                    <div className="text-xs text-gray-500 mt-1">비밀번호가 있어야 참여할 수 있어요</div>
+                  </button>
+                </div>
+
+                {/* 비밀번호 입력 (비밀방 선택 시만 표시) */}
+                {editFormData.isPrivate && (
+                  <div className="mt-3">
+                    <input
+                      type="password"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-base focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="비밀번호 (4자리 이상)"
+                      value={editFormData.password}
+                      onChange={(e) => setEditFormData(prev => ({ ...prev, password: e.target.value }))}
+                      maxLength={20}
+                      disabled={uploading}
+                    />
+                    <div className="text-xs text-gray-400 mt-1">
+                      * 비밀번호는 방 입장 시 필요합니다 ({editFormData.password.length}/20)
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 방 이름 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  방 이름 (필수)
+                </label>
+                <input
+                  type="text"
+                  value={editFormData.name}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, name: e.target.value }))}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="방 이름을 입력하세요"
+                  maxLength={30}
+                />
+                <div className="text-xs text-gray-400 text-right mt-1">{editFormData.name.length}/30</div>
+              </div>
+
+              {/* 방 설명 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  방 설명
+                </label>
+                <textarea
+                  value={editFormData.description}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, description: e.target.value }))}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                  placeholder="방 설명을 입력하세요"
+                  rows={3}
+                  maxLength={200}
+                />
+                <div className="text-xs text-gray-400 text-right mt-1">{editFormData.description.length}/200</div>
+              </div>
+
+              {/* 해시태그 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  🏷️ 해시태그
+                </label>
+                <input
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="#게임 #음악 #일상 (띄어쓰기로 구분)"
+                  value={editFormData.hashtags}
+                  onChange={(e) => setEditFormData(prev => ({ ...prev, hashtags: e.target.value }))}
+                  maxLength={100}
+                  disabled={uploading}
+                />
+                <div className="text-xs text-gray-400 text-right mb-3">{editFormData.hashtags.length}/100</div>
+                
+                {/* 현재 입력된 해시태그 미리보기 */}
+                {editFormData.hashtags && (
+                  <div className="mb-3">
+                    <div className="text-xs text-gray-600 mb-1">입력된 태그:</div>
+                    <div className="flex flex-wrap gap-1">
+                      {parseHashtags(editFormData.hashtags).map((tag, idx) => (
+                        <span key={idx} className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* 추천 해시태그 */}
+                <div>
+                  <div className="text-xs text-gray-600 mb-2">인기 태그:</div>
+                  <div className="flex flex-wrap gap-1">
+                    {["게임", "음악", "영화", "드라마", "애니", "먹방", "여행", "일상", "스포츠", "공부", "취업", "연애", "친구", "힐링", "수다", "토론"].map((tag, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => addRecommendedHashtag(tag)}
+                        className="bg-gray-100 hover:bg-blue-100 text-gray-700 hover:text-blue-800 px-2 py-1 rounded-full text-xs transition-colors duration-200"
+                        disabled={uploading}
+                      >
+                        #{tag}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* 프로필 이미지 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  프로필 이미지
+                </label>
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-full border border-gray-300 flex items-center justify-center overflow-hidden bg-gray-100">
+                    {editFormData.profileImage ? (
+                      <img 
+                        src={editFormData.profileImage} 
+                        alt="프로필 미리보기" 
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-2xl">📷</span>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleProfileImageChange}
+                      className="hidden"
+                      id="profile-image-input"
+                    />
+                    <label
+                      htmlFor="profile-image-input"
+                      className="inline-block bg-gray-100 text-gray-700 px-4 py-2 rounded-lg cursor-pointer hover:bg-gray-200 transition-colors text-sm"
+                    >
+                      이미지 선택
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* 커버 이미지 */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  커버 이미지
+                </label>
+                <div className="space-y-3">
+                  <div className="w-full h-24 rounded-lg border border-gray-300 flex items-center justify-center overflow-hidden bg-gray-100">
+                    {editFormData.coverImage ? (
+                      <img 
+                        src={editFormData.coverImage} 
+                        alt="커버 미리보기" 
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-2xl">🖼️</span>
+                    )}
+                  </div>
+                  <div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleCoverImageChange}
+                      className="hidden"
+                      id="cover-image-input"
+                    />
+                    <label
+                      htmlFor="cover-image-input"
+                      className="inline-block bg-gray-100 text-gray-700 px-4 py-2 rounded-lg cursor-pointer hover:bg-gray-200 transition-colors text-sm"
+                    >
+                      이미지 선택
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 모달 하단 버튼 */}
+            <div className="sticky bottom-0 bg-white border-t px-6 py-4">
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+                  disabled={uploading}
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleSaveRoomInfo}
+                  disabled={uploading || !editFormData.name.trim() || !editFormData.roomType}
+                  className="flex-1 bg-blue-500 text-white py-3 rounded-lg font-medium hover:bg-blue-600 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                >
+                  {uploading ? "저장 중..." : "저장"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,17 +1,20 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from '../contexts/AuthContext';
 import { useProfile } from './MyChannel/hooks/useProfile';
 import CoverImageSection from './MyChannel/CoverImageSection';
 import ProfileSection from './MyChannel/ProfileSection';
 import VideoListSection from './MyChannel/VideoListSection';
-import BottomTabBar from './MyChannel/BottomTabBar';
 import YouTubeChannelManager from './MyChannel/YouTubeChannelManager';
+import ProfileEditModal from './MyChannel/ProfileEditModal';
 
 function MyChannel() {
   const { currentUser, logout, loading, isAuthenticated } = useAuth();
   const user = currentUser;
   const navigate = useNavigate();
+  
+  // 프로필 편집 모달 상태
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   // 커스텀 훅 사용
   const profileData = useProfile(user);
@@ -20,6 +23,14 @@ function MyChannel() {
   const handleLogout = async () => {
     await logout();
     // 마이채널 페이지에 머물러서 다른 계정으로 로그인 가능하도록 함
+  };
+
+  // 프로필 업데이트 핸들러
+  const handleProfileUpdate = (updatedProfile) => {
+    // 프로필 상태 업데이트
+    if (profileData.setProfile) {
+      profileData.setProfile(updatedProfile);
+    }
   };
 
   // 시간 포맷 (혹시 필요한 경우를 위해 남겨둠)
@@ -47,7 +58,6 @@ function MyChannel() {
       <div className="min-h-screen bg-blue-50 flex flex-col items-center justify-center pb-20 max-w-md mx-auto">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mb-4"></div>
         <p className="text-gray-600">로딩 중...</p>
-        <BottomTabBar />
       </div>
     );
   }
@@ -84,8 +94,6 @@ function MyChannel() {
             </Link>
           </div>
         </div>
-
-        <BottomTabBar />
       </div>
     );
   }
@@ -108,16 +116,18 @@ function MyChannel() {
               {...profileData}
               user={user}
               handleLogout={handleLogout}
+              onEditProfile={() => setIsEditModalOpen(true)}
               isKakaoOverlay={true}
             />
           </div>
         </div>
+        
+
       </div>
 
-      {/* 6개 메뉴 버튼 섹션 (커버이미지 바로 아래) */}
+      {/* 3개 메뉴 버튼 섹션 (커버이미지 바로 아래) */}
       <div className="bg-white px-4 py-6">
         <div className="grid grid-cols-3 gap-4">
-          {/* 첫 번째 줄 */}
           <button 
             onClick={() => {
               console.log('📺 내 유튜브 버튼 클릭!');
@@ -131,36 +141,13 @@ function MyChannel() {
           </button>
           
           <button 
-            onClick={() => navigate('/my/blog')}
+            onClick={() => {
+              alert('📝 블로그 기능 구현 예정입니다!\n\n곧 멋진 블로그 기능을 만나보실 수 있습니다. 😊');
+            }}
             className="flex flex-col items-center p-4 bg-blue-50 rounded-xl hover:bg-blue-100 transition-colors"
           >
             <div className="text-2xl mb-2">📝</div>
             <span className="text-xs font-medium text-gray-700">내 블로그</span>
-          </button>
-          
-          <button 
-            onClick={() => navigate('/chat')}
-            className="flex flex-col items-center p-4 bg-purple-50 rounded-xl hover:bg-purple-100 transition-colors"
-          >
-            <div className="text-2xl mb-2">💬</div>
-            <span className="text-xs font-medium text-gray-700">내 채팅방</span>
-          </button>
-          
-          {/* 두 번째 줄 */}
-          <button 
-            onClick={() => navigate('/my/stats')}
-            className="flex flex-col items-center p-4 bg-green-50 rounded-xl hover:bg-green-100 transition-colors"
-          >
-            <div className="text-2xl mb-2">📊</div>
-            <span className="text-xs font-medium text-gray-700">통계</span>
-          </button>
-          
-          <button 
-            onClick={() => navigate('/my/youtube-channel')}
-            className="flex flex-col items-center p-4 bg-yellow-50 rounded-xl hover:bg-yellow-100 transition-colors"
-          >
-            <div className="text-2xl mb-2">🔗</div>
-            <span className="text-xs font-medium text-gray-700">채널관리</span>
           </button>
           
           <button 
@@ -170,6 +157,23 @@ function MyChannel() {
             <div className="text-2xl mb-2">⚙️</div>
             <span className="text-xs font-medium text-gray-700">설정</span>
           </button>
+
+          {/* 두 번째 줄 */}
+          <button 
+            onClick={() => navigate('/my/points')}
+            className="flex flex-col items-center p-4 bg-green-50 rounded-xl hover:bg-green-100 transition-colors"
+          >
+            <div className="text-2xl mb-2">💎</div>
+            <span className="text-xs font-medium text-gray-700">내 포인트</span>
+          </button>
+
+          <button 
+            onClick={() => navigate('/my/viewers')}
+            className="flex flex-col items-center p-4 bg-purple-50 rounded-xl hover:bg-purple-100 transition-colors"
+          >
+            <div className="text-2xl mb-2">👥</div>
+            <span className="text-xs font-medium text-gray-700">내 시청자</span>
+          </button>
         </div>
       </div>
 
@@ -178,8 +182,28 @@ function MyChannel() {
       <VideoListSection />
       </div> */}
 
-      {/* 하단 탭바 */}
-      <BottomTabBar />
+      {/* 로그아웃 버튼 */}
+      <div className="mt-6 px-4 pb-6">
+        <button
+          onClick={handleLogout}
+          className="w-full bg-red-500 hover:bg-red-600 active:bg-red-700 text-white py-4 px-6 rounded-xl font-bold text-base transition-all duration-200 shadow-lg flex items-center justify-center gap-3"
+        >
+          <span className="text-xl">🚪</span>
+          <span>로그아웃</span>
+        </button>
+        <p className="text-center text-xs text-gray-500 mt-2">
+          로그아웃 후 다른 계정으로 로그인할 수 있습니다
+        </p>
+      </div>
+
+      {/* 프로필 편집 모달 */}
+      <ProfileEditModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        user={user}
+        profile={profileData.profile}
+        onProfileUpdate={handleProfileUpdate}
+      />
     </div>
   );
 }

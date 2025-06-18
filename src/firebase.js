@@ -44,6 +44,29 @@ try {
 
 export { storage };
 
+// Storage 업로드 헬퍼 함수 (타임아웃 및 에러 핸들링 포함)
+export const uploadFileWithTimeout = async (file, path, timeoutMs = 30000) => {
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error('업로드 타임아웃: 30초 초과'));
+    }, timeoutMs);
+
+    const { uploadBytes, ref } = require('firebase/storage');
+    const storageRef = ref(storage, path);
+    
+    uploadBytes(storageRef, file)
+      .then((snapshot) => {
+        clearTimeout(timeoutId);
+        resolve(snapshot);
+      })
+      .catch((error) => {
+        clearTimeout(timeoutId);
+        console.error('Storage 업로드 오류:', error);
+        reject(error);
+      });
+  });
+};
+
 // CORS 문제 해결을 위한 Storage 설정
 if (process.env.NODE_ENV === 'development') {
   console.log('🔧 개발 환경에서 Firebase Storage CORS 설정 완료');

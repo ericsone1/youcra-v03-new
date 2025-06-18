@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { doc, getDoc, collection, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, collection, onSnapshot, deleteDoc, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { 
   IoChatbubbleEllipsesOutline, 
@@ -28,6 +28,8 @@ export default function ChatRoomInfo() {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
   const [passwordError, setPasswordError] = useState("");
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [leaving, setLeaving] = useState(false);
 
   const isOwner = roomData?.createdBy === currentUser?.uid;
 
@@ -100,6 +102,40 @@ export default function ChatRoomInfo() {
     }
   };
 
+  // 채팅방 나가기 함수 추가
+  const handleLeaveRoom = async () => {
+    if (!currentUser) return;
+    
+    try {
+      setLeaving(true);
+      
+      // 참여자 목록에서 제거
+      await deleteDoc(doc(db, 'chatRooms', roomId, 'participants', currentUser.uid));
+      
+      // 시스템 메시지 추가
+      const nick = currentUser.displayName || currentUser.email?.split('@')[0] || '익명';
+      await addDoc(collection(db, 'chatRooms', roomId, 'messages'), {
+        text: `${nick}님이 퇴장하셨습니다.`,
+        system: true,
+        action: 'exit',
+        uid: 'system',
+        createdAt: serverTimestamp()
+      });
+      
+      // 세션 스토리지 정리
+      sessionStorage.removeItem(`room_${roomId}_entered`);
+      
+      // 채팅방 목록으로 이동
+      navigate('/chat');
+    } catch (error) {
+      console.error('채팅방 나가기 실패:', error);
+      alert('채팅방 나가기에 실패했습니다. 다시 시도해주세요.');
+    } finally {
+      setLeaving(false);
+      setShowLeaveModal(false);
+    }
+  };
+
   useEffect(() => {
     if (!roomId || !currentUser) return;
 
@@ -145,7 +181,8 @@ export default function ChatRoomInfo() {
                     joinedAt: participantData.joinedAt,
                     role: participantData.role || 'member',
                     isOwner: participantData.role === 'owner' || uid === roomData?.createdBy,
-                    isOnline: participantData.isOnline || false
+                    isOnline: participantData.isOnline || false,
+                    watchRate: participantData.watchRate || 0
                   };
                 } else {
                   console.log('🔍 [방정보] 사용자 문서 없음:', uid);
@@ -164,7 +201,8 @@ export default function ChatRoomInfo() {
                 joinedAt: participantData.joinedAt,
                 role: participantData.role || 'member',
                 isOwner: participantData.role === 'owner',
-                isOnline: participantData.isOnline || false
+                isOnline: participantData.isOnline || false,
+                watchRate: participantData.watchRate || 0
               };
             })
           );
@@ -230,226 +268,211 @@ export default function ChatRoomInfo() {
   const roomTypeInfo = getRoomTypeInfo(roomData?.roomType);
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
-      {/* 상단 헤더 */}
-      <div className="bg-white border-b sticky top-0 z-10">
-        <div className="flex items-center justify-between px-4 py-4">
-            <button 
-            onClick={() => navigate(`/chat/${roomId}`)} 
-            className="text-2xl text-gray-600 hover:text-blue-600"
-            aria-label="뒤로가기"
-            >
-              ←
-            </button>
-          <h1 className="flex-1 text-center font-bold text-lg">채팅방 정보</h1>
-          <div style={{ width: 32 }} />
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 pb-safe">
+      {/* 헤더 */}
+      <div className="bg-gradient-to-r from-blue-100 to-indigo-100 border-b border-blue-200 sticky top-0 z-10">
+        <div className="flex items-center justify-between px-4 py-4 max-w-md mx-auto">
+          <button 
+            onClick={() => navigate(-1)}
+            className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-200 rounded-full transition-colors"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <h1 className="text-lg font-bold text-blue-800">채팅방 정보</h1>
+          <div className="w-10"></div>
         </div>
-          </div>
+      </div>
 
-      <div className="max-w-md mx-auto">
-        {/* 방 프로필 섹션 */}
-        <div className="bg-white mb-4">
-          <div className="flex flex-col items-center py-8">
-            <img 
-              src={roomData?.profileImage || "https://picsum.photos/seed/chatroom/120/120"} 
-              alt="방 프로필" 
-              className="w-24 h-24 rounded-full mb-4 border-4 border-blue-200" 
-            />
-            <div className="font-bold text-xl mb-2 flex items-center gap-2">
-              {roomData?.name || `채팅방 ${roomId?.slice(0, 8)}`}
-              {isOwner && <span title="방장" className="text-yellow-500 text-2xl">👑</span>}
+      <div className="max-w-md mx-auto px-4 py-6 space-y-4">
+        {/* 채팅방 프로필 섹션 */}
+        <div className="bg-white/80 backdrop-blur-sm border border-blue-100 rounded-2xl shadow-lg mb-4">
+          <div className="text-center p-6">
+            {/* 채팅방 이미지 */}
+            <div className="w-24 h-24 rounded-full mx-auto mb-4 overflow-hidden shadow-lg border-4 border-blue-200">
+              <img 
+                src={roomData?.imageUrl || `https://picsum.photos/seed/${roomId}/200/200`}
+                alt="채팅방 이미지"
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  e.target.parentElement.innerHTML = `
+                    <div class="w-full h-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-2xl font-bold">
+                      ${roomData?.name?.slice(0, 2).toUpperCase() || '💬'}
+                    </div>
+                  `;
+                }}
+              />
             </div>
-            <div className="text-gray-500 text-sm">참여자 {participants.length}명</div>
-            {(roomData?.description || roomData?.desc) && (
-              <div className="text-gray-600 text-sm mt-2 text-center px-4">
-                {roomData.description || roomData.desc}
-              </div>
-            )}
+            
+            <h2 className="text-xl font-bold text-blue-800 mb-2">{roomData?.name}</h2>
+            <p className="text-blue-600 text-sm mb-4">참여자 {participants.length}명</p>
+            <p className="text-blue-700 text-sm leading-relaxed">
+              {roomData?.description || "새로 구독하며 소통하여 환영합니다! 함께 즐거운 시간을 보내요 🎉"}
+            </p>
           </div>
         </div>
 
         {/* 콘텐츠 시청리스트 */}
-        <div className="bg-white mb-4 p-4">
-                  <button 
-            className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white font-bold py-4 px-6 rounded-xl hover:from-blue-600 hover:to-purple-700 transition-all shadow-lg flex items-center justify-center gap-3"
-            onClick={() => navigate(`/chat/${roomId}/videos`)}
-                  >
-            <span className="text-xl">🎬</span>
-            <span>콘텐츠 시청리스트</span>
-            <span className="text-sm opacity-80">({videoList.length})</span>
-                  </button>
-          </div>
-
-        {/* 방장 전용 메뉴 */}
-        {isOwner && (
-          <div className="bg-white mb-4 p-4">
-            <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 rounded-xl p-4">
-              <div className="text-center mb-3">
-                <span className="text-yellow-600 font-bold text-sm">👑 방장 전용 메뉴</span>
+        <div className="bg-gradient-to-r from-purple-600 via-pink-500 to-red-500 rounded-2xl shadow-xl mb-4 p-6">
+          <div className="text-center">
+            <div className="flex items-center justify-center mb-3">
+              <div className="bg-white bg-opacity-20 rounded-full p-3 mr-3">
+                <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+                </svg>
               </div>
-              <button
-                className="w-full bg-purple-500 text-white font-bold py-3 px-4 rounded-xl hover:bg-purple-600 text-sm transition-all"
+              <div>
+                <h3 className="text-2xl font-black text-white leading-tight">
+                  콘텐츠 시청리스트
+                </h3>
+                <p className="text-purple-100 text-sm font-medium mt-1">
+                  📱 채팅방 영상 모음
+                </p>
+              </div>
+            </div>
+            <div className="bg-white bg-opacity-15 rounded-xl px-4 py-2 inline-block mb-3">
+              <span className="text-white font-bold text-lg">{videoList.length}개 영상</span>
+            </div>
+            <button
+              onClick={() => navigate(`/chat/${roomId}/videos`)}
+              className="w-full bg-white bg-opacity-20 hover:bg-opacity-30 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-200 transform hover:scale-105 backdrop-blur-sm"
+            >
+              영상 목록 보기 →
+            </button>
+          </div>
+        </div>
+
+        {/* 방 참여 인원 */}
+        <div className="bg-white/80 backdrop-blur-sm border border-blue-100 rounded-2xl shadow-lg mb-4 p-4">
+          <h3 className="text-lg font-bold text-blue-800 mb-4 flex items-center gap-2">
+            <span className="text-xl">👥</span>
+            방 참여 인원
+          </h3>
+          <p className="text-blue-600 text-sm mb-4">이 채팅방에 참여한 멤버들을 확인할 수 있습니다</p>
+        </div>
+
+        {/* 참여자 목록 */}
+        <div className="bg-white/80 backdrop-blur-sm border border-blue-100 rounded-2xl shadow-lg">
+          {participants.map((participant) => (
+            <div 
+              key={participant.id} 
+              className="px-6 py-4 hover:bg-blue-50/50 transition-colors border-b border-blue-100 last:border-b-0"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-blue-200">
+                    <img 
+                      src={`https://picsum.photos/seed/${participant.uid}/100/100`}
+                      alt="프로필"
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                        e.target.parentElement.innerHTML = `
+                          <div class="w-full h-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white text-xs font-bold">
+                            ${(participant.name || participant.email?.split('@')[0] || '익명').slice(0, 2).toUpperCase()}
+                          </div>
+                        `;
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <div className="font-medium text-blue-800">
+                      {participant.name || participant.email?.split('@')[0] || '익명'}
+                      <span className="ml-2 text-sm text-blue-500">시청률 {participant.watchRate ?? 0}%</span>
+                    </div>
+                    {participant.role === 'host' && (
+                      <span className="text-xs bg-gradient-to-r from-yellow-400 to-orange-400 text-white px-2 py-1 rounded-full font-medium">
+                        👑 방장
+                      </span>
+                    )}
+                  </div>
+                </div>
+                
+                <button
+                  onClick={() => navigate(`/profile/${roomId}/${participant.id}`)}
+                  className="p-2 text-blue-400 hover:text-blue-600 hover:bg-blue-100 rounded-full transition-colors"
+                  title="프로필 보기"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* 관리자 메뉴 */}
+        {isOwner && (
+          <div className="bg-white/80 backdrop-blur-sm border border-blue-100 rounded-2xl shadow-lg">
+            <div className="p-4 border-b border-blue-100">
+              <h3 className="text-lg font-bold text-blue-800 flex items-center gap-2">
+                <span className="text-xl">⚙️</span>
+                방장 메뉴
+              </h3>
+            </div>
+            
+            <div className="p-4 space-y-2">
+              <button 
                 onClick={() => navigate(`/chat/${roomId}/manage`)}
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-blue-50 rounded-xl transition-colors text-left"
               >
-                ⚙️ 방 관리
+                <div className="flex items-center gap-3">
+                  <span className="text-lg">🛠️</span>
+                  <span className="text-blue-800 font-medium">채팅방 관리</span>
+                </div>
+                <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
               </button>
             </div>
           </div>
         )}
 
-        {/* 참여자 목록 */}
-        <div className="bg-white mb-4">
-          <div className="px-6 py-4 border-b border-gray-100">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">👥</span>
-              <span className="font-medium text-gray-800">방 참여 인원</span>
-            </div>
-          </div>
-          
-          {participants.length === 0 ? (
-            <div className="px-6 py-8 text-center text-gray-500">
-              <div className="text-4xl mb-2">👥</div>
-              <div className="text-sm">아직 참여자가 없습니다</div>
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-100">
-              {participants.map((participant) => (
-                <div key={participant.id} className="px-6 py-4 hover:bg-gray-50 transition-colors">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      {/* 프로필 이미지 */}
-                      <div className="relative">
-                        {participant.avatar ? (
-                          <img 
-                            src={participant.avatar} 
-                            alt={participant.name} 
-                            className="w-10 h-10 rounded-full object-cover border-2 border-gray-200"
-                            onError={(e) => {
-                              e.target.style.display = 'none';
-                              e.target.nextElementSibling.style.display = 'flex';
-                            }}
-                          />
-                        ) : null}
-                        <div 
-                          className={`w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500 flex items-center justify-center text-white text-sm font-bold ${participant.avatar ? 'hidden' : 'flex'}`}
-                        >
-                          {participant.name?.slice(0, 2).toUpperCase() || '?'}
-                        </div>
-                        
-                        {/* 온라인 상태 표시 */}
-                        {participant.isOnline && (
-                          <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
-                        )}
-                      </div>
-
-                      {/* 사용자 정보 */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-gray-800 truncate">{participant.name}</span>
-                          {participant.isOwner && (
-                            <span className="text-yellow-500 text-lg" title="방장">👑</span>
-                          )}
-                          {participant.role === 'admin' && (
-                            <span className="text-blue-500 text-sm" title="관리자">🛡️</span>
-                          )}
-                        </div>
-                        <div className="text-sm text-gray-500 truncate">{participant.email}</div>
-                      </div>
-                    </div>
-
-                    {/* 액션 버튼 */}
-                    <button
-                      className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // TODO: 유저별 메뉴 액션 구현
-                        console.log('유저 메뉴 클릭:', participant.name);
-                        alert(`${participant.name}님의 메뉴 (구현 예정)`);
-                      }}
-                    >
-                      <span className="text-lg">⋮</span>
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* 기타 메뉴 */}
-        <div className="bg-white">
-          <MenuItem 
-            icon="📺" 
-            label="실시간 시청" 
-            subtitle={`${videoList.length}개 영상`}
-            onClick={() => navigate(`/chat/${roomId}/videos`)} 
-          />
-        </div>
-
-        {/* 하단 버튼 */}
-        <div className="bg-white mt-4 p-4">
-          <button 
-            onClick={handleJoinRoom}
-            className="w-full text-blue-600 font-bold py-3 rounded-lg hover:bg-blue-50 transition-colors"
+        {/* 채팅방 나가기 */}
+        <div className="bg-white/80 backdrop-blur-sm border border-red-200 rounded-2xl shadow-lg">
+          <button
+            onClick={() => setShowLeaveModal(true)}
+            className="w-full p-4 text-red-600 hover:bg-red-50 rounded-2xl transition-colors flex items-center justify-center gap-2 font-medium"
           >
-            💬 채팅방으로 돌아가기
+            <span className="text-lg">🚪</span>
+            채팅방 나가기
           </button>
         </div>
       </div>
 
-      {/* 비밀번호 입력 모달 */}
-      {showPasswordModal && (
-        <div className="fixed inset-0 z-70 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <IoLockClosedOutline className="text-red-500" size={32} />
-              </div>
-              <h3 className="text-xl font-bold mb-2">비밀방 입장</h3>
-              <p className="text-gray-600 text-sm">비밀번호를 입력해주세요</p>
-            </div>
-            
-            <div className="space-y-4">
-              <input
-                type="password"
-                value={passwordInput}
-                onChange={(e) => {
-                  setPasswordInput(e.target.value);
-                  setPasswordError("");
-                }}
-                placeholder="비밀번호 입력"
-                className="w-full px-4 py-3 border rounded-xl text-center text-lg font-mono tracking-widest"
-                maxLength={20}
-                onKeyPress={(e) => e.key === 'Enter' && handlePasswordSubmit()}
-                autoFocus
-              />
-              
-              {passwordError && (
-                <div className="text-red-500 text-sm text-center">{passwordError}</div>
-              )}
-              
-              <div className="flex gap-3">
-                <button
-                  onClick={() => {
-                    setShowPasswordModal(false);
-                    setPasswordInput("");
-                    setPasswordError("");
-                  }}
-                  className="flex-1 py-3 px-4 border rounded-xl text-gray-700 font-medium hover:bg-gray-50"
-                >
-                  취소
-                </button>
-                <button
-                  onClick={handlePasswordSubmit}
-                  className="flex-1 py-3 px-4 bg-blue-500 text-white rounded-xl font-medium hover:bg-blue-600"
-                >
-                  입장
-                </button>
-              </div>
+      {/* 나가기 확인 모달 */}
+      {showLeaveModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white/95 backdrop-blur rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-blue-200">
+            <h3 className="text-lg font-bold text-blue-800 mb-4 text-center">채팅방 나가기</h3>
+            <p className="text-blue-600 text-center mb-6">
+              정말로 이 채팅방을 나가시겠습니까?<br/>
+              나간 후에는 다시 초대받아야 합니다.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowLeaveModal(false)}
+                className="flex-1 py-3 px-4 border border-blue-300 rounded-xl text-blue-700 font-medium hover:bg-blue-50 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleLeaveRoom}
+                disabled={leaving}
+                className="flex-1 py-3 px-4 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-xl font-medium hover:from-red-600 hover:to-red-700 disabled:opacity-50 transition-colors"
+              >
+                {leaving ? '나가는 중...' : '나가기'}
+              </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* 하단 네비게이션 공간 */}
+      <div className="h-20"></div>
     </div>
   );
 }

@@ -46,19 +46,33 @@ code {
 }
 
 /* 스크롤바 커스터마이징 */
-.hide-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-
 .hide-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+  /* GPU 가속으로 스크롤 성능 향상 */
+  transform: translateZ(0);
+  /* 부드러운 스크롤 */
+  scroll-behavior: smooth;
+  /* 모바일 터치 스크롤 최적화 */
+  -webkit-overflow-scrolling: touch;
+  /* 과도한 스크롤 방지 */
+  overscroll-behavior: contain;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 /* 채팅 관련 커스텀 스타일 */
 .chat-scroll {
   scrollbar-width: thin;
   scrollbar-color: #e2e8f0 transparent;
+  /* 최신 성능 최적화 */
+  transform: translateZ(0);
+  will-change: scroll-position;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
 }
 
 .chat-scroll::-webkit-scrollbar {
@@ -78,6 +92,24 @@ code {
 
 .chat-scroll::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(180deg, #cbd5e0, #a0aec0);
+}
+
+/* 스크롤 최적화 유틸리티 클래스 */
+.scroll-optimized {
+  transform: translateZ(0);
+  will-change: scroll-position;
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+/* 채팅방 전용 - 애니메이션 없는 즉시 스크롤 */
+.chat-room-scroll {
+  transform: translateZ(0);
+  will-change: scroll-position;
+  scroll-behavior: auto; /* smooth 대신 auto로 즉시 스크롤 */
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 /* 메시지 입력창 자동 높이 조절 */
