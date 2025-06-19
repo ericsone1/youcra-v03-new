@@ -289,11 +289,11 @@ function App() {
 export default function AppWrapper() {
   return (
     <VideoPlayerProvider>
-      <Router>
-        <App />
+    <Router>
+      <App />
         {/* 전역 비디오 플레이어 */}
         <GlobalVideoPlayer />
-      </Router>
+    </Router>
     </VideoPlayerProvider>
   );
 }

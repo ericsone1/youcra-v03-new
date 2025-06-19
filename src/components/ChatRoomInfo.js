@@ -23,6 +23,7 @@ export default function ChatRoomInfo() {
   const [participants, setParticipants] = useState([]);
   const [videoList, setVideoList] = useState([]);
   const [participantWatchRates, setParticipantWatchRates] = useState({});
+  const [isCalculatingWatchRates, setIsCalculatingWatchRates] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
@@ -181,7 +182,47 @@ export default function ChatRoomInfo() {
               const uid = participantDoc.id;
               const participantData = participantDoc.data();
               
-              // 사용자 정보 가져오기
+              // 현재 사용자인 경우 currentUser 정보를 우선 사용
+              if (uid === currentUser.uid) {
+                try {
+                  const userRef = doc(db, 'users', uid);
+                  const userSnapshot = await getDoc(userRef);
+                  
+                  if (userSnapshot.exists()) {
+                    const userData = userSnapshot.data();
+                    return {
+                      id: uid,
+                      name: userData.displayName || userData.nick || userData.name || currentUser.email?.split('@')[0] || '나',
+                      email: userData.email || currentUser.email || '내 이메일',
+                      avatar: userData.photoURL || userData.profileImage || currentUser.photoURL || null,
+                      joinedAt: participantData.joinedAt,
+                      role: participantData.role || 'member',
+                      isOwner: participantData.role === 'owner' || uid === roomData?.createdBy,
+                      isOnline: true,
+                      watchRate: participantData.watchRate || 0,
+                      isMe: true // 자신임을 표시
+                    };
+                  }
+                } catch (error) {
+                  console.error('현재 사용자 정보 로딩 실패:', error);
+                }
+                
+                // users 컬렉션에서 가져오지 못한 경우 currentUser 기본 정보 사용
+                return {
+                  id: uid,
+                  name: currentUser.displayName || currentUser.email?.split('@')[0] || '나',
+                  email: currentUser.email || '내 이메일',
+                  avatar: currentUser.photoURL || null,
+                  joinedAt: participantData.joinedAt,
+                  role: participantData.role || 'member',
+                  isOwner: participantData.role === 'owner' || uid === roomData?.createdBy,
+                  isOnline: true,
+                  watchRate: participantData.watchRate || 0,
+                  isMe: true // 자신임을 표시
+                };
+              }
+              
+              // 다른 사용자의 정보 가져오기
               try {
                 const userRef = doc(db, 'users', uid);
                 const userSnapshot = await getDoc(userRef);
@@ -219,12 +260,44 @@ export default function ChatRoomInfo() {
             })
           );
           
-          // 방장을 맨 위로, 나머지는 이름순으로 정렬
+          // 방장을 맨 위로, 나를 그 다음으로, 나머지는 이름순으로 정렬
           participantsList.sort((a, b) => {
             if (a.isOwner && !b.isOwner) return -1;
             if (!a.isOwner && b.isOwner) return 1;
+            if (a.isMe && !b.isMe) return -1;
+            if (!a.isMe && b.isMe) return 1;
             return a.name.localeCompare(b.name);
           });
+          
+          // 현재 사용자가 참여자 목록에 없는 경우 상단에 추가
+          const hasCurrentUser = participantsList.some(p => p.id === currentUser.uid);
+          if (!hasCurrentUser && currentUser) {
+            const currentUserInfo = {
+              id: currentUser.uid,
+              name: currentUser.displayName || currentUser.email?.split('@')[0] || '나',
+              email: currentUser.email || '내 이메일',
+              avatar: currentUser.photoURL || null,
+              joinedAt: new Date(),
+              role: 'member',
+              isOwner: roomData?.createdBy === currentUser.uid,
+              isOnline: true,
+              watchRate: 0,
+              isMe: true
+            };
+            
+            // 내 정보를 맨 앞에 추가 (방장이 아닌 경우)
+            if (currentUserInfo.isOwner) {
+              participantsList.unshift(currentUserInfo);
+            } else {
+              // 방장 다음에 추가
+              const ownerIndex = participantsList.findIndex(p => p.isOwner);
+              if (ownerIndex >= 0) {
+                participantsList.splice(ownerIndex + 1, 0, currentUserInfo);
+              } else {
+                participantsList.unshift(currentUserInfo);
+              }
+            }
+          }
           
           setParticipants(participantsList);
         } catch (error) {
@@ -257,8 +330,13 @@ export default function ChatRoomInfo() {
   // 참여자와 영상 목록이 모두 로드된 후 시청률 계산
   useEffect(() => {
     if (participants.length > 0 && videoList.length > 0) {
+      setIsCalculatingWatchRates(true);
       calculateWatchRates(videoList, participants).then(watchRates => {
         setParticipantWatchRates(watchRates);
+        setIsCalculatingWatchRates(false);
+      }).catch(error => {
+        console.error('시청률 계산 오류:', error);
+        setIsCalculatingWatchRates(false);
       });
     }
   }, [participants, videoList, roomId]);
@@ -379,14 +457,14 @@ export default function ChatRoomInfo() {
                 </p>
               </div>
             </div>
-          </div>
+            </div>
           
-          <button
-            onClick={() => navigate(`/chat/${roomId}/videos`)}
+            <button
+              onClick={() => navigate(`/chat/${roomId}/videos`)}
             className="w-full bg-white bg-opacity-20 hover:bg-opacity-30 text-white font-medium py-2 px-3 rounded-lg transition-colors text-sm"
-          >
-            영상 목록 보기 →
-          </button>
+            >
+              영상 목록 보기 →
+            </button>
         </div>
 
         {/* 방 참여 인원 */}
@@ -425,13 +503,20 @@ export default function ChatRoomInfo() {
                   <div>
                     <div className="font-medium text-blue-800">
                       {participant.name || participant.email?.split('@')[0] || '익명'}
-                      <span className={`ml-2 text-sm font-medium ${
-                        (participantWatchRates[participant.id] ?? 0) < 50 
-                          ? 'text-red-500' 
-                          : 'text-blue-500'
-                      }`}>
-                        시청률 {participantWatchRates[participant.id] ?? 0}%
-                      </span>
+                      {participant.isMe && <span className="text-green-600 font-bold"> (나)</span>}
+                      {isCalculatingWatchRates ? (
+                        <span className="ml-2 text-sm text-gray-500 animate-pulse">
+                          📊 계산중...
+                        </span>
+                      ) : (
+                        <span className={`ml-2 text-sm font-medium ${
+                          (participantWatchRates[participant.id] ?? 0) < 50 
+                            ? 'text-red-500' 
+                            : 'text-blue-500'
+                        }`}>
+                          시청률 {participantWatchRates[participant.id] ?? 0}%
+                        </span>
+                      )}
                     </div>
                     {participant.role === 'host' && (
                       <span className="text-xs bg-gradient-to-r from-yellow-400 to-orange-400 text-white px-2 py-1 rounded-full font-medium">

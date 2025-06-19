@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { collection, onSnapshot, doc, getDoc, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, doc, getDoc, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 
 function ChatRoomParticipants() {
@@ -18,6 +18,20 @@ function ChatRoomParticipants() {
   // 방 정보 및 참여자 목록 실시간 구독
   useEffect(() => {
     if (!roomId || !currentUser) return;
+
+    // 현재 사용자를 participants 컬렉션에 등록
+    const addCurrentUser = async () => {
+      try {
+        const participantRef = doc(db, "chatRooms", roomId, "participants", currentUser.uid);
+        await setDoc(participantRef, {
+          email: currentUser.email,
+          uid: currentUser.uid,
+          joinedAt: serverTimestamp(),
+        }, { merge: true }); // merge: true로 기존 데이터 유지
+      } catch (error) {
+        console.error('현재 사용자 등록 실패:', error);
+      }
+    };
 
     // 방 정보 가져오기
     const fetchRoomData = async () => {
@@ -77,10 +91,35 @@ function ChatRoomParticipants() {
           })
         );
         
-        // 방장을 맨 위로, 나머지는 이름순으로 정렬
+        // 자신이 목록에 없으면 추가
+        const hasCurrentUser = participantsList.some(p => p.id === currentUser.uid);
+        if (!hasCurrentUser) {
+          participantsList.push({
+            id: currentUser.uid,
+            name: currentUser.displayName || currentUser.email?.split('@')[0] || '나',
+            email: currentUser.email || '내 이메일',
+            avatar: currentUser.photoURL || null,
+            joinedAt: { toDate: () => new Date() }, // 현재 시간
+            role: 'member',
+            isOwner: roomData?.createdBy === currentUser.uid,
+            isOnline: true,
+            isMe: true, // 자신임을 표시
+          });
+        } else {
+          // 자신을 찾아서 isMe 플래그 추가
+          participantsList.forEach(p => {
+            if (p.id === currentUser.uid) {
+              p.isMe = true;
+            }
+          });
+        }
+        
+        // 방장을 맨 위로, 나를 그 다음으로, 나머지는 이름순으로 정렬
         participantsList.sort((a, b) => {
           if (a.isOwner && !b.isOwner) return -1;
           if (!a.isOwner && b.isOwner) return 1;
+          if (a.isMe && !b.isMe) return -1;
+          if (!a.isMe && b.isMe) return 1;
           return a.name.localeCompare(b.name);
         });
         
@@ -105,6 +144,7 @@ function ChatRoomParticipants() {
     );
 
     fetchRoomData();
+    addCurrentUser();
 
     return () => {
       unsubscribeParticipants();
@@ -222,7 +262,11 @@ function ChatRoomParticipants() {
           </div>
         ) : (
           participants.map((user) => (
-            <div key={user.id} className="bg-white/80 backdrop-blur-sm border border-blue-100 rounded-xl shadow-lg hover:border-blue-200 transition-colors">
+            <div key={user.id} className={`backdrop-blur-sm border rounded-xl shadow-lg hover:border-blue-200 transition-colors ${
+              user.isMe 
+                ? 'bg-green-50/90 border-green-200' 
+                : 'bg-white/80 border-blue-100'
+            }`}>
               <button
                 className="w-full p-4 text-left hover:bg-blue-50/50 rounded-xl transition-colors"
                 onClick={() => {
@@ -260,7 +304,10 @@ function ChatRoomParticipants() {
                   {/* 사용자 정보 */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="font-medium text-blue-800 truncate">{user.name}</span>
+                      <span className="font-medium text-blue-800 truncate">
+                        {user.name}
+                        {user.isMe && <span className="text-green-600 font-bold"> (나)</span>}
+                      </span>
                       {user.isOwner && (
                         <span className="text-yellow-500 flex-shrink-0 text-lg" title="방장">👑</span>
                       )}
