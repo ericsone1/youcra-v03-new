@@ -104,6 +104,44 @@ function VideoListPage() {
     return () => unsub();
   }, [roomId]);
 
+  // 시청 상태에 따른 영상 목록 정렬 (시청 안된 것 상단으로)
+  useEffect(() => {
+    if (videoList.length === 0) return;
+    
+    const sortedVideos = [...videoList].sort((a, b) => {
+      const aWatched = certifiedIds.includes(a.id);
+      const bWatched = certifiedIds.includes(b.id);
+      
+      // 1차 정렬: 시청 안된 것을 상단으로
+      if (!aWatched && bWatched) return -1;
+      if (aWatched && !bWatched) return 1;
+      
+      // 2차 정렬: 기존 duration 정렬 유지 (짧은 것부터)
+      return (a.duration || 0) - (b.duration || 0);
+    });
+    
+    setVideoListState(sortedVideos);
+  }, [videoList, certifiedIds]);
+
+  // 시청 상태에 따른 영상 목록 정렬 (시청 안된 것 상단으로)
+  useEffect(() => {
+    if (videoList.length === 0) return;
+    
+    const sortedVideos = [...videoList].sort((a, b) => {
+      const aWatched = certifiedIds.includes(a.id);
+      const bWatched = certifiedIds.includes(b.id);
+      
+      // 1차 정렬: 시청 안된 것을 상단으로
+      if (!aWatched && bWatched) return -1;
+      if (aWatched && !bWatched) return 1;
+      
+      // 2차 정렬: 기존 duration 정렬 유지 (짧은 것부터)
+      return (a.duration || 0) - (b.duration || 0);
+    });
+    
+    setVideoListState(sortedVideos);
+  }, [videoList, certifiedIds]);
+
   // 내가 인증한 영상 id 리스트 불러오기
   useEffect(() => {
     if (!roomId || !auth.currentUser || videoList.length === 0) {
