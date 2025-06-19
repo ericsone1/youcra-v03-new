@@ -192,23 +192,28 @@ function VideoListPage() {
   const handleDeleteVideo = async (videoId, videoTitle) => {
     // 현재 영상 정보 찾기
     const video = videoList.find(v => v.id === videoId);
-    if (!video) return;
+    if (!video) {
+      return;
+    }
     
     // 권한 체크: 방장이거나 본인이 등록한 영상인 경우만 삭제 가능
     const canDelete = isOwner || video.registeredBy === auth.currentUser?.email;
+    
     if (!canDelete) {
       alert("이 영상을 삭제할 권한이 없습니다.");
       return;
     }
     
-    if (!window.confirm(`"${videoTitle}" 영상을 삭제하시겠습니까?`)) return;
+    if (!window.confirm(`"${videoTitle}" 영상을 삭제하시겠습니까?`)) {
+      return;
+    }
     
     try {
       await deleteDoc(doc(db, "chatRooms", roomId, "videos", videoId));
-      console.log("영상 삭제 완료:", videoId);
+      alert("영상이 성공적으로 삭제되었습니다.");
     } catch (error) {
       console.error("영상 삭제 오류:", error);
-      alert("영상 삭제 중 오류가 발생했습니다.");
+      alert("영상 삭제 중 오류가 발생했습니다: " + error.message);
     }
   };
 
@@ -442,7 +447,11 @@ function VideoListPage() {
                     </div>
                   )}
                   
-                  {videoListState.map((video, idx) => (
+                  {videoListState.map((video, idx) => {
+                    // 삭제 버튼 표시 조건
+                    const canUserDelete = isOwner || video.registeredBy === auth.currentUser?.email;
+                    
+                    return (
                     <div 
                       key={video.id} 
                       className={`bg-white border border-gray-200 rounded-xl p-4 shadow-sm transition-all duration-300 ease-in-out transform ${
@@ -519,14 +528,14 @@ function VideoListPage() {
                           </div>
                           
                           {/* 삭제 버튼 - 방장은 모든 영상, 일반 유저는 자신의 영상만 */}
-                          {(isOwner || video.registeredBy === auth.currentUser?.email) && (
+                          {canUserDelete && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation(); // 드래그 이벤트 방지
                                 handleDeleteVideo(video.id, video.title);
                               }}
-                              className="bg-red-500 hover:bg-red-600 text-white text-xs px-3 py-1.5 rounded-full font-medium text-center transition-colors shadow-md hover:shadow-lg"
-                              title="영상 삭제"
+                              className="bg-red-500 hover:bg-red-600 text-white text-xs px-3 py-1.5 rounded-full font-medium text-center transition-colors shadow-md hover:shadow-lg transform hover:scale-105"
+                              title={`영상 삭제 (등록자: ${video.registeredBy?.split('@')[0]})`}
                             >
                               삭제하기
                             </button>
@@ -534,7 +543,8 @@ function VideoListPage() {
                         </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
