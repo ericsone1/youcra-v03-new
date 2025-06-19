@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { doc, getDoc, collection, onSnapshot, deleteDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, collection, onSnapshot, deleteDoc, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 import { 
   IoChatbubbleEllipsesOutline, 
@@ -24,6 +24,7 @@ export default function ChatRoomInfo() {
   const [roomData, setRoomData] = useState(null);
   const [participants, setParticipants] = useState([]);
   const [videoList, setVideoList] = useState([]);
+  const [participantWatchRates, setParticipantWatchRates] = useState({});
   const [loading, setLoading] = useState(true);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
@@ -134,6 +135,43 @@ export default function ChatRoomInfo() {
       setLeaving(false);
       setShowLeaveModal(false);
     }
+  };
+
+  // 참여자별 시청률 계산 함수
+  const calculateWatchRates = async (videosList, participantsList) => {
+    if (!videosList.length || !participantsList.length) {
+      return {};
+    }
+
+    const watchRates = {};
+    
+    for (const participant of participantsList) {
+      let certifiedCount = 0;
+      
+      // 각 영상에 대해 이 참여자가 인증했는지 확인
+      for (const video of videosList) {
+        try {
+          const certificationsRef = collection(db, 'chatRooms', roomId, 'videos', video.id, 'certifications');
+          const certificationsSnapshot = await getDocs(certificationsRef);
+          
+          const hasCertified = certificationsSnapshot.docs.some(doc => 
+            doc.data().uid === participant.id
+          );
+          
+          if (hasCertified) {
+            certifiedCount++;
+          }
+        } catch (error) {
+          console.error('인증 확인 오류:', error);
+        }
+      }
+      
+      // 시청률 계산 (인증한 영상 수 / 전체 영상 수 * 100)
+      const watchRate = videosList.length > 0 ? Math.round((certifiedCount / videosList.length) * 100) : 0;
+      watchRates[participant.id] = watchRate;
+    }
+    
+    return watchRates;
   };
 
   useEffect(() => {
@@ -247,6 +285,15 @@ export default function ChatRoomInfo() {
     };
   }, [roomId, currentUser]);
 
+  // 참여자와 영상 목록이 모두 로드된 후 시청률 계산
+  useEffect(() => {
+    if (participants.length > 0 && videoList.length > 0) {
+      calculateWatchRates(videoList, participants).then(watchRates => {
+        setParticipantWatchRates(watchRates);
+      });
+    }
+  }, [participants, videoList, roomId]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -314,34 +361,63 @@ export default function ChatRoomInfo() {
           </div>
         </div>
 
+        {/* 🔝 방장 메뉴 - 상단으로 이동 */}
+        {isOwner && (
+          <div className="bg-gradient-to-r from-yellow-100 to-orange-100 border border-yellow-300 rounded-xl shadow-md mb-4">
+            <div className="p-3 border-b border-yellow-200">
+              <h3 className="text-base font-bold text-yellow-800 flex items-center gap-2">
+                <span className="text-lg">👑</span>
+                방장 전용 메뉴
+              </h3>
+              <p className="text-yellow-700 text-xs mt-1">채팅방 관리 및 설정</p>
+            </div>
+            
+            <div className="p-3">
+              <button 
+                onClick={() => navigate(`/chat/${roomId}/manage`)}
+                className="w-full flex items-center justify-between px-3 py-2 hover:bg-yellow-50 rounded-lg transition-colors text-left border border-yellow-200 hover:border-yellow-300"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🛠️</span>
+                  <div>
+                    <span className="text-yellow-800 font-medium text-sm block">채팅방 관리</span>
+                    <span className="text-yellow-600 text-xs">참여자·방설정·영상관리</span>
+                  </div>
+                </div>
+                <svg className="w-4 h-4 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* 콘텐츠 시청리스트 */}
-        <div className="bg-gradient-to-r from-purple-600 via-pink-500 to-red-500 rounded-2xl shadow-xl mb-4 p-6">
-          <div className="text-center">
-            <div className="flex items-center justify-center mb-3">
-              <div className="bg-white bg-opacity-20 rounded-full p-3 mr-3">
-                <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+        <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl shadow-md mb-4 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <div className="bg-white bg-opacity-20 rounded-lg p-2">
+                <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
                 </svg>
               </div>
               <div>
-                <h3 className="text-2xl font-black text-white leading-tight">
+                <h3 className="text-lg font-bold text-white">
                   콘텐츠 시청리스트
                 </h3>
-                <p className="text-purple-100 text-sm font-medium mt-1">
-                  📱 채팅방 영상 모음
+                <p className="text-purple-100 text-xs">
+                  {videoList.length}개 영상
                 </p>
               </div>
             </div>
-            <div className="bg-white bg-opacity-15 rounded-xl px-4 py-2 inline-block mb-3">
-              <span className="text-white font-bold text-lg">{videoList.length}개 영상</span>
-            </div>
-            <button
-              onClick={() => navigate(`/chat/${roomId}/videos`)}
-              className="w-full bg-white bg-opacity-20 hover:bg-opacity-30 text-white font-semibold py-3 px-4 rounded-xl transition-all duration-200 transform hover:scale-105 backdrop-blur-sm"
-            >
-              영상 목록 보기 →
-            </button>
           </div>
+          
+          <button
+            onClick={() => navigate(`/chat/${roomId}/videos`)}
+            className="w-full bg-white bg-opacity-20 hover:bg-opacity-30 text-white font-medium py-2 px-3 rounded-lg transition-colors text-sm"
+          >
+            영상 목록 보기 →
+          </button>
         </div>
 
         {/* 방 참여 인원 */}
@@ -380,7 +456,13 @@ export default function ChatRoomInfo() {
                   <div>
                     <div className="font-medium text-blue-800">
                       {participant.name || participant.email?.split('@')[0] || '익명'}
-                      <span className="ml-2 text-sm text-blue-500">시청률 {participant.watchRate ?? 0}%</span>
+                      <span className={`ml-2 text-sm font-medium ${
+                        (participantWatchRates[participant.id] ?? 0) < 50 
+                          ? 'text-red-500' 
+                          : 'text-blue-500'
+                      }`}>
+                        시청률 {participantWatchRates[participant.id] ?? 0}%
+                      </span>
                     </div>
                     {participant.role === 'host' && (
                       <span className="text-xs bg-gradient-to-r from-yellow-400 to-orange-400 text-white px-2 py-1 rounded-full font-medium">
@@ -403,33 +485,6 @@ export default function ChatRoomInfo() {
             </div>
           ))}
         </div>
-
-        {/* 관리자 메뉴 */}
-        {isOwner && (
-          <div className="bg-white/80 backdrop-blur-sm border border-blue-100 rounded-2xl shadow-lg">
-            <div className="p-4 border-b border-blue-100">
-              <h3 className="text-lg font-bold text-blue-800 flex items-center gap-2">
-                <span className="text-xl">⚙️</span>
-                방장 메뉴
-              </h3>
-            </div>
-            
-            <div className="p-4 space-y-2">
-              <button 
-                onClick={() => navigate(`/chat/${roomId}/manage`)}
-                className="w-full flex items-center justify-between px-4 py-3 hover:bg-blue-50 rounded-xl transition-colors text-left"
-              >
-                <div className="flex items-center gap-3">
-                  <span className="text-lg">🛠️</span>
-                  <span className="text-blue-800 font-medium">채팅방 관리</span>
-                </div>
-                <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* 채팅방 나가기 */}
         <div className="bg-white/80 backdrop-blur-sm border border-red-200 rounded-2xl shadow-lg">

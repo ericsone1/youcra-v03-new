@@ -198,6 +198,10 @@ function ChatRoom() {
   const [certLoading, setCertLoading] = useState(false);
   const [certifiedVideoIds, setCertifiedVideoIds] = useState([]);
   const [watchSeconds, setWatchSeconds] = useState(0);
+  
+  // === 방장 기능 관련 State ===
+  const [showMessageOptions, setShowMessageOptions] = useState(null);
+  const [showUserModal, setShowUserModal] = useState(null);
   const [lastPlayerTime, setLastPlayerTime] = useState(0);
   const [videoEnded, setVideoEnded] = useState(false);
   const [countdown, setCountdown] = useState(5);
@@ -492,28 +496,18 @@ function ChatRoom() {
         videos.map(async (video) => {
           // duration이 없거나 0인 모든 영상에 대해 다시 가져오기
           if ((!video.duration || video.duration === 0) && video.videoId) {
-            console.log('🔄 duration 누락/0, 다시 가져오기:', video.title);
             try {
               const meta = await fetchYoutubeMeta(video.videoId);
               if (meta && meta.duration && meta.duration > 0) {
-                console.log('✅ duration 복구 성공:', {
-                  title: video.title?.substring(0, 30),
-                  oldDuration: video.duration || 0,
-                  newDuration: meta.duration,
-                  formatted: `${Math.floor(meta.duration / 60)}분 ${meta.duration % 60}초`
-                });
-                
                 // Firestore에 duration 업데이트
                 await setDoc(doc(db, "chatRooms", roomId, "videos", video.id), {
                   ...video,
                   duration: meta.duration
                 }, { merge: true });
                 return { ...video, duration: meta.duration };
-              } else {
-                console.log('❌ duration 가져오기 실패 또는 0:', video.title);
               }
             } catch (error) {
-              console.error('❌ duration 가져오기 오류:', error);
+              console.error('duration 가져오기 오류:', error);
             }
           }
           return video;
@@ -543,25 +537,10 @@ function ChatRoom() {
           return timeB - timeA; // 최신순
         }
         
-        console.log('🔄 영상 정렬:', {
-          titleA: a.title?.substring(0, 20) + '...',
-          durationA: `${durationA}초 (${Math.floor(durationA / 60)}분)`,
-          titleB: b.title?.substring(0, 20) + '...',
-          durationB: `${durationB}초 (${Math.floor(durationB / 60)}분)`,
-          result: durationA - durationB
-        });
-        
         return durationA - durationB; // 오름차순 정렬
-      });
-      
-      console.log('📺 최종 정렬된 영상 목록:', sortedVideos.map((v, idx) => ({
-        index: idx,
-        title: v.title?.substring(0, 30) + '...',
-        duration: v.duration || 0,
-        durationFormatted: `${Math.floor((v.duration || 0) / 60)}분 ${(v.duration || 0) % 60}초`
-      })));
-      
-      setVideoList(sortedVideos);
+                });
+          
+          setVideoList(sortedVideos);
       
       // URL 쿼리 파라미터에서 비디오 ID 확인하고 자동 선택
       const urlParams = new URLSearchParams(window.location.search);
@@ -682,9 +661,57 @@ function ChatRoom() {
 
   // 메시지 삭제(길게 눌러야)
   const handleDelete = async (msgId) => {
-    if (window.confirm("정말 이 메시지를 삭제할까요?")) {
+    try {
       await deleteDoc(doc(db, "chatRooms", roomId, "messages", msgId));
-      setShowDelete(null);
+    } catch (error) {
+      console.error("메시지 삭제 오류:", error);
+    }
+  };
+
+  // 방장 기능: 메시지 삭제
+  const handleAdminDeleteMessage = async (msgId, msgUid) => {
+    if (!isOwner) {
+      alert("방장만 메시지를 삭제할 수 있습니다.");
+      return;
+    }
+
+    if (!window.confirm("이 메시지를 삭제하시겠습니까?")) {
+      return;
+    }
+
+    try {
+      await deleteDoc(doc(db, "chatRooms", roomId, "messages", msgId));
+      console.log("방장이 메시지를 삭제했습니다:", msgId);
+    } catch (error) {
+      console.error("메시지 삭제 오류:", error);
+      alert("메시지 삭제 중 오류가 발생했습니다.");
+    }
+  };
+
+  // 방장 기능: 사용자 추방
+  const handleKickUser = async (targetUid, targetEmail) => {
+    if (!isOwner) {
+      alert("방장만 사용자를 추방할 수 있습니다.");
+      return;
+    }
+
+    if (targetUid === myUid) {
+      alert("자신을 추방할 수 없습니다.");
+      return;
+    }
+
+    if (!window.confirm(`정말로 ${targetEmail}님을 추방하시겠습니까?`)) {
+      return;
+    }
+
+    try {
+      // 참여자 목록에서 제거
+      await deleteDoc(doc(db, "chatRooms", roomId, "participants", targetUid));
+      console.log("사용자를 추방했습니다:", targetEmail);
+      alert(`${targetEmail}님을 추방했습니다.`);
+    } catch (error) {
+      console.error("사용자 추방 오류:", error);
+      alert("사용자 추방 중 오류가 발생했습니다.");
     }
   };
 
@@ -796,14 +823,11 @@ function ChatRoom() {
       return;
     }
 
-    console.log('📤 파일 업로드 시작:', { fileName: file.name, fileSize: file.size, fileType: type });
     setUploading(true);
     
     // 이미지 파일인 경우 우선 Base64로 처리 (CORS 회피)
     if (type === 'image' && file.type.startsWith('image/')) {
       try {
-        console.log('🖼️ 이미지 파일 - Base64 처리 시작');
-        
         const reader = new FileReader();
         reader.onload = async (e) => {
           try {
@@ -828,17 +852,16 @@ function ChatRoom() {
               readAt: serverTimestamp()
             });
             
-            console.log('✅ Base64 이미지 업로드 완료:', messageRef.id);
             setUploading(false);
           } catch (dbError) {
-            console.error('❌ Firestore 저장 오류:', dbError);
+            console.error('Firestore 저장 오류:', dbError);
             setUploading(false);
             alert('이미지 저장 중 오류가 발생했습니다. 네트워크를 확인해주세요.');
           }
         };
         
         reader.onerror = () => {
-          console.error('❌ FileReader 오류');
+          console.error('FileReader 오류');
           setUploading(false);
           alert('이미지 읽기 중 오류가 발생했습니다.');
         };
@@ -847,7 +870,7 @@ function ChatRoom() {
         return; // 이미지는 여기서 처리 완료
         
       } catch (error) {
-        console.error('❌ Base64 변환 오류:', error);
+        console.error('Base64 변환 오류:', error);
         setUploading(false);
         alert('이미지 처리 중 오류가 발생했습니다.');
         return;
@@ -856,8 +879,6 @@ function ChatRoom() {
     
     // 비이미지 파일의 경우 Firebase Storage 시도
     try {
-      console.log('📁 파일 업로드 - Firebase Storage 시도');
-      
       const timestamp = Date.now();
       const fileName = `${timestamp}_${file.name}`;
       const storageRef = ref(storage, `chatrooms/${roomId}/${fileName}`);
@@ -869,10 +890,7 @@ function ChatRoom() {
       );
       
       const snapshot = await Promise.race([uploadPromise, timeoutPromise]);
-      console.log('✅ Firebase Storage 업로드 완료');
-      
       const downloadURL = await getDownloadURL(snapshot.ref);
-      console.log('🔗 다운로드 URL 생성 완료');
       
       // 메시지로 파일 정보 저장
       const messageRef = await addDoc(collection(db, "chatRooms", roomId, "messages"), {
@@ -887,8 +905,6 @@ function ChatRoom() {
         uploadMethod: 'firebase_storage',
       });
       
-      console.log('💬 메시지 저장 완료:', messageRef.id);
-      
       // 읽음 처리
       await setDoc(doc(db, "chatRooms", roomId, "messages", messageRef.id, "readBy", auth.currentUser.uid), {
         uid: auth.currentUser.uid,
@@ -896,7 +912,7 @@ function ChatRoom() {
       });
       
     } catch (error) {
-      console.error('❌ 파일 업로드 오류:', {
+      console.error('파일 업로드 오류:', {
         message: error.message,
         code: error.code,
         name: error.name
@@ -1113,9 +1129,7 @@ function ChatRoom() {
   // 유튜브 플레이어 핸들러
   const handleYoutubeReady = (event) => {
     playerRef.current = event.target;
-    setWatchSeconds(0);
-    setLastPlayerTime(0);
-    setVideoEnded(false);
+    // 상태 초기화 제거 - selectedVideoIdx 변경 시에만 초기화되도록 함
   };
   
   const handleYoutubeStateChange = (event) => {
@@ -1127,10 +1141,16 @@ function ChatRoom() {
 
     // 재생 중일 때만 새로운 interval 생성
     if (event.data === 1) { // YT.PlayerState.PLAYING
+      // 재생 시작 시 현재 시간으로 동기화
+      if (playerRef.current && playerRef.current.getCurrentTime) {
+        const currentTime = Math.floor(playerRef.current.getCurrentTime());
+        setWatchSeconds(currentTime);
+      }
+      
       playerRef.current._interval = setInterval(() => {
         if (playerRef.current && playerRef.current.getCurrentTime) {
-          const currentTime = playerRef.current.getCurrentTime();
-          setWatchSeconds(Math.floor(currentTime));
+          const currentTime = Math.floor(playerRef.current.getCurrentTime());
+          setWatchSeconds(currentTime);
         } else {
           // 기본 카운터 (플레이어 API 접근 불가 시)
           setWatchSeconds((prev) => prev + 1);
@@ -1140,18 +1160,6 @@ function ChatRoom() {
   };
   
   const handleYoutubeEnd = () => {
-    console.log('🎬 영상 끝남 감지:', {
-      selectedVideoIdx,
-      videoListLength: videoList.length,
-      hasNext: selectedVideoIdx < videoList.length - 1
-    });
-    
-    // 영상 종료 시 interval 정리
-    if (playerRef.current && playerRef.current._interval) {
-      clearInterval(playerRef.current._interval);
-      playerRef.current._interval = null;
-    }
-    
     // 영상 종료 시 videoEnded 상태 설정
     setVideoEnded(true);
     
@@ -1159,21 +1167,17 @@ function ChatRoom() {
     // 시청인증이 비활성화되어 있다면 바로 다음 영상으로 이동
     if (!watchSettings.enabled) {
       if (selectedVideoIdx < videoList.length - 1) {
-        console.log('⏰ 다음 영상 카운트다운 시작 (시청인증 비활성)');
         setEndCountdown(3);
         endTimer.current = setInterval(() => {
           setEndCountdown((prev) => {
             if (prev <= 1) {
               clearInterval(endTimer.current);
-              console.log('➡️ 다음 영상으로 이동:', selectedVideoIdx + 1);
               setSelectedVideoIdx(selectedVideoIdx + 1);
               return 0;
             }
             return prev - 1;
           });
         }, 1000);
-      } else {
-        console.log('📺 마지막 영상 완료');
       }
     }
   };
@@ -1229,25 +1233,13 @@ function ChatRoom() {
     const currentVideo = videoList[selectedVideoIdx];
     const isAlreadyCertified = currentVideo && certifiedVideoIds.includes(currentVideo.id);
     
-    console.log('🔄 자동 인증 useEffect 실행:', {
-      watchSettingsEnabled: watchSettings.enabled,
-      certAvailable,
-      isCertified,
-      certLoading,
-      isAlreadyCertified,
-      videoEnded
-    });
-    
     // 시청인증이 활성화되고, 인증 가능하고, 아직 인증하지 않았고, 이미 인증된 영상이 아닐 때만 카운트다운 시작
     if (watchSettings.enabled && certAvailable && !isCertified && !certLoading && !isAlreadyCertified) {
-      console.log('⏰ 자동 인증 5초 카운트다운 시작');
       setCountdown(5);
       autoNextTimer.current = setInterval(() => {
         setCountdown((prev) => {
-          console.log(`⏱️ 자동 인증 카운트다운: ${prev}초`);
           if (prev <= 1) {
             clearInterval(autoNextTimer.current);
-            console.log('✅ 자동 인증 처리 시작');
             
             // 자동으로 인증 처리
             handleCertify();
@@ -1255,11 +1247,9 @@ function ChatRoom() {
             // 다음 영상이 있으면 이동, 없으면 플레이어 종료
             setTimeout(() => {
             if (selectedVideoIdx < videoList.length - 1) {
-                console.log('➡️ 다음 영상으로 자동 이동:', selectedVideoIdx + 1);
                 // 다음 영상으로 이동
               setSelectedVideoIdx(selectedVideoIdx + 1);
               } else {
-                console.log('📺 마지막 영상 완료 - 플레이어 종료');
                 // 마지막 영상이므로 플레이어 종료
                 setSelectedVideoIdx(null);
                 setMinimized(false);
@@ -1477,33 +1467,25 @@ function ChatRoom() {
 
   // 붙여넣기 핸들러 (이미지/파일 클립보드 업로드)
   const handlePaste = (e) => {
-    console.log('📋 붙여넣기 이벤트 감지');
     if (!e.clipboardData || !e.clipboardData.items) {
-      console.log('❌ 클립보드 데이터 없음');
       return;
     }
     
     const items = e.clipboardData.items;
-    console.log('📄 클립보드 아이템 수:', items.length);
     
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
-      console.log(`📄 아이템 ${i}:`, { kind: item.kind, type: item.type });
       
       if (item.kind === 'file') {
         const file = item.getAsFile();
         if (file) {
-          console.log('📎 파일 감지:', { name: file.name, size: file.size, type: file.type });
           const mime = file.type;
           let fileType = 'file';
           if (mime.startsWith('image/')) fileType = 'image';
           else if (mime.startsWith('video/')) fileType = 'video';
           
-          console.log('🚀 파일 업로드 시작:', fileType);
           handleFileUpload(file, fileType);
           e.preventDefault();
-        } else {
-          console.log('❌ 파일 객체 생성 실패');
         }
       }
     }
@@ -1690,16 +1672,36 @@ function ChatRoom() {
                     </button>
                     {/* 닉네임과 말풍선을 세로로 */}
                     <div className="flex flex-col">
-                      {/* 닉네임 */}
-                      <div className="text-xl text-gray-600 font-medium max-w-20 truncate mb-1">{userNickMap[msg.uid] || msg.email?.split('@')[0] || '익명'}</div>
+                      {/* 닉네임 + 방장 아이콘 */}
+                      <div className="text-xl text-gray-600 font-medium max-w-20 truncate mb-1 flex items-center gap-1">
+                        {userNickMap[msg.uid] || msg.email?.split('@')[0] || '익명'}
+                        {/* 방장 아이콘 표시 */}
+                        {roomData && msg.uid === roomData.createdBy && (
+                          <span title="방장" className="text-yellow-500 text-xl">👑</span>
+                        )}
+                      </div>
                       {/* 말풍선+시간 */}
                       <div className={`flex items-end gap-2 max-w-[85%]`}>
-                        <div className={`relative px-4 py-3 rounded-2xl bg-white text-gray-800 rounded-bl-sm border border-gray-200 shadow-md break-words`}>
+                        <div className={`relative px-4 py-3 rounded-2xl bg-white text-gray-800 rounded-bl-sm border border-gray-200 shadow-md word-break-keep-all`}
+                             style={{ 
+                               wordBreak: 'keep-all',
+                               overflowWrap: 'break-word',
+                               hyphens: 'auto',
+                               minWidth: '200px',
+                               maxWidth: '100%'
+                             }}>
                       <div className="absolute -left-2 bottom-3 w-0 h-0 border-r-8 border-r-white border-t-4 border-t-transparent border-b-4 border-b-transparent drop-shadow-sm"></div>
                     {msg.fileType ? (
                             <div className="text-left">{renderMessage(msg)}</div>
                     ) : (
-                            <div className="text-lg leading-relaxed text-left whitespace-pre-wrap font-normal">{renderMessageWithPreview(msg.text)}</div>
+                            <div className="text-lg leading-relaxed text-left whitespace-pre-wrap font-normal"
+                                 style={{ 
+                                   wordBreak: 'keep-all',
+                                   overflowWrap: 'break-word',
+                                   lineHeight: '1.5'
+                                 }}>
+                              {renderMessageWithPreview(msg.text)}
+                            </div>
                     )}
                   </div>
                         
@@ -1724,12 +1726,26 @@ function ChatRoom() {
                 {/* 내 메시지는 기존과 동일 */}
                 {isMine && (
                   <div className={`flex items-end gap-2 max-w-[85%] flex-row-reverse`}>
-                    <div className={`relative px-4 py-3 rounded-2xl bg-yellow-300 text-gray-800 rounded-br-sm shadow-md break-words`}>
+                    <div className={`relative px-4 py-3 rounded-2xl bg-yellow-300 text-gray-800 rounded-br-sm shadow-md word-break-keep-all`}
+                         style={{ 
+                           wordBreak: 'keep-all',
+                           overflowWrap: 'break-word',
+                           hyphens: 'auto',
+                           minWidth: '200px',
+                           maxWidth: '100%'
+                         }}>
                       <div className="absolute -right-2 bottom-3 w-0 h-0 border-l-8 border-l-yellow-300 border-t-4 border-t-transparent border-b-4 border-b-transparent drop-shadow-sm"></div>
                       {msg.fileType ? (
                         <div className="text-left">{renderMessage(msg)}</div>
                       ) : (
-                        <div className="text-lg leading-relaxed text-left whitespace-pre-wrap font-normal">{renderMessageWithPreview(msg.text)}</div>
+                        <div className="text-lg leading-relaxed text-left whitespace-pre-wrap font-normal"
+                             style={{ 
+                               wordBreak: 'keep-all',
+                               overflowWrap: 'break-word',
+                               lineHeight: '1.5'
+                             }}>
+                          {renderMessageWithPreview(msg.text)}
+                        </div>
                       )}
                     </div>
                     

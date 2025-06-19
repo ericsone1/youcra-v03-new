@@ -182,10 +182,10 @@ const YouTubeChannelManager = () => {
     }
   };
 
-  // 채널 등록/업데이트
+  // 채널 등록
   const handleRegisterChannel = async () => {
-    if (!newChannelUrl.trim() || !currentUser?.uid) {
-      setMessage('채널 URL을 입력해주세요.');
+    if (!newChannelUrl.trim()) {
+      setMessage('YouTube 채널 URL을 입력해주세요.');
       return;
     }
 
@@ -193,10 +193,15 @@ const YouTubeChannelManager = () => {
     setMessage('');
 
     try {
-      // URL에서 채널 정보 추출
+      // 디버깅: API 키 확인
+      console.log('🔍 환경변수 확인:');
+      console.log('- REACT_APP_YOUTUBE_API_KEY 존재:', !!process.env.REACT_APP_YOUTUBE_API_KEY);
+      console.log('- API 키 길이:', process.env.REACT_APP_YOUTUBE_API_KEY?.length || 0);
+      console.log('- API 키 시작:', process.env.REACT_APP_YOUTUBE_API_KEY?.substring(0, 10) + '...');
+      
       const channelInfo = extractChannelId(newChannelUrl);
       if (!channelInfo) {
-        setMessage('유효한 YouTube 채널 URL을 입력해주세요.');
+        setMessage('올바른 YouTube 채널 URL이 아닙니다. 다시 확인해주세요.');
         setIsLoading(false);
         return;
       }

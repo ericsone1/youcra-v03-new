@@ -112,11 +112,21 @@ export function extractChannelId(url) {
 export async function fetchYouTubeChannelInfo(channelData) {
   try {
     const apiKey = process.env.REACT_APP_YOUTUBE_API_KEY;
+    
+    // 🔍 디버깅 로그 추가
+    console.log('🔍 YouTube API 키 디버깅:');
+    console.log('- API 키 존재 여부:', !!apiKey);
+    console.log('- API 키 타입:', typeof apiKey);
+    console.log('- API 키 길이:', apiKey?.length || 0);
+    console.log('- API 키 시작 10자:', apiKey?.substring(0, 10) || 'undefined');
+    console.log('- 모든 환경변수:', Object.keys(process.env).filter(key => key.startsWith('REACT_APP')));
+    
     if (!apiKey) {
-      console.warn('YouTube API 키가 설정되지 않음');
+      console.warn('❌ YouTube API 키가 설정되지 않음 - Mock 데이터 반환');
       return createMockChannelData(channelData);
     }
     
+    console.log('✅ API 키 존재 - YouTube API 호출 시작');
     console.log('채널 데이터:', channelData);
     
     let apiUrl = '';
