@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { collection, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { collection, onSnapshot, doc, getDoc, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
 
 function ChatRoomParticipants() {
@@ -11,6 +11,8 @@ function ChatRoomParticipants() {
   
   const [participants, setParticipants] = useState([]);
   const [roomData, setRoomData] = useState(null);
+  const [videoList, setVideoList] = useState([]);
+  const [participantWatchRates, setParticipantWatchRates] = useState({});
   const [loading, setLoading] = useState(true);
 
   // 방 정보 및 참여자 목록 실시간 구독
@@ -32,7 +34,7 @@ function ChatRoomParticipants() {
 
     // 참여자 목록 실시간 구독
     const participantsRef = collection(db, 'chatRooms', roomId, 'participants');
-    const unsubscribe = onSnapshot(participantsRef, async (snapshot) => {
+    const unsubscribeParticipants = onSnapshot(participantsRef, async (snapshot) => {
       try {
         const participantsList = await Promise.all(
           snapshot.docs.map(async (participantDoc) => {
@@ -55,7 +57,6 @@ function ChatRoomParticipants() {
                   role: participantData.role || 'member',
                   isOwner: participantData.role === 'owner' || uid === roomData?.createdBy,
                   isOnline: participantData.isOnline || false,
-                  watchRate: participantData.watchRate || 0,
                 };
               }
             } catch (userError) {
@@ -72,7 +73,6 @@ function ChatRoomParticipants() {
               role: participantData.role || 'member',
               isOwner: participantData.role === 'owner',
               isOnline: participantData.isOnline || false,
-              watchRate: participantData.watchRate || 0,
             };
           })
         );
@@ -92,10 +92,34 @@ function ChatRoomParticipants() {
       }
     });
 
+    // 영상 목록 실시간 구독
+    const unsubscribeVideos = onSnapshot(
+      collection(db, 'chatRooms', roomId, 'videos'),
+      (snapshot) => {
+        const videosList = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setVideoList(videosList);
+      }
+    );
+
     fetchRoomData();
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeParticipants();
+      unsubscribeVideos();
+    };
   }, [roomId, currentUser, roomData?.createdBy]);
+
+  // 참여자와 영상 목록이 모두 로드된 후 시청률 계산
+  useEffect(() => {
+    if (participants.length > 0 && videoList.length > 0) {
+      calculateWatchRates(videoList, participants).then(watchRates => {
+        setParticipantWatchRates(watchRates);
+      });
+    }
+  }, [participants, videoList, roomId]);
 
   // 시간 포맷팅
   const formatJoinTime = (timestamp) => {
@@ -113,6 +137,44 @@ function ChatRoomParticipants() {
     } catch {
       return '참여 시간 없음';
     }
+  };
+
+  // 시청률 계산 함수
+  const calculateWatchRates = async (videosList, participantsList) => {
+    if (!videosList.length || !participantsList.length) {
+      return {};
+    }
+
+    const watchRates = {};
+    
+    for (const participant of participantsList) {
+      let certifiedCount = 0;
+      
+      // 각 영상에 대해 이 참여자가 인증했는지 확인
+      for (const video of videosList) {
+        try {
+          const certificationsRef = collection(db, 'chatRooms', roomId, 'videos', video.id, 'certifications');
+          const certificationsSnapshot = await getDocs(certificationsRef);
+          
+          const hasCertified = certificationsSnapshot.docs.some(doc => {
+            const certData = doc.data();
+            return certData.uid === participant.id;
+          });
+          
+          if (hasCertified) {
+            certifiedCount++;
+          }
+        } catch (error) {
+          console.error('시청률 계산 오류:', error);
+        }
+      }
+      
+      // 시청률 계산 (인증한 영상 수 / 전체 영상 수 * 100)
+      const watchRate = videosList.length > 0 ? Math.round((certifiedCount / videosList.length) * 100) : 0;
+      watchRates[participant.id] = watchRate;
+    }
+    
+    return watchRates;
   };
 
   if (loading) {
@@ -207,7 +269,7 @@ function ChatRoomParticipants() {
                       )}
                     </div>
                     <div className="flex items-center gap-2 text-sm text-blue-600">
-                      <span>시청률 {user.watchRate || 0}%</span>
+                      <span>시청률 {participantWatchRates[user.id] ?? 0}%</span>
                       {user.isOnline && (
                         <span className="flex items-center gap-1">
                           <div className="w-2 h-2 bg-green-500 rounded-full"></div>

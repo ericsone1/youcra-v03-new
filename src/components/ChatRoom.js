@@ -519,28 +519,11 @@ function ChatRoom() {
         const durationA = a.duration || 0;
         const durationB = b.duration || 0;
         
-        // duration이 0인 영상들은 가장 아래로 보내기
-        if (durationA === 0 && durationB > 0) return 1;  // A를 아래로
-        if (durationB === 0 && durationA > 0) return -1; // B를 아래로
-        
-        // 둘 다 0이면 등록 시간 순으로 정렬
-        if (durationA === 0 && durationB === 0) {
-          const timeA = a.registeredAt?.seconds || 0;
-          const timeB = b.registeredAt?.seconds || 0;
-          return timeB - timeA; // 최신순
-        }
-        
-        // duration이 같으면 등록 시간 순으로 정렬
-        if (durationA === durationB) {
-          const timeA = a.registeredAt?.seconds || 0;
-          const timeB = b.registeredAt?.seconds || 0;
-          return timeB - timeA; // 최신순
-        }
-        
-        return durationA - durationB; // 오름차순 정렬
-                });
+        // 시청리스트 순서: duration 기준 오름차순 (짧은 영상부터)
+        return durationA - durationB;
+      });
           
-          setVideoList(sortedVideos);
+      setVideoList(sortedVideos);
       
       // URL 쿼리 파라미터에서 비디오 ID 확인하고 자동 선택
       const urlParams = new URLSearchParams(window.location.search);
@@ -556,6 +539,29 @@ function ChatRoom() {
     });
     return () => unsub();
   }, [roomId]);
+
+  // 시청 상태에 따른 영상 목록 정렬 (시청 안된 것 상단으로)
+  useEffect(() => {
+    if (videoList.length === 0) return;
+    
+    const sortedVideos = [...videoList].sort((a, b) => {
+      const aWatched = certifiedVideoIds.includes(a.id);
+      const bWatched = certifiedVideoIds.includes(b.id);
+      
+      // 1차 정렬: 시청 안된 것을 상단으로
+      if (!aWatched && bWatched) return -1;
+      if (aWatched && !bWatched) return 1;
+      
+      // 2차 정렬: 기존 duration 정렬 유지 (짧은 것부터)
+      return (a.duration || 0) - (b.duration || 0);
+    });
+    
+    // 정렬이 실제로 변경된 경우만 업데이트 (무한 루프 방지)
+    const isOrderChanged = sortedVideos.some((video, index) => video.id !== videoList[index]?.id);
+    if (isOrderChanged) {
+      setVideoList(sortedVideos);
+    }
+  }, [certifiedVideoIds]); // videoList 의존성 제거하여 무한 루프 방지
 
   // 내가 인증한 영상 id 리스트 구독
   useEffect(() => {

@@ -19,8 +19,6 @@ export default function ChatRoomInfo() {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
   
-  console.log('🏠 ChatRoomInfo 컴포넌트 로딩:', { roomId, currentUser: !!currentUser });
-  
   const [roomData, setRoomData] = useState(null);
   const [participants, setParticipants] = useState([]);
   const [videoList, setVideoList] = useState([]);
@@ -44,22 +42,6 @@ export default function ChatRoomInfo() {
     roomData.owner === myUid ||
     roomData.hostUid === myUid
   );
-
-  // 디버깅용 로그 (개발 환경에서만)
-  if (process.env.NODE_ENV === 'development' && roomData && myUid) {
-    console.log('🔍 방장 확인:', {
-      myUid,
-      myEmail,
-      roomData: {
-        createdBy: roomData.createdBy,
-        ownerEmail: roomData.ownerEmail,
-        creatorEmail: roomData.creatorEmail,
-        owner: roomData.owner,
-        hostUid: roomData.hostUid
-      },
-      isOwner
-    });
-  }
 
   // 방 타입 정보
   const getRoomTypeInfo = (roomType) => {
@@ -154,15 +136,16 @@ export default function ChatRoomInfo() {
           const certificationsRef = collection(db, 'chatRooms', roomId, 'videos', video.id, 'certifications');
           const certificationsSnapshot = await getDocs(certificationsRef);
           
-          const hasCertified = certificationsSnapshot.docs.some(doc => 
-            doc.data().uid === participant.id
-          );
+          const hasCertified = certificationsSnapshot.docs.some(doc => {
+            const certData = doc.data();
+            return certData.uid === participant.id;
+          });
           
           if (hasCertified) {
             certifiedCount++;
           }
         } catch (error) {
-          console.error('인증 확인 오류:', error);
+          console.error('시청률 계산 오류:', error);
         }
       }
       
@@ -189,19 +172,14 @@ export default function ChatRoomInfo() {
     };
 
     // 참여자 실시간 구독
-    console.log('🔍 [방정보] 참여자 실시간 구독 시작:', roomId);
-    
     const unsubscribeParticipants = onSnapshot(
       collection(db, 'chatRooms', roomId, 'participants'),
       async (snapshot) => {
-        console.log('🔍 [방정보] participants 컬렉션 문서 수:', snapshot.size);
-        
         try {
           const participantsList = await Promise.all(
             snapshot.docs.map(async (participantDoc) => {
               const uid = participantDoc.id;
               const participantData = participantDoc.data();
-              console.log('🔍 [방정보] 참여자 처리 중:', uid, participantData);
               
               // 사용자 정보 가져오기
               try {
@@ -210,7 +188,6 @@ export default function ChatRoomInfo() {
                 
                 if (userSnapshot.exists()) {
                   const userData = userSnapshot.data();
-                  console.log('🔍 [방정보] 사용자 정보 발견:', userData);
                   return {
                     id: uid,
                     name: userData.displayName || userData.nick || userData.name || userData.email?.split('@')[0] || '익명',
@@ -222,15 +199,12 @@ export default function ChatRoomInfo() {
                     isOnline: participantData.isOnline || false,
                     watchRate: participantData.watchRate || 0
                   };
-                } else {
-                  console.log('🔍 [방정보] 사용자 문서 없음:', uid);
                 }
               } catch (userError) {
-                console.error('🔍 [방정보] 사용자 정보 로딩 실패:', userError);
+                console.error('사용자 정보 로딩 실패:', userError);
               }
               
               // 사용자 정보를 찾을 수 없는 경우 기본값 반환
-              console.log('🔍 [방정보] 기본값 사용자 정보 반환:', uid);
               return {
                 id: uid,
                 name: uid.slice(0, 8) + '...',
@@ -245,8 +219,6 @@ export default function ChatRoomInfo() {
             })
           );
           
-          console.log('🔍 [방정보] 처리된 참여자 목록:', participantsList);
-          
           // 방장을 맨 위로, 나머지는 이름순으로 정렬
           participantsList.sort((a, b) => {
             if (a.isOwner && !b.isOwner) return -1;
@@ -254,12 +226,9 @@ export default function ChatRoomInfo() {
             return a.name.localeCompare(b.name);
           });
           
-          console.log('🔍 [방정보] 최종 참여자 목록:', participantsList);
-          console.log('🔍 [방정보] 참여자 수:', participantsList.length);
-          
           setParticipants(participantsList);
         } catch (error) {
-          console.error('🔍 [방정보] 참여자 목록 로딩 실패:', error);
+          console.error('참여자 목록 로딩 실패:', error);
         }
       }
     );
