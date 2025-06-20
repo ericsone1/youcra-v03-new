@@ -198,6 +198,8 @@ function ChatRoom() {
   const [certLoading, setCertLoading] = useState(false);
   const [certifiedVideoIds, setCertifiedVideoIds] = useState([]);
   const [watchSeconds, setWatchSeconds] = useState(0);
+  // 인증 횟수 상태 추가
+  const [userCertCount, setUserCertCount] = useState(0);
   
   // === 방장 기능 관련 State ===
   const [showMessageOptions, setShowMessageOptions] = useState(null);
@@ -1555,7 +1557,7 @@ function ChatRoom() {
   return (
     <div className="flex flex-col h-screen max-w-md mx-auto bg-white relative">
       {/* 헤더 */}
-      <header className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md flex-shrink-0 flex items-center justify-between px-4 py-3 border-b z-30 bg-rose-100">
+      <header className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md flex-shrink-0 flex items-center justify-between px-4 py-3 border-b z-30 bg-rose-100" style={{ paddingTop: 'env(safe-area-inset-top, 12px)' }}>
         <div className="flex-1 text-center">
           <div className="font-bold text-lg truncate">{roomName}</div>
           <div className="flex items-center justify-center gap-2 text-xs text-gray-600">
@@ -1614,7 +1616,7 @@ function ChatRoom() {
         style={{
           background: 'linear-gradient(180deg, #FFFEF7 0%, #FEFDF6 50%, #FDF9F0 100%)',
           paddingBottom: 176, // 입력창 공간을 적절히 확보 (80 + 96)
-          paddingTop: 140,
+          paddingTop: 220, // 헤더 높이 + safe-area 고려하여 충분히 확보
           position: 'relative',
           zIndex: 10,
           msOverflowStyle: 'none',
@@ -2266,5 +2268,26 @@ function getDayOfWeek(ts) {
   const days = ['일', '월', '화', '수', '목', '금', '토'];
   return days[date.getDay()] + '요일';
 }
+
+// === 사용자 인증 횟수 fetch ===
+useEffect(() => {
+  if (!auth.currentUser || selectedVideoIdx === null || !videoList[selectedVideoIdx] || !roomId) {
+    setUserCertCount(0);
+    return;
+  }
+  const fetchCount = async () => {
+    try {
+      const q = query(
+        collection(db, "chatRooms", roomId, "videos", videoList[selectedVideoIdx].id, "certifications"),
+        where("uid", "==", auth.currentUser.uid)
+      );
+      const snap = await getDocs(q);
+      setUserCertCount(snap.size);
+    } catch (e) {
+      console.error("cert count error", e);
+    }
+  };
+  fetchCount();
+}, [selectedVideoIdx, certifiedVideoIds, auth.currentUser, roomId, videoList]);
 
 export default ChatRoom;
