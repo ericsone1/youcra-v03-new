@@ -590,29 +590,17 @@ function ChatRoom() {
     return () => unsubscribes.forEach((unsub) => unsub());
   }, [roomId, videoList, auth.currentUser]);
 
-  // 팝업 플레이어 인증 상태 초기화 (영상 변경 시)
+  // ▶️ 선택된 영상이 바뀔 때마다 타이머와 관련 상태 초기화
   useEffect(() => {
-    setIsCertified(false);
+    // watchSeconds, videoEnded 초기화
     setWatchSeconds(0);
-    setLastPlayerTime(0);
     setVideoEnded(false);
-    setMinimized(false);
-    setEndCountdown(0);
-    
-    // 모든 타이머 정리
+    setIsCertified(false);
+
+    // 기존 interval 정리 (재생 중이던 타이머 충돌 방지)
     if (playerRef.current && playerRef.current._interval) {
       clearInterval(playerRef.current._interval);
       playerRef.current._interval = null;
-    }
-    
-    if (autoNextTimer.current) {
-      clearInterval(autoNextTimer.current);
-      autoNextTimer.current = null;
-    }
-    
-    if (endTimer.current) {
-      clearInterval(endTimer.current);
-      endTimer.current = null;
     }
   }, [selectedVideoIdx]);
 
