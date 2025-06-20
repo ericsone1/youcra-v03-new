@@ -619,6 +619,27 @@ function ChatRoom() {
     }, 0);
   }, [messages, loading, error]);
 
+  // === 사용자 인증 횟수 fetch ===
+  useEffect(() => {
+    if (!auth.currentUser || selectedVideoIdx === null || !videoList[selectedVideoIdx] || !roomId) {
+      setUserCertCount(0);
+      return;
+    }
+    const fetchCount = async () => {
+      try {
+        const q = query(
+          collection(db, "chatRooms", roomId, "videos", videoList[selectedVideoIdx].id, "certifications"),
+          where("uid", "==", auth.currentUser.uid)
+        );
+        const snap = await getDocs(q);
+        setUserCertCount(snap.size);
+      } catch (e) {
+        console.error("cert count error", e);
+      }
+    };
+    fetchCount();
+  }, [selectedVideoIdx, certifiedVideoIds, auth.currentUser, roomId, videoList]);
+
   // 메시지 전송
   const handleSend = async (e) => {
     e.preventDefault();
@@ -2268,26 +2289,5 @@ function getDayOfWeek(ts) {
   const days = ['일', '월', '화', '수', '목', '금', '토'];
   return days[date.getDay()] + '요일';
 }
-
-// === 사용자 인증 횟수 fetch ===
-useEffect(() => {
-  if (!auth.currentUser || selectedVideoIdx === null || !videoList[selectedVideoIdx] || !roomId) {
-    setUserCertCount(0);
-    return;
-  }
-  const fetchCount = async () => {
-    try {
-      const q = query(
-        collection(db, "chatRooms", roomId, "videos", videoList[selectedVideoIdx].id, "certifications"),
-        where("uid", "==", auth.currentUser.uid)
-      );
-      const snap = await getDocs(q);
-      setUserCertCount(snap.size);
-    } catch (e) {
-      console.error("cert count error", e);
-    }
-  };
-  fetchCount();
-}, [selectedVideoIdx, certifiedVideoIds, auth.currentUser, roomId, videoList]);
 
 export default ChatRoom;
