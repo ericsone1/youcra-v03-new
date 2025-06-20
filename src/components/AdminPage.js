@@ -1,10 +1,20 @@
 import React, { useState } from 'react';
 import AdminDeleteAllChatRooms from './AdminDeleteAllChatRooms';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, getDocs, query, where, doc, deleteDoc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
 export default function AdminPage() {
   const [isCreatingPosts, setIsCreatingPosts] = useState(false);
+  
+  // 인증 관리 관련 상태
+  const [selectedRoomId, setSelectedRoomId] = useState('xojnZj99BRNLbHXmSkof');
+  const [targetUserInput, setTargetUserInput] = useState('SONAGI MUSIC');
+  const [isSearchingUser, setIsSearchingUser] = useState(false);
+  const [foundUser, setFoundUser] = useState(null);
+  const [userVideos, setUserVideos] = useState([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [allParticipants, setAllParticipants] = useState([]);
+  const [showAllUsers, setShowAllUsers] = useState(false);
 
   // 더미 게시물 데이터
   const dummyPosts = [
@@ -111,10 +121,496 @@ export default function AdminPage() {
     }
   };
 
+  // 유저 검색 및 인증 상태 확인
+  const searchUserAndVideos = async () => {
+    if (!targetUserInput.trim()) {
+      alert('유저명을 입력해주세요.');
+      return;
+    }
+
+    setIsSearchingUser(true);
+    try {
+      console.log(`🔍 "${targetUserInput}" 유저 검색 중...`);
+      
+      // 1. 참여자에서 유저 찾기
+      console.log('🔍 채팅방 ID:', selectedRoomId);
+      const participantsRef = collection(db, 'chatRooms', selectedRoomId, 'participants');
+      const allParticipantsSnap = await getDocs(participantsRef);
+      
+      console.log('📋 참여자 문서 개수:', allParticipantsSnap.size);
+      
+      // 모든 참여자 목록 저장
+      const participantsList = await Promise.all(
+        allParticipantsSnap.docs.map(async (participantDoc) => {
+          const uid = participantDoc.id;
+          const participantData = participantDoc.data();
+          console.log('👤 참여자 기본 데이터:', { uid, ...participantData });
+          
+          // users 컬렉션에서 상세 정보 가져오기
+          try {
+            const userRef = doc(db, 'users', uid);
+            const userSnapshot = await getDoc(userRef);
+            
+            if (userSnapshot.exists()) {
+              const userData = userSnapshot.data();
+              console.log('✅ users 컬렉션 데이터:', userData);
+              
+              return {
+                uid,
+                nickname: userData.displayName || userData.nick || userData.name || participantData.displayName || participantData.nickname,
+                displayName: userData.displayName || userData.nick || userData.name || participantData.displayName,
+                email: userData.email || participantData.email,
+                photoURL: userData.photoURL || userData.profileImage || participantData.photoURL,
+                // participants 컬렉션의 추가 정보도 유지
+                ...participantData
+              };
+            } else {
+              console.log('⚠️ users 컬렉션에 해당 유저 없음:', uid);
+            }
+          } catch (userError) {
+            console.error('❌ users 컬렉션 조회 실패:', userError);
+          }
+          
+          // users 컬렉션에서 가져오지 못한 경우 participants 데이터만 사용
+          return {
+            uid,
+            nickname: participantData.displayName || participantData.nickname || participantData.email?.split('@')[0],
+            displayName: participantData.displayName || participantData.nickname,
+            email: participantData.email,
+            photoURL: participantData.photoURL,
+            ...participantData
+          };
+        })
+      );
+      
+      console.log('📊 전체 참여자 목록:', participantsList);
+      setAllParticipants(participantsList);
+      
+      let targetUser = null;
+      participantsList.forEach(data => {
+        if (
+          (data.nickname && data.nickname.includes(targetUserInput)) ||
+          (data.displayName && data.displayName.includes(targetUserInput)) ||
+          (data.email && data.email.includes(targetUserInput.toLowerCase()))
+        ) {
+          targetUser = data;
+        }
+      });
+
+      if (!targetUser) {
+        alert(`"${targetUserInput}" 유저를 찾을 수 없습니다.`);
+        setFoundUser(null);
+        setUserVideos([]);
+        return;
+      }
+
+      console.log('✅ 유저 발견:', targetUser);
+      setFoundUser(targetUser);
+
+      // 2. 채팅방 영상 목록 가져오기
+      const videosRef = collection(db, 'chatRooms', selectedRoomId, 'videos');
+      const videosSnap = await getDocs(videosRef);
+      
+      const videosList = [];
+      
+      // 3. 각 영상의 인증 상태 확인
+      for (const videoDoc of videosSnap.docs) {
+        const videoData = videoDoc.data();
+        
+        // 해당 유저의 인증 기록 확인
+        const certRef = collection(db, 'chatRooms', selectedRoomId, 'videos', videoDoc.id, 'certifications');
+        const certQuery = query(certRef, where('uid', '==', targetUser.uid));
+        const certSnap = await getDocs(certQuery);
+        
+        videosList.push({
+          id: videoDoc.id,
+          title: videoData.title,
+          thumbnail: videoData.thumbnail,
+          duration: videoData.duration,
+          isCertified: !certSnap.empty,
+          certificationCount: certSnap.size
+        });
+      }
+
+      setUserVideos(videosList);
+      console.log(`📹 총 ${videosList.length}개 영상 중 ${videosList.filter(v => v.isCertified).length}개 인증됨`);
+
+    } catch (error) {
+      console.error('유저 검색 오류:', error);
+      alert('유저 검색 중 오류가 발생했습니다.');
+    } finally {
+      setIsSearchingUser(false);
+    }
+  };
+
+  // 모든 영상 인증 추가
+  const addAllCertifications = async () => {
+    if (!foundUser) {
+      alert('먼저 유저를 검색해주세요.');
+      return;
+    }
+
+    const uncertifiedVideos = userVideos.filter(v => !v.isCertified);
+    if (uncertifiedVideos.length === 0) {
+      alert('이미 모든 영상이 인증되어 있습니다.');
+      return;
+    }
+
+    if (!window.confirm(`${foundUser.nickname || foundUser.displayName}님의 미인증 영상 ${uncertifiedVideos.length}개에 인증을 추가하시겠습니까?`)) {
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      let successCount = 0;
+      
+      for (const video of uncertifiedVideos) {
+        try {
+          const certRef = collection(db, 'chatRooms', selectedRoomId, 'videos', video.id, 'certifications');
+          await addDoc(certRef, {
+            uid: foundUser.uid,
+            email: foundUser.email,
+            certifiedAt: serverTimestamp(),
+            addedBy: 'admin',
+            addedAt: serverTimestamp()
+          });
+          successCount++;
+          console.log(`✅ "${video.title}" 인증 추가 완료`);
+        } catch (error) {
+          console.error(`❌ "${video.title}" 인증 추가 실패:`, error);
+        }
+      }
+
+      alert(`✅ ${successCount}개 영상 인증이 추가되었습니다!`);
+      
+      // 상태 새로고침
+      await searchUserAndVideos();
+
+    } catch (error) {
+      console.error('인증 추가 오류:', error);
+      alert('인증 추가 중 오류가 발생했습니다.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // 모든 영상 인증 제거
+  const removeAllCertifications = async () => {
+    if (!foundUser) {
+      alert('먼저 유저를 검색해주세요.');
+      return;
+    }
+
+    const certifiedVideos = userVideos.filter(v => v.isCertified);
+    if (certifiedVideos.length === 0) {
+      alert('인증된 영상이 없습니다.');
+      return;
+    }
+
+    if (!window.confirm(`${foundUser.nickname || foundUser.displayName}님의 인증된 영상 ${certifiedVideos.length}개의 인증을 제거하시겠습니까?`)) {
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      let successCount = 0;
+      
+      for (const video of certifiedVideos) {
+        try {
+          const certRef = collection(db, 'chatRooms', selectedRoomId, 'videos', video.id, 'certifications');
+          const certQuery = query(certRef, where('uid', '==', foundUser.uid));
+          const certSnap = await getDocs(certQuery);
+          
+          // 해당 유저의 모든 인증 기록 삭제
+          for (const certDoc of certSnap.docs) {
+            await deleteDoc(doc(db, 'chatRooms', selectedRoomId, 'videos', video.id, 'certifications', certDoc.id));
+          }
+          
+          successCount++;
+          console.log(`✅ "${video.title}" 인증 제거 완료`);
+        } catch (error) {
+          console.error(`❌ "${video.title}" 인증 제거 실패:`, error);
+        }
+      }
+
+      alert(`✅ ${successCount}개 영상 인증이 제거되었습니다!`);
+      
+      // 상태 새로고침
+      await searchUserAndVideos();
+
+    } catch (error) {
+      console.error('인증 제거 오류:', error);
+      alert('인증 제거 중 오류가 발생했습니다.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // 모든 참여자 불러오기 함수 추가
+  const loadAllParticipants = async () => {
+    if (!selectedRoomId.trim()) {
+      alert('채팅방 ID를 입력해주세요.');
+      return;
+    }
+    
+    setIsSearchingUser(true);
+    try {
+      console.log('🔍 채팅방 ID:', selectedRoomId);
+      const participantsRef = collection(db, 'chatRooms', selectedRoomId, 'participants');
+      const allParticipantsSnap = await getDocs(participantsRef);
+      
+      console.log('📋 참여자 문서 개수:', allParticipantsSnap.size);
+      
+      const participantsList = await Promise.all(
+        allParticipantsSnap.docs.map(async (participantDoc) => {
+          const uid = participantDoc.id;
+          const participantData = participantDoc.data();
+          console.log('👤 참여자 기본 데이터:', { uid, ...participantData });
+          
+          // users 컬렉션에서 상세 정보 가져오기
+          try {
+            const userRef = doc(db, 'users', uid);
+            const userSnapshot = await getDoc(userRef);
+            
+            if (userSnapshot.exists()) {
+              const userData = userSnapshot.data();
+              console.log('✅ users 컬렉션 데이터:', userData);
+              
+              return {
+                uid,
+                nickname: userData.displayName || userData.nick || userData.name || participantData.displayName || participantData.nickname,
+                displayName: userData.displayName || userData.nick || userData.name || participantData.displayName,
+                email: userData.email || participantData.email,
+                photoURL: userData.photoURL || userData.profileImage || participantData.photoURL,
+                // participants 컬렉션의 추가 정보도 유지
+                ...participantData
+              };
+            } else {
+              console.log('⚠️ users 컬렉션에 해당 유저 없음:', uid);
+            }
+          } catch (userError) {
+            console.error('❌ users 컬렉션 조회 실패:', userError);
+          }
+          
+          // users 컬렉션에서 가져오지 못한 경우 participants 데이터만 사용
+          return {
+            uid,
+            nickname: participantData.displayName || participantData.nickname || participantData.email?.split('@')[0],
+            displayName: participantData.displayName || participantData.nickname,
+            email: participantData.email,
+            photoURL: participantData.photoURL,
+            ...participantData
+          };
+        })
+      );
+      
+      console.log('📊 최종 참여자 목록:', participantsList);
+      setAllParticipants(participantsList);
+      
+    } catch (error) {
+      console.error('참여자 목록 로드 오류:', error);
+      alert('참여자 목록을 불러오는 중 오류가 발생했습니다.');
+    } finally {
+      setIsSearchingUser(false);
+    }
+  };
+
+  // 전체보기 토글 함수 수정
+  const toggleShowAllUsers = async () => {
+    if (!showAllUsers && allParticipants.length === 0) {
+      // 처음 전체보기를 누르고 참여자 목록이 없으면 로드
+      await loadAllParticipants();
+    }
+    setShowAllUsers(!showAllUsers);
+  };
+
   return (
     <div style={{ maxWidth: 480, margin: '40px auto', padding: 32, background: '#fff', borderRadius: 16, boxShadow: '0 2px 16px #0001' }}>
       <h1 style={{ fontSize: 28, fontWeight: 'bold', marginBottom: 24, color: '#d00' }}>관리자 페이지</h1>
       
+      {/* 유저 인증 관리 섹션 */}
+      <div style={{ marginBottom: 40, padding: 20, backgroundColor: '#f0f8ff', borderRadius: 12, border: '2px solid #87ceeb' }}>
+        <h2 style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 16, color: '#1e90ff' }}>🎯 유저 인증 관리</h2>
+        
+        {/* 검색 입력 */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold', color: '#333' }}>채팅방 ID:</label>
+          <input
+            type="text"
+            value={selectedRoomId}
+            onChange={(e) => setSelectedRoomId(e.target.value)}
+            style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: 6, marginBottom: 12 }}
+            placeholder="채팅방 ID (예: xojnZj99BRNLbHXmSkof)"
+          />
+          
+          <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold', color: '#333' }}>유저명:</label>
+          <input
+            type="text"
+            value={targetUserInput}
+            onChange={(e) => setTargetUserInput(e.target.value)}
+            style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: 6, marginBottom: 12 }}
+            placeholder="닉네임, 이메일 또는 표시명"
+          />
+          
+                     <div style={{ display: 'flex', gap: 8 }}>
+             <button
+               onClick={searchUserAndVideos}
+               disabled={isSearchingUser}
+               style={{
+                 flex: 1,
+                 padding: '12px',
+                 backgroundColor: isSearchingUser ? '#6c757d' : '#007bff',
+                 color: 'white',
+                 border: 'none',
+                 borderRadius: 6,
+                 fontWeight: 'bold',
+                 cursor: isSearchingUser ? 'not-allowed' : 'pointer'
+               }}
+             >
+               {isSearchingUser ? '🔍 검색 중...' : '🔍 유저 검색'}
+             </button>
+             
+             <button
+               onClick={toggleShowAllUsers}
+               disabled={isSearchingUser}
+               style={{
+                 padding: '12px 16px',
+                 backgroundColor: isSearchingUser ? '#6c757d' : '#6c757d',
+                 color: 'white',
+                 border: 'none',
+                 borderRadius: 6,
+                 fontWeight: 'bold',
+                 cursor: isSearchingUser ? 'not-allowed' : 'pointer'
+               }}
+             >
+               {isSearchingUser ? '⏳ 로딩...' : (showAllUsers ? '👁️ 숨기기' : '👥 전체보기')}
+             </button>
+           </div>
+                 </div>
+
+         {/* 모든 참여자 목록 표시 */}
+         {showAllUsers && allParticipants.length > 0 && (
+           <div style={{ marginBottom: 16, padding: 12, backgroundColor: '#fff', borderRadius: 8, border: '1px solid #ddd' }}>
+             <h3 style={{ margin: 0, marginBottom: 8, color: '#333' }}>👥 채팅방 전체 참여자 ({allParticipants.length}명):</h3>
+             <div style={{ maxHeight: 200, overflowY: 'auto', fontSize: 12 }}>
+               {allParticipants.map((user, index) => (
+                 <div key={user.uid} style={{ 
+                   padding: 8, 
+                   borderBottom: '1px solid #eee',
+                   cursor: 'pointer',
+                   backgroundColor: '#f8f9fa'
+                 }}
+                 onClick={() => {
+                   setTargetUserInput(user.nickname || user.displayName || user.email || user.uid);
+                   setShowAllUsers(false);
+                 }}>
+                   <div style={{ fontWeight: 'bold', color: '#333' }}>
+                     {user.nickname || user.displayName || '닉네임 없음'}
+                   </div>
+                   <div style={{ color: '#666', fontSize: 11 }}>
+                     이메일: {user.email || '없음'}<br/>
+                     UID: {user.uid}
+                   </div>
+                 </div>
+               ))}
+             </div>
+             <div style={{ fontSize: 11, color: '#999', marginTop: 8 }}>
+               💡 클릭하면 해당 유저로 검색됩니다
+             </div>
+           </div>
+         )}
+
+         {/* 유저 정보 표시 */}
+         {foundUser && (
+          <div style={{ marginBottom: 16, padding: 12, backgroundColor: '#fff', borderRadius: 8, border: '1px solid #ddd' }}>
+            <h3 style={{ margin: 0, marginBottom: 8, color: '#333' }}>👤 검색된 유저:</h3>
+            <p style={{ margin: 0, color: '#666' }}>
+              <strong>닉네임:</strong> {foundUser.nickname || '없음'}<br />
+              <strong>이메일:</strong> {foundUser.email}<br />
+              <strong>UID:</strong> {foundUser.uid}
+            </p>
+          </div>
+        )}
+
+        {/* 영상 목록 및 인증 상태 */}
+        {userVideos.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <h3 style={{ marginBottom: 12, color: '#333' }}>📹 영상 인증 현황:</h3>
+            <div style={{ marginBottom: 16, padding: 12, backgroundColor: '#f8f9fa', borderRadius: 8 }}>
+              <p style={{ margin: 0, fontSize: 14, color: '#666' }}>
+                총 <strong>{userVideos.length}개</strong> 영상 중 <strong style={{ color: '#28a745' }}>{userVideos.filter(v => v.isCertified).length}개 인증됨</strong>, 
+                <strong style={{ color: '#dc3545' }}> {userVideos.filter(v => !v.isCertified).length}개 미인증</strong>
+              </p>
+            </div>
+            
+            <div style={{ maxHeight: 200, overflowY: 'auto', border: '1px solid #ddd', borderRadius: 6 }}>
+              {userVideos.map((video) => (
+                <div key={video.id} style={{ 
+                  padding: 8, 
+                  borderBottom: '1px solid #eee', 
+                  display: 'flex', 
+                  alignItems: 'center',
+                  backgroundColor: video.isCertified ? '#f0fff0' : '#fff5f5'
+                }}>
+                  <img src={video.thumbnail} alt="썸네일" style={{ width: 40, height: 24, objectFit: 'cover', borderRadius: 4, marginRight: 8 }} />
+                  <div style={{ flex: 1, fontSize: 12 }}>
+                    <div style={{ fontWeight: 'bold', marginBottom: 2 }}>{video.title}</div>
+                  </div>
+                  <span style={{ 
+                    fontSize: 12, 
+                    padding: '2px 6px', 
+                    borderRadius: 10, 
+                    backgroundColor: video.isCertified ? '#28a745' : '#dc3545',
+                    color: 'white'
+                  }}>
+                    {video.isCertified ? '✅ 인증' : '❌ 미인증'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 인증 관리 버튼들 */}
+        {foundUser && userVideos.length > 0 && (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={addAllCertifications}
+              disabled={isProcessing || userVideos.filter(v => !v.isCertified).length === 0}
+              style={{
+                flex: 1,
+                padding: '12px',
+                backgroundColor: isProcessing ? '#6c757d' : '#28a745',
+                color: 'white',
+                border: 'none',
+                borderRadius: 6,
+                fontWeight: 'bold',
+                cursor: isProcessing ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {isProcessing ? '⏳ 처리 중...' : '✅ 전체 인증 추가'}
+            </button>
+            
+            <button
+              onClick={removeAllCertifications}
+              disabled={isProcessing || userVideos.filter(v => v.isCertified).length === 0}
+              style={{
+                flex: 1,
+                padding: '12px',
+                backgroundColor: isProcessing ? '#6c757d' : '#dc3545',
+                color: 'white',
+                border: 'none',
+                borderRadius: 6,
+                fontWeight: 'bold',
+                cursor: isProcessing ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {isProcessing ? '⏳ 처리 중...' : '❌ 전체 인증 제거'}
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* 더미 게시물 생성 섹션 */}
       <div style={{ marginBottom: 40, padding: 20, backgroundColor: '#f8f9fa', borderRadius: 12, border: '2px solid #e9ecef' }}>
         <h2 style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 16, color: '#495057' }}>📝 더미 게시물 생성</h2>

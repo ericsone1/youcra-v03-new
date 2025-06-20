@@ -179,42 +179,81 @@ function ChatRoomParticipants() {
     }
   };
 
-  // 시청률 계산 함수
+  // 시청률 계산 함수 (최적화된 버전)
   const calculateWatchRates = async (videosList, participantsList) => {
     if (!videosList.length || !participantsList.length) {
       return {};
     }
 
-    const watchRates = {};
-    
-    for (const participant of participantsList) {
-      let certifiedCount = 0;
-      
-      // 각 영상에 대해 이 참여자가 인증했는지 확인
-      for (const video of videosList) {
+    console.log('🔄 [참여자] 시청률 계산 시작:', { 
+      참여자수: participantsList.length, 
+      영상수: videosList.length 
+    });
+
+    try {
+      // 1. 모든 영상의 인증 데이터를 병렬로 한 번에 가져오기
+      const allCertificationsPromises = videosList.map(async (video) => {
         try {
           const certificationsRef = collection(db, 'chatRooms', roomId, 'videos', video.id, 'certifications');
           const certificationsSnapshot = await getDocs(certificationsRef);
           
-          const hasCertified = certificationsSnapshot.docs.some(doc => {
-            const certData = doc.data();
-            return certData.uid === participant.id;
-          });
+          // 해당 영상에 인증한 사용자 UID 목록 반환
+          const certifiedUids = certificationsSnapshot.docs.map(doc => doc.data().uid);
           
-          if (hasCertified) {
+          return {
+            videoId: video.id,
+            certifiedUids: certifiedUids
+          };
+        } catch (error) {
+          console.error(`영상 ${video.id} 인증 데이터 로딩 실패:`, error);
+          return {
+            videoId: video.id,
+            certifiedUids: []
+          };
+        }
+      });
+
+      // 모든 인증 데이터 대기
+      const allCertifications = await Promise.all(allCertificationsPromises);
+      
+      // 2. 인증 데이터를 Map으로 변환 (빠른 조회를 위해)
+      const certificationMap = new Map();
+      allCertifications.forEach(({ videoId, certifiedUids }) => {
+        certificationMap.set(videoId, new Set(certifiedUids));
+      });
+
+      // 3. 각 참여자의 시청률 계산 (메모리에서 빠르게 처리)
+      const watchRates = {};
+      
+      participantsList.forEach(participant => {
+        let certifiedCount = 0;
+        
+        // 각 영상에 대해 이 참여자가 인증했는지 확인
+        videosList.forEach(video => {
+          const certifiedUids = certificationMap.get(video.id);
+          if (certifiedUids && certifiedUids.has(participant.id)) {
             certifiedCount++;
           }
-        } catch (error) {
-          console.error('시청률 계산 오류:', error);
-        }
-      }
+        });
+        
+        // 시청률 계산 (인증한 영상 수 / 전체 영상 수 * 100)
+        const watchRate = videosList.length > 0 ? Math.round((certifiedCount / videosList.length) * 100) : 0;
+        watchRates[participant.id] = watchRate;
+      });
+
+      console.log('✅ [참여자] 시청률 계산 완료:', watchRates);
+      return watchRates;
+
+    } catch (error) {
+      console.error('❌ [참여자] 시청률 계산 전체 오류:', error);
       
-      // 시청률 계산 (인증한 영상 수 / 전체 영상 수 * 100)
-      const watchRate = videosList.length > 0 ? Math.round((certifiedCount / videosList.length) * 100) : 0;
-      watchRates[participant.id] = watchRate;
+      // 오류 발생 시 기본값 반환 (모든 참여자 0%)
+      const fallbackRates = {};
+      participantsList.forEach(participant => {
+        fallbackRates[participant.id] = 0;
+      });
+      return fallbackRates;
     }
-    
-    return watchRates;
   };
 
   if (loading) {
