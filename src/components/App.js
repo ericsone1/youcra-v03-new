@@ -289,20 +289,14 @@ function App() {
 function AppWrapperContent() {
   const { selectedVideoIdx } = useVideoPlayer();
   
-  // 디버깅용 로그
-  console.log('🔍 AppWrapperContent - selectedVideoIdx:', selectedVideoIdx);
+
   
   return (
     <Router>
       <App />
       {/* 전역 비디오 플레이어 - selectedVideoIdx가 있을 때만 렌더링 */}
       {selectedVideoIdx !== null && (
-        <div>
-          <div style={{position: 'fixed', top: 0, left: 0, background: 'red', color: 'white', padding: '5px', zIndex: 9999}}>
-            DEBUG: selectedVideoIdx = {selectedVideoIdx}
-          </div>
-          <GlobalVideoPlayer />
-        </div>
+        <GlobalVideoPlayer />
       )}
     </Router>
   );
