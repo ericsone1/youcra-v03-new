@@ -12,6 +12,7 @@ export function ChatRoom() {
   const [useVirtualization, setUseVirtualization] = useState(false);
   const {
     loading,
+    messagesLoading,
     error,
     roomInfo,
     messages,
@@ -148,7 +149,11 @@ export function ChatRoom() {
           autoScrollToBottom={true}
         />
       ) : (
-        <MessageList messages={messages} myJoinedAt={myJoinedAt} />
+        <MessageList 
+          messages={messages} 
+          myJoinedAt={myJoinedAt} 
+          messagesLoading={messagesLoading}
+        />
       )}
 
       {/* 메시지 입력 */}

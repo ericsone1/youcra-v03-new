@@ -20,6 +20,7 @@ import useNotification from './useNotification';
 
 export function useChat(roomId) {
   const [loading, setLoading] = useState(true);
+  const [messagesLoading, setMessagesLoading] = useState(true);
   const [error, setError] = useState(null);
   const [roomInfo, setRoomInfo] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -93,6 +94,7 @@ export function useChat(roomId) {
   useEffect(() => {
     if (!roomId || !authReady) return;
 
+    setMessagesLoading(true);
     const messagesRef = collection(db, 'chatRooms', roomId, 'messages');
     const q = query(messagesRef, orderBy('createdAt', 'desc'), limit(50));
 
@@ -103,6 +105,7 @@ export function useChat(roomId) {
           newMessages.push({ id: doc.id, ...doc.data() });
         });
         setMessages(newMessages.reverse());
+        setMessagesLoading(false);
         
         // 알림: 새 메시지 감지 (로그인된 사용자만)
         if (auth.currentUser && newMessages.length > 0) {
@@ -129,6 +132,7 @@ export function useChat(roomId) {
       (error) => {
         console.error('메시지 로드 오류:', error);
         setError('메시지를 불러올 수 없습니다.');
+        setMessagesLoading(false);
       }
     );
 
@@ -204,6 +208,7 @@ export function useChat(roomId) {
 
   return {
     loading,
+    messagesLoading,
     error,
     roomInfo,
     messages,

@@ -2,17 +2,17 @@ import React, { useRef, useEffect, useMemo } from 'react';
 import { auth } from '../../firebase';
 import { Message } from './Message';
 
-export function MessageList({ messages, myJoinedAt }) {
+export function MessageList({ messages, myJoinedAt, messagesLoading }) {
   const scrollRef = useRef();
   const bottomRef = useRef();
   const currentUser = auth.currentUser;
 
   // 새 메시지가 올 때마다 부드럽게 스크롤
   useEffect(() => {
-    if (bottomRef.current) {
+    if (bottomRef.current && !messagesLoading) {
       bottomRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
-  }, [messages]);
+  }, [messages, messagesLoading]);
 
   // 메시지 필터링 로직을 메모이제이션
   const filteredMessages = useMemo(() => {
@@ -103,13 +103,23 @@ export function MessageList({ messages, myJoinedAt }) {
       ref={scrollRef}
       className="flex-1 overflow-y-auto px-4 py-6 space-y-2 chat-scroll"
       style={{ 
-        background: 'linear-gradient(to bottom, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)'
+        background: 'linear-gradient(to bottom, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%)',
+        paddingTop: '100px', // 헤더가 가리지 않도록 상단 패딩 증가
+        paddingBottom: '120px' // 입력창이 가리지 않도록 하단 패딩 증가
       }}
       role="log"
       aria-label="메시지 목록"
       aria-live="polite"
     >
-      {groupedMessages.length === 0 ? (
+      {/* 메시지 로딩 중 표시 */}
+      {messagesLoading && (
+        <div className="flex flex-col items-center justify-center h-full text-center fade-in">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-4"></div>
+          <div className="text-gray-500 text-sm font-medium">메시지를 찾는중...</div>
+        </div>
+      )}
+
+      {!messagesLoading && groupedMessages.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-full text-center fade-in">
           <div className="w-20 h-20 mb-6 bg-gradient-to-br from-blue-100 to-purple-100 rounded-full flex items-center justify-center shadow-lg">
             <svg className="w-10 h-10 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -126,7 +136,7 @@ export function MessageList({ messages, myJoinedAt }) {
             <div className="w-2 h-2 bg-pink-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
           </div>
         </div>
-      ) : (
+      ) : !messagesLoading && (
         <div className="space-y-2">
           {groupedMessages.map((item, index) => {
             if (item.type === 'date') {
@@ -169,7 +179,8 @@ export function MessageList({ messages, myJoinedAt }) {
           })}
         </div>
       )}
-      <div ref={bottomRef} className="h-4" />
+      {/* spacer to ensure last message is above input area */}
+      <div ref={bottomRef} className="h-16" />
     </main>
   );
 } 
