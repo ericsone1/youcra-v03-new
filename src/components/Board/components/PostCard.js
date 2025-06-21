@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import { auth } from '../../../firebase';
 import { formatTime, getTypeIcon } from '../utils/formatters';
 import CommentSection from './CommentSection';
@@ -69,18 +70,26 @@ function PostCard({ post, onLike, onDelete, onEdit, isAuthenticated }) {
     >
       {/* 작성자 정보 */}
       <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-400 to-purple-600 flex items-center justify-center text-white font-bold">
-            {post.author.displayName?.slice(0, 2).toUpperCase() || '??'}
-          </div>
+        <Link to={`/profile/0/${post.author.uid}`} className="flex items-center gap-3 group">
+          {post.author.photoURL ? (
+            <img 
+              src={post.author.photoURL} 
+              alt={post.author.displayName} 
+              className="w-10 h-10 rounded-full object-cover transition-transform duration-300 group-hover:scale-110" 
+            />
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-gradient-to-r from-blue-400 to-purple-600 flex items-center justify-center text-white font-bold transition-transform duration-300 group-hover:scale-110">
+              {post.author.displayName?.slice(0, 2).toUpperCase() || '??'}
+            </div>
+          )}
           <div>
-            <div className="font-semibold text-gray-800">{post.author.displayName}</div>
+            <div className="font-semibold text-gray-800 group-hover:text-blue-600 transition-colors">{post.author.displayName}</div>
             <div className="text-xs text-gray-500 flex items-center gap-2">
               <span>{formatTime(post.createdAt)}</span>
               <span>{getTypeIcon(post.type)}</span>
             </div>
           </div>
-        </div>
+        </Link>
         
         {/* 수정/삭제 버튼 (작성자만) */}
         {isAuthenticated && auth.currentUser?.uid === post.author.uid && (

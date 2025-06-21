@@ -339,16 +339,14 @@ function UserProfile() {
         )}
       </div>
       {/* 1:1 채팅 버튼 (상단) */}
-      {auth.currentUser?.uid !== uid && (
-        <div className="px-4 mb-2">
-          <button
-            className="w-full bg-blue-500 text-white py-3 rounded-xl font-bold text-lg hover:bg-blue-600 shadow"
-            onClick={() => navigate(`/dm/${uid}`)}
-          >
-            1:1 채팅하기
-          </button>
-        </div>
-      )}
+      <div className="px-4 mb-2">
+        <button
+          className="w-full bg-blue-500 text-white py-3 rounded-xl font-bold text-lg hover:bg-blue-600 shadow"
+          onClick={() => navigate(`/dm/${uid}`)}
+        >
+          {auth.currentUser?.uid === uid ? '나에게 채팅하기' : '1:1 채팅하기'}
+        </button>
+      </div>
       {/* 탭 메뉴 */}
       <div className="px-4 mb-2">
         <div className="flex gap-2 mb-2">

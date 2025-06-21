@@ -82,19 +82,24 @@ export function useChat(roomId) {
         setMessages(newMessages.reverse());
         
         // 알림: 새 메시지 감지 (로그인된 사용자만)
-        if (auth.currentUser) {
+        if (auth.currentUser && newMessages.length > 0) {
           const newest = newMessages[newMessages.length - 1];
           if (newest && prevLastMsgRef.current) {
-            // 새 메시지가 추가됐는지 판단
-            if (newest.id !== prevLastMsgRef.current.id && newest.uid !== auth.currentUser.uid) {
+            const isNewMessage = newest.id !== prevLastMsgRef.current.id;
+            const isFromOtherUser = newest.uid !== auth.currentUser.uid;
+            const isAfterJoined = myJoinedAt && newest.createdAt && newest.createdAt.seconds > myJoinedAt.seconds;
+
+            if (isNewMessage && isFromOtherUser && isAfterJoined) {
               notify('새 메시지', {
                 body: newest.text?.slice(0, 50) || '새 메시지가 도착했습니다',
-                icon: newest.photoURL || '/favicon.ico',
-                tag: roomId
+                icon: newest.photoURL || '/logo192.png',
+                tag: roomId, // 같은 채팅방의 알림은 하나로 묶음
               });
             }
           }
-          if (newest) prevLastMsgRef.current = newest;
+        }
+        if (newMessages.length > 0) {
+          prevLastMsgRef.current = newMessages[newMessages.length - 1];
         }
         setError(null);
       },

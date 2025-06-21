@@ -11,7 +11,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyBH5YYBq5N1FL2a_0dIDmCVbwOpoOQumeE",
   authDomain: "youcra-v031.firebaseapp.com",
   projectId: "youcra-v031",
-  storageBucket: "youcra-v031.appspot.com",
+  storageBucket: "youcra-v031.firebasestorage.app",
   messagingSenderId: "1065721157188",
   appId: "1:1065721157188:web:19c734988b52e86afcce11",
   measurementId: "G-T8E9E58JET"

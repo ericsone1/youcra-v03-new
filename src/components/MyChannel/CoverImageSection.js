@@ -87,15 +87,6 @@ const CoverImageSection = ({ user, profile, setProfile, saving, setSaving, isBac
         </div>
       )}
       
-      {/* 커버이미지 변경 버튼 */}
-      <button
-        onClick={() => coverInputRef.current?.click()}
-        disabled={uploading}
-        className="absolute top-3 right-3 bg-black bg-opacity-50 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-opacity-70 transition-all duration-200 backdrop-blur-sm"
-      >
-        📷 변경
-      </button>
-      
       {/* 파일 입력 */}
       <input
         type="file"

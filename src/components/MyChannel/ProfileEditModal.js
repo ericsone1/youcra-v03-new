@@ -71,10 +71,10 @@ const ProfileEditModal = ({ isOpen, onClose, user, profile, onProfileUpdate }) =
     reader.readAsDataURL(file);
   };
 
-  // 이미지 업로드
-  const uploadImage = async (file, path) => {
+  // 이미지 업로드 (경로 직접 지정 방식으로 변경)
+  const uploadImage = async (file, fullPath) => {
     try {
-      const imageRef = ref(storage, `${path}/${user.uid}_${Date.now()}`);
+      const imageRef = ref(storage, fullPath);
       await uploadBytes(imageRef, file);
       return await getDownloadURL(imageRef);
     } catch (error) {
@@ -113,25 +113,30 @@ const ProfileEditModal = ({ isOpen, onClose, user, profile, onProfileUpdate }) =
 
       // 프로필 이미지 업로드
       if (profileImageRef.current?.files[0]) {
-        const profileImageUrl = await uploadImage(profileImageRef.current.files[0], 'profiles');
+        const imagePath = `profiles/${user.uid}/profile.jpg`;
+        const profileImageUrl = await uploadImage(profileImageRef.current.files[0], imagePath);
         updatedData.profileImage = profileImageUrl;
       }
 
       // 커버 이미지 업로드
       if (coverImageRef.current?.files[0]) {
-        const coverImageUrl = await uploadImage(coverImageRef.current.files[0], 'covers');
+        const imagePath = `covers/${user.uid}/cover.jpg`;
+        const coverImageUrl = await uploadImage(coverImageRef.current.files[0], imagePath);
         updatedData.coverImage = coverImageUrl;
       }
 
       // Firestore 업데이트
       const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, {
+      
+      const updatePayload = {
         nickname: updatedData.nickname,
         introduction: updatedData.introduction,
         profileImage: updatedData.profileImage,
         coverImage: updatedData.coverImage,
         updatedAt: new Date()
-      });
+      };
+
+      await updateDoc(userRef, updatePayload);
 
       // 부모 컴포넌트에 업데이트 알림
       if (onProfileUpdate) {
@@ -141,7 +146,7 @@ const ProfileEditModal = ({ isOpen, onClose, user, profile, onProfileUpdate }) =
       alert('프로필이 성공적으로 업데이트되었습니다!');
       onClose();
     } catch (error) {
-      console.error('프로필 업데이트 실패:', error);
+      console.error('❌ 프로필 업데이트 실패:', error);
       alert('프로필 업데이트에 실패했습니다. 다시 시도해주세요.');
     } finally {
       setUploading(false);

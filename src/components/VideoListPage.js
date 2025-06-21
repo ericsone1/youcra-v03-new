@@ -66,6 +66,16 @@ function VideoListPage() {
   const [videoLoading, setVideoLoading] = useState(false);
   const [videoMsg, setVideoMsg] = useState("");
 
+  // 페이지 진입 시 스크롤을 맨 위로 초기화
+  useEffect(() => {
+    window.scrollTo(0, 0);
+    // 메인 콘텐츠 영역도 스크롤 초기화
+    const mainElement = document.querySelector('main');
+    if (mainElement) {
+      mainElement.scrollTop = 0;
+    }
+  }, []);
+
   // 방장 권한 확인
   useEffect(() => {
     const checkOwnership = async () => {
