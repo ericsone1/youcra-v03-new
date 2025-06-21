@@ -12,7 +12,9 @@ import {
   updateDoc,
   arrayUnion,
   arrayRemove,
-  getDoc
+  getDoc,
+  setDoc,
+  deleteDoc
 } from 'firebase/firestore';
 import useNotification from './useNotification';
 
@@ -136,8 +138,18 @@ export function useChat(roomId) {
     if (!roomId || !auth.currentUser) return;
 
     try {
+      // participants 서브컬렉션에 사용자 추가
+      const participantRef = doc(db, 'chatRooms', roomId, 'participants', auth.currentUser.uid);
+      await setDoc(participantRef, {
+        joinedAt: serverTimestamp(),
+        lastReadAt: serverTimestamp(),
+        uid: auth.currentUser.uid,
+        email: auth.currentUser.email,
+        displayName: auth.currentUser.displayName,
+      }, { merge: true });
+
+      // 기존 participants 배열도 유지 (호환성)
       const roomRef = doc(db, 'chatRooms', roomId);
-      
       await updateDoc(roomRef, {
         participants: arrayUnion(auth.currentUser.uid)
       });
@@ -155,6 +167,11 @@ export function useChat(roomId) {
     if (!roomId || !auth.currentUser) return;
 
     try {
+      // participants 서브컬렉션에서 사용자 제거
+      const participantRef = doc(db, 'chatRooms', roomId, 'participants', auth.currentUser.uid);
+      await deleteDoc(participantRef);
+
+      // 기존 participants 배열에서도 제거 (호환성)
       const roomRef = doc(db, 'chatRooms', roomId);
       await updateDoc(roomRef, {
         participants: arrayRemove(auth.currentUser.uid)

@@ -19,10 +19,15 @@ export function useChatList() {
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [searchActive, setSearchActive] = useState(false);
-  // 탭 관련 상태 제거 - 이제 내 채팅방만 표시
+  const [activeTab, setActiveTab] = useState("내 채팅방");
+  const [filter, setFilter] = useState("all");
   const [visibleCount, setVisibleCount] = useState(10);
   const [myRoomsVisibleCount, setMyRoomsVisibleCount] = useState(5);
   const [joinedRoomsVisibleCount, setJoinedRoomsVisibleCount] = useState(5);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newRoomName, setNewRoomName] = useState("");
+  const [newRoomHashtags, setNewRoomHashtags] = useState("");
+  const [creating, setCreating] = useState(false);
   const navigate = useNavigate();
 
   // 최근 활동 기준 정렬 함수
@@ -49,11 +54,11 @@ export function useChatList() {
     console.log("로그인 상태 - 채팅방 데이터 구독 시작");
     const q = query(collection(db, "chatRooms"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, async (snapshot) => {
-      console.log("chatRooms snapshot docs:", snapshot.docs.length);
+      console.log("🔄 chatRooms snapshot 업데이트 - 문서 수:", snapshot.docs.length);
       
       const roomPromises = snapshot.docs.map(async (docSnap) => {
         const room = { id: docSnap.id, ...docSnap.data() };
-        console.log("Processing room:", room.id);
+        console.log("🏠 처리 중인 방:", room.id, "- 현재 사용자:", auth.currentUser?.uid);
 
         try {
           // 더미 해시태그 추가 (기존 해시태그가 없는 경우)
@@ -80,13 +85,13 @@ export function useChatList() {
             orderBy("createdAt", "desc")
           );
           const msgSnap = await getDocs(msgQ);
-          const participants = new Set();
+          const messageParticipants = new Set();
           let lastMsg = null;
           let myLastMsg = null;
 
           msgSnap.forEach((msgDoc) => {
             const msg = msgDoc.data();
-            if (msg.uid) participants.add(msg.uid);
+            if (msg.uid) messageParticipants.add(msg.uid);
             if (!lastMsg) lastMsg = msg;
             if (msg.uid === auth.currentUser?.uid && !myLastMsg) {
               myLastMsg = msg;
@@ -98,14 +103,17 @@ export function useChatList() {
           const participantsSnap = await getDocs(participantsRef);
           let joinedAt = null;
           let lastReadAt = null;
+          let isInParticipants = false;
           
           participantsSnap.forEach((doc) => {
             if (doc.id === auth.currentUser?.uid) {
               joinedAt = doc.data().joinedAt;
               lastReadAt = doc.data().lastReadAt;
+              isInParticipants = true;
+              console.log("👤 방", room.id, "- 사용자 참여 확인됨:", doc.id);
             }
           });
-
+          
           // 3. 안읽음 메시지 개수 계산
           let unreadCount = 0;
           if (lastReadAt) {
@@ -134,8 +142,8 @@ export function useChatList() {
           }
 
           // 4. 방 정보 업데이트
-          room.participantUids = Array.from(participants);
-          room.participantCount = participants.size;
+          room.participantUids = Array.from(messageParticipants);
+          room.participantCount = messageParticipants.size;
           room.lastMsg = lastMsg;
           room.lastMsgTime = lastMsg?.createdAt?.seconds
             ? new Date(lastMsg.createdAt.seconds * 1000)
@@ -157,9 +165,27 @@ export function useChatList() {
           room.imageUrl = `https://picsum.photos/seed/${room.id}/48`;
           room.members = room.participantCount;
           room.isMine = room.createdBy === auth.currentUser?.uid;
-          room.isJoined = room.participantUids?.includes(auth.currentUser?.uid);
-          // 내 채팅방만 표시 (내가 만든 방 또는 참여중인 방)
+          
+          // 7. 참여 상태 확인 로직
+          const hasMessages = messageParticipants.has(auth.currentUser?.uid);
+          
+          // 조건:
+          // 1. 방장이면 항상 표시
+          // 2. participants에 있으면 표시 (활성 참여자)
+          // 3. participants에 없지만 메시지 이력이 있고 joinedAt이 있으면 표시 (단순 뒤로가기)
+          room.isJoined = isInParticipants || (hasMessages && joinedAt);
           room.isVisible = room.isMine || room.isJoined;
+          
+          console.log("🔍 방", room.id, "참여 상태:", {
+            isMine: room.isMine,
+            isInParticipants,
+            hasMessages,
+            joinedAt: !!joinedAt,
+            isJoined: room.isJoined,
+            isVisible: room.isVisible,
+            participantsCount: participantsSnap.size
+          });
+          
           room.isSearched = !search || 
             room.title.includes(search) || 
             room.desc.includes(search) ||
@@ -179,7 +205,7 @@ export function useChatList() {
     });
 
     return () => unsubscribe();
-  }, [search, isAuthenticated, authLoading]); // 인증 상태 의존성 추가
+  }, [search, isAuthenticated, authLoading]);
 
   // 검색 핸들러
   const handleSearch = (searchText) => {
@@ -196,11 +222,47 @@ export function useChatList() {
 
   // 방 입장 핸들러
   const handleEnterRoom = (roomId) => {
-    console.log('ChatList handleEnterRoom 호출됨:', roomId, '→ /chat/' + roomId + '/profile');
-    navigate(`/chat/${roomId}/profile`);
+    console.log('ChatList handleEnterRoom 호출됨:', roomId, '→ /chat/' + roomId);
+    navigate(`/chat/${roomId}`);
   };
 
-  // 필터된 방 목록 계산 (사용하지 않음 - 내 채팅방만 표시)
+  // 방 생성 핸들러
+  const handleCreateRoom = async () => {
+    if (!newRoomName.trim()) return;
+    
+    setCreating(true);
+    try {
+      const hashtags = parseHashtags(newRoomHashtags);
+      await addDoc(collection(db, "chatRooms"), {
+        name: newRoomName.trim(),
+        hashtags: hashtags,
+        createdBy: auth.currentUser?.uid,
+        createdAt: serverTimestamp(),
+        desc: "새로운 채팅방입니다. 함께 이야기해요!",
+      });
+      
+      setNewRoomName("");
+      setNewRoomHashtags("");
+      setShowCreateModal(false);
+    } catch (error) {
+      console.error("방 생성 오류:", error);
+      alert("방 생성에 실패했습니다.");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  // 해시태그 파싱 함수
+  const parseHashtags = (hashtagString) => {
+    if (!hashtagString.trim()) return [];
+    return hashtagString
+      .split(/[,\s]+/)
+      .map(tag => tag.replace(/^#/, '').trim())
+      .filter(tag => tag.length > 0)
+      .slice(0, 5); // 최대 5개까지
+  };
+
+  // 필터된 방 목록 계산
   const getFilteredRooms = () => {
     let filtered = rooms.filter(room => room.isVisible && room.isSearched);
     
@@ -227,22 +289,35 @@ export function useChatList() {
   return {
     // 상태
     rooms,
-    roomsLoading: authLoading || roomsLoading, // 인증 로딩도 포함
+    roomsLoading: authLoading || roomsLoading,
     search,
     searchInput,
     setSearchInput,
     searchActive,
+    activeTab,
+    setActiveTab,
+    filter,
+    setFilter,
     visibleCount,
     setVisibleCount,
     myRoomsVisibleCount,
     setMyRoomsVisibleCount,
     joinedRoomsVisibleCount,
     setJoinedRoomsVisibleCount,
+    showCreateModal,
+    setShowCreateModal,
+    newRoomName,
+    setNewRoomName,
+    newRoomHashtags,
+    setNewRoomHashtags,
+    creating,
 
     // 핸들러
     handleSearch,
     handleClearSearch,
     handleEnterRoom,
+    handleCreateRoom,
+    parseHashtags,
 
     // 계산된 값
     filteredRooms: getFilteredRooms(),

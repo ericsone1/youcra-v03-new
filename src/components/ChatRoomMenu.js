@@ -135,9 +135,21 @@ function ChatRoomMenu() {
       await deleteDoc(doc(db, 'chatRooms', roomId, 'participants', currentUser.uid));
       
       // 시스템 메시지 추가
-      const nick = currentUser.displayName || currentUser.email?.split('@')[0] || '익명';
+      let nickname = currentUser.displayName;
+      try {
+        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+        if (userDoc.exists()) {
+          nickname = userDoc.data().nickname || userDoc.data().displayName;
+        }
+      } catch (error) {
+        console.error('사용자 정보 가져오기 오류:', error);
+      }
+      
+      const finalNickname = nickname || currentUser.email?.split('@')[0] || '익명';
       await addDoc(collection(db, 'chatRooms', roomId, 'messages'), {
-        text: `${nick}님이 퇴장하셨습니다.`,
+        text: `${finalNickname}님이 퇴장했습니다.`,
+        type: 'system',
+        isSystemMessage: true,
         system: true,
         action: 'exit',
         uid: 'system',

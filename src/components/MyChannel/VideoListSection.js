@@ -28,24 +28,12 @@ const VideoListSection = () => {
       const allVideos = [];
       
       for (const chatRoomDoc of chatRoomsSnap.docs) {
-        // 먼저 해당 채팅방의 모든 영상을 가져와서 registeredBy 값들을 확인
-        const allVideosInRoom = await getDocs(collection(db, 'chatRooms', chatRoomDoc.id, 'videos'));
-        console.log(`📹 [마이채널] 채팅방 ${chatRoomDoc.data().name}(${chatRoomDoc.id})의 전체 영상 수: ${allVideosInRoom.size}`);
-        
-        if (allVideosInRoom.size > 0) {
-          allVideosInRoom.forEach(doc => {
-            const videoData = doc.data();
-            console.log(`📹 [영상확인] 영상 "${videoData.title}" - registeredBy: "${videoData.registeredBy}", 내ID: "${auth.currentUser.uid}"`);
-          });
-        }
-        
         const videosQuery = query(
           collection(db, 'chatRooms', chatRoomDoc.id, 'videos'),
           where('registeredBy', '==', auth.currentUser.uid)
         );
         
         const videosSnap = await getDocs(videosQuery);
-        console.log(`📹 [마이채널] 채팅방 ${chatRoomDoc.data().name}(${chatRoomDoc.id})에서 내 영상 ${videosSnap.size}개 발견`);
         
         videosSnap.forEach(doc => {
           allVideos.push({

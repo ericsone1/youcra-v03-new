@@ -103,13 +103,17 @@ code {
   overscroll-behavior: contain;
 }
 
-/* 채팅방 전용 - 애니메이션 없는 즉시 스크롤 */
+/* 채팅방 전용 - 부드러운 스크롤 */
 .chat-room-scroll {
   transform: translateZ(0);
   will-change: scroll-position;
-  scroll-behavior: auto; /* smooth 대신 auto로 즉시 스크롤 */
+  scroll-behavior: auto; /* 즉시 스크롤 */
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+  /* 스크롤 성능 최적화 */
+  contain: layout style paint;
+  overflow-anchor: auto; /* 자동 스크롤 앵커 활성화 */
+  scroll-snap-type: none; /* 스크롤 스냅 비활성화 */
 }
 
 /* 메시지 입력창 자동 높이 조절 */

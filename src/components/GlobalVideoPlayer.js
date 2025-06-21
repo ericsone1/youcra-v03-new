@@ -1,13 +1,13 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import YouTube from 'react-youtube';
 import { useVideoPlayer } from '../contexts/VideoPlayerContext';
-import { doc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { doc, addDoc, collection, serverTimestamp, onSnapshot, query, where, updateDoc, increment } from 'firebase/firestore';
 import { db, auth } from '../firebase';
+import { useAuth } from '../hooks/useAuth';
 
 function GlobalVideoPlayer() {
   const {
     selectedVideoIdx,
-    setSelectedVideoIdx,
     videoList,
     roomId,
     minimized,
@@ -30,19 +30,146 @@ function GlobalVideoPlayer() {
     setCountdown,
     endCountdown,
     setEndCountdown,
+    certCompleteCountdown,
+    setCertCompleteCountdown,
     watchSettings,
+    setWatchSettings,
     certifiedVideoIds,
+    setCertifiedVideoIds,
+    currentVideoCertCount,
+    setCurrentVideoCertCount,
+    liked,
+    setLiked,
+    likeCount,
+    setLikeCount,
+    watching,
+    setWatching,
     playerRef,
     autoNextTimer,
     endTimer,
     dragOffset,
-    closePlayer
+    closePlayer,
+    selectVideo
   } = useVideoPlayer();
 
-  // 플레이어가 활성화되어 있지 않으면 렌더링하지 않음
-  if (selectedVideoIdx === null || !videoList[selectedVideoIdx]) {
-    return null;
-  }
+  const { user } = useAuth();
+  
+  // 현재 영상의 인증 횟수 실시간 구독
+  useEffect(() => {
+    if (!roomId || !auth.currentUser || selectedVideoIdx === null || !videoList[selectedVideoIdx]) {
+      setCurrentVideoCertCount(0);
+      return;
+    }
+
+    const currentVideo = videoList[selectedVideoIdx];
+    const q = query(
+      collection(db, "chatRooms", roomId, "videos", currentVideo.id, "certifications"),
+      where("uid", "==", auth.currentUser.uid)
+    );
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setCurrentVideoCertCount(snapshot.size);
+    });
+
+    return () => unsubscribe();
+  }, [roomId, selectedVideoIdx, videoList, auth.currentUser]);
+
+  // selectedVideoIdx 변경 시 인증 상태 초기화
+  useEffect(() => {
+    if (selectedVideoIdx !== null) {
+      setIsCertified(false);
+      setCertLoading(false);
+      setCountdown(0);
+      setCertCompleteCountdown(0);
+    }
+  }, [selectedVideoIdx]);
+
+  // 시청인증 완료 시 자동 인증 및 다음 영상 이동 (바로 인증 후 3초 카운트다운)
+  useEffect(() => {
+    if (!watchSettings.enabled) return;
+    
+    // certAvailable 계산 (ChatRoom.js와 동일한 로직)
+    let certAvailable = false;
+    if (
+      selectedVideoIdx !== null &&
+      videoList[selectedVideoIdx] &&
+      typeof videoList[selectedVideoIdx].duration === "number"
+    ) {
+      if (watchSettings.watchMode === 'partial') {
+        // 부분 시청 허용: 3분 이상 영상은 3분 시청, 3분 미만은 완시청
+        certAvailable =
+          videoList[selectedVideoIdx].duration >= 180
+            ? watchSeconds >= 180
+            : videoEnded;
+      } else {
+        // 전체 시청 필수: 1시간 초과 영상은 30분 시청, 1시간 이하는 30분 시청 또는 완시청, 30분 미만은 완시청
+        const videoDuration = videoList[selectedVideoIdx].duration;
+        if (videoDuration > 3600) {
+          // 1시간 초과 영상: 30분(1800초) 시청으로 인증
+          certAvailable = watchSeconds >= 1800;
+        } else if (videoDuration > 1800) {
+          // 30분~1시간 영상: 30분 시청 또는 완시청
+          certAvailable = watchSeconds >= 1800 || videoEnded;
+        } else {
+          // 30분 미만 영상: 완시청 필요
+          certAvailable = videoEnded;
+        }
+      }
+    }
+
+    // 시청인증이 활성화되고, 인증 가능하고, 로딩 중이 아닐 때 바로 인증 처리
+    if (watchSettings.enabled && certAvailable && !certLoading && !isCertified) {
+      // 바로 인증 처리 (카운트다운은 별도 useEffect에서 처리)
+      handleCertify().then(() => {
+        // 인증 완료
+      }).catch((error) => {
+        // 인증 실패 시에도 다음 영상으로 이동 또는 플레이어 종료
+        if (selectedVideoIdx < videoList.length - 1) {
+          selectVideo(selectedVideoIdx + 1);
+        }
+      });
+    }
+  }, [watchSettings.enabled, watchSettings.watchMode, isCertified, certLoading, selectedVideoIdx, videoList.length, watchSeconds, videoEnded]);
+
+  // 인증 횟수가 업데이트되면 카운트다운 시작
+  const [lastCertCount, setLastCertCount] = useState(0);
+  useEffect(() => {
+    // 인증 횟수가 증가했고, 현재 인증된 상태일 때 카운트다운 시작
+    if (currentVideoCertCount > lastCertCount && isCertified) {
+      setLastCertCount(currentVideoCertCount);
+      
+      // 3초 카운트다운 시작
+      setCertCompleteCountdown(3);
+      const completeTimer = setInterval(() => {
+        setCertCompleteCountdown((prev) => {
+          if (prev <= 1) {
+            clearInterval(completeTimer);
+            if (selectedVideoIdx < videoList.length - 1) {
+              // 다음 영상으로 이동
+              selectVideo(selectedVideoIdx + 1);
+            } else {
+              // 마지막 영상이므로 플레이어 종료
+              closePlayer();
+            }
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else if (selectedVideoIdx !== null) {
+      // 새 영상으로 이동했을 때 현재 인증 횟수로 업데이트
+      setLastCertCount(currentVideoCertCount);
+    }
+  }, [currentVideoCertCount, isCertified, selectedVideoIdx, lastCertCount]);
+
+  // 영상 선택 시 좋아요 상태 초기화
+  useEffect(() => {
+    if (selectedVideoIdx !== null) {
+      setLiked(false);
+      setLikeCount(Math.floor(Math.random() * 500) + 50); // 50-550 랜덤 좋아요 수
+      setWatching(Math.floor(Math.random() * 1000) + 100); // 100-1100 랜덤 시청자 수
+    }
+  }, [selectedVideoIdx]);
 
   // 드래그 핸들러
   const handleDragStart = (e) => {
@@ -119,41 +246,31 @@ function GlobalVideoPlayer() {
   };
   
   const handleYoutubeEnd = () => {
-    console.log('🎬 영상 끝남 감지:', {
-      selectedVideoIdx,
-      videoListLength: videoList.length,
-      hasNext: selectedVideoIdx < videoList.length - 1
-    });
-    
-    // 영상 종료 시 interval 정리
-    if (playerRef.current && playerRef.current._interval) {
-      clearInterval(playerRef.current._interval);
-      playerRef.current._interval = null;
-    }
-    
-    // 영상 종료 시 videoEnded 상태 설정
+    console.log('🎬 영상 재생 완료');
     setVideoEnded(true);
+    setEndCountdown(5); // 5초 카운트다운 시작
     
-    // 시청인증이 비활성화되어 있다면 바로 다음 영상으로 이동
-    if (!watchSettings.enabled) {
-      if (selectedVideoIdx < videoList.length - 1) {
-        console.log('⏰ 다음 영상 카운트다운 시작 (시청인증 비활성)');
-        setEndCountdown(3);
-        endTimer.current = setInterval(() => {
-          setEndCountdown((prev) => {
-            if (prev <= 1) {
-              clearInterval(endTimer.current);
-              console.log('➡️ 다음 영상으로 이동:', selectedVideoIdx + 1);
-              setSelectedVideoIdx(selectedVideoIdx + 1);
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
-      } else {
-        console.log('📺 마지막 영상 완료');
+    // 5초 카운트다운 타이머
+    let countdown = 5;
+    endTimer.current = setInterval(() => {
+      countdown--;
+      setEndCountdown(countdown);
+      
+      if (countdown <= 0) {
+        clearInterval(endTimer.current);
+        endTimer.current = null;
+        
+        // 다음 영상으로 이동
+        const nextIdx = selectedVideoIdx + 1;
+        if (nextIdx < videoList.length) {
+          // 다음 영상이 있으면 이동
+          selectVideo(nextIdx);
+        } else {
+          // 마지막 영상이면 처음 영상으로 이동
+          selectVideo(0);
+        }
       }
-    }
+    }, 1000);
   };
 
   // 인증 핸들러
@@ -178,7 +295,7 @@ function GlobalVideoPlayer() {
     setCertLoading(false);
   };
 
-  // certAvailable 계산
+  // certAvailable 계산 - ChatRoom.js와 동일한 로직
   let certAvailable = false;
   if (
     selectedVideoIdx !== null &&
@@ -186,22 +303,23 @@ function GlobalVideoPlayer() {
     typeof videoList[selectedVideoIdx].duration === "number" &&
     watchSettings.enabled
   ) {
-    const videoDuration = videoList[selectedVideoIdx].duration;
-    
     if (watchSettings.watchMode === 'partial') {
-      // 부분 시청 허용: 3분 기준 조건
-      if (videoDuration >= 180) {
-        // 3분 이상 영상: 3분(180초) 시청 후 인증 가능
-        certAvailable = watchSeconds >= 180;
-      } else {
-        // 3분 미만 영상: 끝까지 시청 후 인증 가능
-        certAvailable = videoEnded;
-      }
+      // 부분 시청 허용: 3분 이상 영상은 3분 시청, 3분 미만은 완시청
+      certAvailable =
+        videoList[selectedVideoIdx].duration >= 180
+          ? watchSeconds >= 180
+          : videoEnded;
     } else {
-      // 전체 시청 필수: 30분 초과 영상도 최대 30분까지만 시청
-      if (videoDuration > 1800) {
+      // 전체 시청 필수: 1시간 초과 영상은 30분 시청, 1시간 이하는 30분 시청 또는 완시청, 30분 미만은 완시청
+      const videoDuration = videoList[selectedVideoIdx].duration;
+      if (videoDuration > 3600) {
+        // 1시간 초과 영상: 30분(1800초) 시청으로 인증
         certAvailable = watchSeconds >= 1800;
+      } else if (videoDuration > 1800) {
+        // 30분~1시간 영상: 30분 시청 또는 완시청
+        certAvailable = watchSeconds >= 1800 || videoEnded;
       } else {
+        // 30분 미만 영상: 완시청 필요
         certAvailable = videoEnded;
       }
     }
@@ -385,10 +503,10 @@ function GlobalVideoPlayer() {
             </div>
 
             {/* 카운트다운 및 인증 버튼 */}
-            {watchSettings.enabled && certAvailable && !isCertified && countdown > 0 && (
+            {watchSettings.enabled && certAvailable && countdown > 0 && (
               <div className="text-center mb-2">
                 <div className="text-orange-600 font-bold mb-1">
-                  🎯 {countdown}초 후 자동 인증
+                  🎯 {countdown}초 후 {currentVideoCertCount + 1}번째 인증
                 </div>
               </div>
             )}
@@ -402,18 +520,95 @@ function GlobalVideoPlayer() {
               </div>
             )}
 
+            {/* 인증완료 후 다음 영상 카운트다운 */}
+            {watchSettings.enabled && certCompleteCountdown > 0 && (
+              <div className="text-center mb-2">
+                <div className="text-green-600 font-bold">
+                  ✅ {currentVideoCertCount}번째 인증완료! {certCompleteCountdown}초 후 다음 영상
+                </div>
+              </div>
+            )}
+
+            {/* 현재 시청 상태 표시 */}
+            {watchSettings.enabled && countdown === 0 && certCompleteCountdown === 0 && (
+              <div className="text-center mb-2">
+                <div className={`border rounded-lg px-3 py-2 ${
+                  videoEnded && endCountdown > 0 
+                    ? 'bg-green-50 border-green-200' 
+                    : 'bg-blue-50 border-blue-200'
+                }`}>
+                  <div className={`font-medium text-sm ${
+                    videoEnded && endCountdown > 0 
+                      ? 'text-green-700' 
+                      : 'text-blue-700'
+                  }`}>
+                    {videoEnded && endCountdown > 0 
+                      ? `🎉 ${currentVideoCertCount + 1}번째 시청 완료!` 
+                      : `📺 ${currentVideoCertCount + 1}번째 시청 중...`
+                    }
+                  </div>
+                  <div className={`text-xs mt-1 ${
+                    videoEnded && endCountdown > 0 
+                      ? 'text-green-600' 
+                      : 'text-blue-600'
+                  }`}>
+                    {videoEnded && endCountdown > 0 
+                      ? `${endCountdown}초 후 다음 영상으로 이동합니다`
+                      : (watchSettings.watchMode === 'partial' ? '3분 이상 시청하면 인증됩니다' : '영상을 끝까지 시청하면 인증됩니다')
+                    }
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 영상 종료 후 다음 영상 카운트다운 (시청인증 비활성화 시) */}
+            {!watchSettings.enabled && videoEnded && endCountdown > 0 && (
+              <div className="text-center mb-2">
+                <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                  <div className="text-green-700 font-medium text-sm">
+                    🎉 영상 시청 완료!
+                  </div>
+                  <div className="text-green-600 text-xs mt-1">
+                    {endCountdown}초 후 다음 영상으로 이동합니다
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* 수동 인증 버튼 */}
-            {watchSettings.enabled && certAvailable && !isCertified && countdown === 0 && (
+            {watchSettings.enabled && certAvailable && countdown === 0 && endCountdown === 0 && (
               <div className="text-center mb-2">
                 <button
                   onClick={handleCertify}
                   disabled={certLoading}
-                  className="bg-purple-500 text-white px-4 py-2 rounded-lg hover:bg-purple-600 disabled:opacity-50 text-sm font-medium"
+                  className="bg-purple-500 text-white px-3 py-2 rounded-lg hover:bg-purple-600 disabled:opacity-50 text-sm font-medium"
                 >
-                  {certLoading ? '인증 중...' : '시청 인증하기'}
+                  {certLoading ? '인증 중...' : `${currentVideoCertCount + 1}번째 시청 인증하기`}
                 </button>
               </div>
             )}
+
+            {/* 구독/좋아요 버튼 영역 */}
+            <div className="flex items-center justify-start gap-2 mt-2 px-1">
+              {/* 통합 구독/좋아요 바로가기 버튼 */}
+              <button
+                onClick={() => {
+                  const videoUrl = `https://www.youtube.com/watch?v=${videoList[selectedVideoIdx]?.videoId}`;
+                  window.open(videoUrl, '_blank');
+                }}
+                className="bg-red-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-red-600 transition-colors shadow-md flex items-center gap-1"
+                title="YouTube에서 구독/좋아요하기"
+              >
+                🔔❤️ 구독/좋아요 바로가기
+              </button>
+              
+              {/* 시청자 수 */}
+              <div className="text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded-md whitespace-nowrap">
+                👁️ {watching}명
+              </div>
+            </div>
+
+
           </div>
         )}
       </div>

@@ -9,6 +9,7 @@ import {
   orderBy,
   onSnapshot,
   addDoc,
+  getDocs,
 } from "firebase/firestore";
 
 function UserProfile() {
@@ -17,6 +18,8 @@ function UserProfile() {
   const [user, setUser] = useState(null);
   const [videos, setVideos] = useState([]);
   const [certifiedIds, setCertifiedIds] = useState([]);
+  const [certificationCounts, setCertificationCounts] = useState({}); // 각 영상별 인증 횟수
+  const [videoViewRates, setVideoViewRates] = useState({}); // 각 영상별 시청률 (전체 참여자 대비)
   const [loading, setLoading] = useState(true);
   const [registeredVideos, setRegisteredVideos] = useState([]);
   const [activeTab, setActiveTab] = useState('watched'); // 'watched' | 'registered'
@@ -42,6 +45,8 @@ function UserProfile() {
           const userData = userDoc.data();
           setUser(userData);
           console.log('✅ [프로필] 상대방 사용자 데이터:', userData);
+          console.log('✅ [프로필] 상대방 uid:', uid);
+          console.log('✅ [프로필] 상대방 email:', userData.email);
           if (userData.youtubeChannel) {
             console.log('✅ [프로필] 상대방 유튜브 채널:', userData.youtubeChannel);
           } else {
@@ -92,26 +97,49 @@ function UserProfile() {
     const unsub = onSnapshot(q, (snapshot) => {
       const allVideos = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
       setVideos(allVideos);
-      setRegisteredVideos(allVideos.filter(v => v.registeredBy === uid));
+      
+      // registeredBy가 uid 또는 해당 사용자의 email과 일치하는 영상 필터링
+      const userRegisteredVideos = allVideos.filter(v => {
+        // 1. URL의 uid와 일치하는 경우 (가장 기본적인 uid 기준)
+        const matchByUrlUid = v.registeredBy === uid;
+        
+        // 2. user 객체의 email과 일치하는 경우 (user 데이터가 로드된 후)
+        const matchByUserEmail = user?.email && v.registeredBy === user.email;
+
+        // 3. 현재 로그인한 사용자의 프로필인 경우, auth.currentUser의 email과 일치하는지 확인
+        const isMyProfile = auth.currentUser?.uid === uid;
+        const matchByCurrentUserEmail = isMyProfile && auth.currentUser?.email && v.registeredBy === auth.currentUser.email;
+
+        return matchByUrlUid || matchByUserEmail || matchByCurrentUserEmail;
+      });
+      setRegisteredVideos(userRegisteredVideos);
     });
     return () => unsub();
-  }, [roomId, uid]);
+  }, [roomId, uid, user]);
 
-  // 인증 영상 id 리스트 불러오기
+  // 인증 영상 id 리스트 및 인증 횟수 불러오기
   useEffect(() => {
     if (!roomId || !uid || videos.length === 0) {
       setCertifiedIds([]);
+      setCertificationCounts({});
       return;
     }
     const unsubscribes = videos.map((video) => {
       const q = collection(db, "chatRooms", roomId, "videos", video.id, "certifications");
       return onSnapshot(q, (snapshot) => {
-        const found = snapshot.docs.find((doc) => doc.data().uid === uid);
+        const userCertifications = snapshot.docs.filter((doc) => doc.data().uid === uid);
+        const certCount = userCertifications.length;
+        
+        setCertificationCounts((prev) => ({
+          ...prev,
+          [video.id]: certCount
+        }));
+        
         setCertifiedIds((prev) => {
-          if (found && !prev.includes(video.id)) {
+          if (certCount > 0 && !prev.includes(video.id)) {
             return [...prev, video.id];
           }
-          if (!found && prev.includes(video.id)) {
+          if (certCount === 0 && prev.includes(video.id)) {
             return prev.filter((id) => id !== video.id);
           }
           return prev;
@@ -120,6 +148,53 @@ function UserProfile() {
     });
     return () => unsubscribes.forEach((unsub) => unsub());
   }, [roomId, videos, uid]);
+
+  // "등록한 영상" 탭이 활성화되면 시청률 계산
+  useEffect(() => {
+    if (activeTab === 'registered' && registeredVideos.length > 0) {
+      calculateViewRates();
+    }
+  }, [activeTab, registeredVideos]); // registeredVideos가 업데이트되면 재계산
+
+  // 각 영상별 시청률 계산 함수
+  const calculateViewRates = async () => {
+    if (!roomId || registeredVideos.length === 0) {
+      setVideoViewRates({});
+      return;
+    }
+
+    console.log('📊 [시청률] 계산 시작...');
+    try {
+      const participantsRef = collection(db, "chatRooms", roomId, "participants");
+      const participantsSnap = await getDocs(participantsRef);
+      const totalParticipants = participantsSnap.size;
+      console.log('📊 [시청률] 총 참여자 수:', totalParticipants);
+
+      if (totalParticipants === 0) {
+        setVideoViewRates({});
+        return;
+      }
+
+      const rates = {};
+      for (const video of registeredVideos) { // 'videos' 대신 'registeredVideos' 사용
+        const certificationsRef = collection(db, "chatRooms", roomId, "videos", video.id, "certifications");
+        const certificationsSnap = await getDocs(certificationsRef);
+        
+        const uniqueViewers = new Set(certificationsSnap.docs.map(doc => doc.data().uid));
+        const viewerCount = uniqueViewers.size;
+        const viewRate = Math.round((viewerCount / totalParticipants) * 100);
+        
+        rates[video.id] = { viewerCount, totalParticipants, viewRate };
+        console.log(`📊 [시청률] 영상 "${video.title}": ${viewerCount} / ${totalParticipants} (${viewRate}%)`);
+      }
+      
+      setVideoViewRates(rates);
+      console.log('📊 [시청률] 계산 완료:', rates);
+    } catch (error) {
+      console.error('❌ [시청률] 계산 오류:', error);
+      setVideoViewRates({});
+    }
+  };
 
   // 상대방이 내 채널을 구독중인지 확인
   useEffect(() => {
@@ -372,7 +447,22 @@ function UserProfile() {
               <div className="flex flex-col gap-3">
                 {videos.map((video) => {
                   const watched = certifiedIds.includes(video.id);
+                  const certCount = certificationCounts[video.id] || 0;
                   const percent = watched ? 100 : 0;
+                  
+                  // 인증 버튼 텍스트 결정
+                  let certText = "미인증";
+                  let certStyle = "text-gray-400";
+                  
+                  if (certCount > 0) {
+                    if (certCount === 1) {
+                      certText = "시청완료";
+                    } else {
+                      certText = `${certCount}회\n시청완료`;
+                    }
+                    certStyle = "text-green-600 font-bold";
+                  }
+                  
                   return (
                     <div key={video.id} className="flex items-center gap-3 p-2 border rounded-lg bg-white">
                       <img src={video.thumbnail} alt="썸네일" className="w-20 h-12 rounded object-cover" />
@@ -384,11 +474,9 @@ function UserProfile() {
                         </div>
                         <div className="text-xs text-right text-gray-500 mt-0.5">{percent}%</div>
                       </div>
-                      {watched ? (
-                        <span className="bg-green-500 text-white text-xs px-2 py-1 rounded">인증</span>
-                      ) : (
-                        <span className="bg-gray-300 text-gray-600 text-xs px-2 py-1 rounded">미인증</span>
-                      )}
+                      <span className={`text-xs font-medium ${certStyle} whitespace-pre-line text-center`}>
+                        {certText}
+                      </span>
                     </div>
                   );
                 })}
@@ -399,15 +487,40 @@ function UserProfile() {
               <div className="text-sm text-gray-400">이 사용자가 등록한 영상이 없습니다.</div>
             ) : (
               <div className="flex flex-col gap-3">
-                {registeredVideos.map((video) => (
-                  <div key={video.id} className="flex items-center gap-3 p-2 border rounded-lg bg-white">
-                    <img src={video.thumbnail} alt="썸네일" className="w-20 h-12 rounded object-cover" />
-                    <div className="flex-1 min-w-0">
-                      <div className="font-semibold truncate text-sm">{video.title}</div>
-                      <div className="text-xs text-gray-500">{video.channel}</div>
+                {registeredVideos.map((video) => {
+                  const viewData = videoViewRates[video.id];
+                  const viewRate = viewData?.viewRate || 0;
+                  const viewerCount = viewData?.viewerCount || 0;
+                  const totalParticipants = viewData?.totalParticipants || 0;
+                  const displayRate = Math.min(viewRate, 100); // UI 표시는 100%로 제한
+                  
+                  return (
+                    <div key={video.id} className="flex items-center gap-3 p-2 border rounded-lg bg-white">
+                      <img src={video.thumbnail} alt="썸네일" className="w-20 h-12 rounded object-cover" />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-semibold truncate text-sm">{video.title}</div>
+                        <div className="text-xs text-gray-500">{video.channel}</div>
+                        
+                        {/* 시청률 정보 */}
+                        <div className="mt-1">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-gray-500">방 전체 시청률</span>
+                            <span className="font-medium text-blue-600">{viewRate}%</span>
+                          </div>
+                          <div className="w-full bg-gray-200 h-1.5 rounded mt-1 overflow-hidden">
+                            <div 
+                              className="h-1.5 rounded bg-gradient-to-r from-blue-400 to-blue-600" 
+                              style={{ width: `${displayRate}%` }}
+                            />
+                          </div>
+                          <div className="text-xs text-gray-400 mt-1">
+                            {viewerCount}명 / {totalParticipants}명 시청완료
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )
           )}

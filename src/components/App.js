@@ -28,7 +28,7 @@ import { ToastProvider } from "../contexts/ToastContext";
 import ToastContainer from "./common/ToastContainer";
 import { AnimatePresence } from 'framer-motion';
 import PageWrapper from './common/PageWrapper';
-import { VideoPlayerProvider } from "../contexts/VideoPlayerContext";
+import { VideoPlayerProvider, useVideoPlayer } from "../contexts/VideoPlayerContext";
 import GlobalVideoPlayer from "./GlobalVideoPlayer";
 import MyPointsPage from "./MyPointsPage";
 import MyFeedViewersPage from "./MyFeedViewersPage";
@@ -286,14 +286,32 @@ function App() {
   );
 }
 
+function AppWrapperContent() {
+  const { selectedVideoIdx } = useVideoPlayer();
+  
+  // 디버깅용 로그
+  console.log('🔍 AppWrapperContent - selectedVideoIdx:', selectedVideoIdx);
+  
+  return (
+    <Router>
+      <App />
+      {/* 전역 비디오 플레이어 - selectedVideoIdx가 있을 때만 렌더링 */}
+      {selectedVideoIdx !== null && (
+        <div>
+          <div style={{position: 'fixed', top: 0, left: 0, background: 'red', color: 'white', padding: '5px', zIndex: 9999}}>
+            DEBUG: selectedVideoIdx = {selectedVideoIdx}
+          </div>
+          <GlobalVideoPlayer />
+        </div>
+      )}
+    </Router>
+  );
+}
+
 export default function AppWrapper() {
   return (
     <VideoPlayerProvider>
-    <Router>
-      <App />
-        {/* 전역 비디오 플레이어 */}
-        <GlobalVideoPlayer />
-    </Router>
+      <AppWrapperContent />
     </VideoPlayerProvider>
   );
 }

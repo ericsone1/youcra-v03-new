@@ -25,11 +25,16 @@ export const VideoPlayerProvider = ({ children }) => {
   const [certLoading, setCertLoading] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const [endCountdown, setEndCountdown] = useState(0);
+  const [certCompleteCountdown, setCertCompleteCountdown] = useState(0);
   const [watchSettings, setWatchSettings] = useState({
     enabled: true,
     watchMode: 'partial'
   });
   const [certifiedVideoIds, setCertifiedVideoIds] = useState([]);
+  const [currentVideoCertCount, setCurrentVideoCertCount] = useState(0);
+  const [liked, setLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(0);
+  const [watching, setWatching] = useState(Math.floor(Math.random() * 50) + 10);
 
   // Refs
   const playerRef = useRef(null);
@@ -52,6 +57,7 @@ export const VideoPlayerProvider = ({ children }) => {
     setCertLoading(false);
     setCountdown(0);
     setEndCountdown(0);
+    setCertCompleteCountdown(0);
   };
 
   // 플레이어 닫기
@@ -83,6 +89,12 @@ export const VideoPlayerProvider = ({ children }) => {
 
   // 비디오 선택
   const selectVideo = (videoIdx) => {
+    // 기존 타이머 정리
+    if (endTimer.current) {
+      clearInterval(endTimer.current);
+      endTimer.current = null;
+    }
+    
     setSelectedVideoIdx(videoIdx);
     setWatchSeconds(0);
     setLastPlayerTime(0);
@@ -91,6 +103,11 @@ export const VideoPlayerProvider = ({ children }) => {
     setCertLoading(false);
     setCountdown(0);
     setEndCountdown(0);
+    setCertCompleteCountdown(0);
+    setCurrentVideoCertCount(0);
+    setLiked(false);
+    setLikeCount(0);
+    setWatching(Math.floor(Math.random() * 50) + 10); // 10-59 랜덤값
   };
 
   const value = {
@@ -121,10 +138,20 @@ export const VideoPlayerProvider = ({ children }) => {
     setCountdown,
     endCountdown,
     setEndCountdown,
+    certCompleteCountdown,
+    setCertCompleteCountdown,
     watchSettings,
     setWatchSettings,
     certifiedVideoIds,
     setCertifiedVideoIds,
+    currentVideoCertCount,
+    setCurrentVideoCertCount,
+    liked,
+    setLiked,
+    likeCount,
+    setLikeCount,
+    watching,
+    setWatching,
     
     // Refs
     playerRef,

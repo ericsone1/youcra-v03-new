@@ -28,10 +28,12 @@ export function MessageList({ messages, myJoinedAt }) {
     let currentDate = '';
     
     filteredMessages.forEach((message, index) => {
+      // 원본 메시지로부터 날짜 추출
       const messageDate = message.createdAt?.seconds 
         ? new Date(message.createdAt.seconds * 1000).toDateString()
         : new Date().toDateString();
       
+      // 날짜 구분선 추가
       if (messageDate !== currentDate) {
         groups.push({
           type: 'date',
@@ -40,13 +42,37 @@ export function MessageList({ messages, myJoinedAt }) {
         });
         currentDate = messageDate;
       }
-      
-      groups.push({
-        type: 'message',
-        ...message,
-        isFirstInGroup: index === 0 || filteredMessages[index - 1]?.uid !== message.uid,
-        isLastInGroup: index === filteredMessages.length - 1 || filteredMessages[index + 1]?.uid !== message.uid
-      });
+
+      // 🔍 메시지 타입 감지 (다중 조건 체크)
+      const isSystemMessage = message.type === 'system' || 
+                             message.isSystemMessage === true ||
+                             message.systemType ||
+                             (message.text && (
+                               message.text.includes('님이 입장했습니다') ||
+                               message.text.includes('님이 퇴장했습니다')
+                             ));
+
+      if (isSystemMessage) {
+        // 🎯 시스템 메시지는 원본 보존하되 타입 명시
+        groups.push({
+          ...message,
+          type: 'system',
+          isSystemMessage: true,
+          id: message.id || `system-${index}`
+        });
+      } else {
+        // 📝 일반 메시지 그룹화
+        groups.push({
+          ...message,
+          type: 'message',
+          isFirstInGroup: index === 0 || 
+                         filteredMessages[index - 1]?.uid !== message.uid || 
+                         (filteredMessages[index - 1]?.type === 'system' || filteredMessages[index - 1]?.isSystemMessage),
+          isLastInGroup: index === filteredMessages.length - 1 || 
+                        filteredMessages[index + 1]?.uid !== message.uid || 
+                        (filteredMessages[index + 1]?.type === 'system' || filteredMessages[index + 1]?.isSystemMessage)
+        });
+      }
     });
     
     return groups;
@@ -116,10 +142,18 @@ export function MessageList({ messages, myJoinedAt }) {
                   </div>
                 </div>
               );
+            } else if (item.type === 'system') {
+              // 시스템 메시지 처리
+              return (
+                <div key={item.id || `system-${index}`}>
+                  <Message message={item} />
+                </div>
+              );
             } else {
+              // 일반 메시지 처리
               return (
                 <div
-                  key={item.id}
+                  key={item.id || `msg-${index}`}
                   className="slide-up"
                   style={{ animationDelay: `${Math.min(index * 0.05, 1)}s` }}
                 >

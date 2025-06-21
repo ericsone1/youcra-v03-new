@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { db, auth } from "../firebase";
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, getDoc, deleteDoc, setDoc } from "firebase/firestore";
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, getDoc, deleteDoc, setDoc, getDocs, where } from "firebase/firestore";
+import { useVideoPlayer } from "../contexts/VideoPlayerContext";
 
 // YouTube ID 추출 함수
 function getYoutubeId(url) {
@@ -42,6 +43,9 @@ function VideoListPage() {
   const { roomId } = useParams();
   const navigate = useNavigate();
   
+  // VideoPlayer context 사용
+  const { initializePlayer } = useVideoPlayer();
+  
   // 탭 관리
   const [activeTab, setActiveTab] = useState("watch"); // "watch" | "add"
   
@@ -65,6 +69,9 @@ function VideoListPage() {
   const [videoMeta, setVideoMeta] = useState(null);
   const [videoLoading, setVideoLoading] = useState(false);
   const [videoMsg, setVideoMsg] = useState("");
+  
+  // 자동재생 모드 상태 (기본값 ON)
+  const [isAutoPlayMode, setIsAutoPlayMode] = useState(true);
 
   // 페이지 진입 시 스크롤을 맨 위로 초기화
   useEffect(() => {
@@ -113,25 +120,6 @@ function VideoListPage() {
     });
     return () => unsub();
   }, [roomId]);
-
-  // 시청 상태에 따른 영상 목록 정렬 (시청 안된 것 상단으로)
-  useEffect(() => {
-    if (videoList.length === 0) return;
-    
-    const sortedVideos = [...videoList].sort((a, b) => {
-      const aWatched = certifiedIds.includes(a.id);
-      const bWatched = certifiedIds.includes(b.id);
-      
-      // 1차 정렬: 시청 안된 것을 상단으로
-      if (!aWatched && bWatched) return -1;
-      if (aWatched && !bWatched) return 1;
-      
-      // 2차 정렬: 기존 duration 정렬 유지 (짧은 것부터)
-      return (a.duration || 0) - (b.duration || 0);
-    });
-    
-    setVideoListState(sortedVideos);
-  }, [videoList, certifiedIds]);
 
   // 시청 상태에 따른 영상 목록 정렬 (시청 안된 것 상단으로)
   useEffect(() => {
@@ -219,7 +207,7 @@ function VideoListPage() {
       await addDoc(collection(db, "chatRooms", roomId, "videos"), {
         ...videoMeta,
         registeredAt: serverTimestamp(),
-        registeredBy: auth.currentUser.email,
+        registeredBy: auth.currentUser.uid,
       });
       setVideoUrl("");
       setVideoMeta(null);
@@ -245,7 +233,7 @@ function VideoListPage() {
     }
     
     // 권한 체크: 방장이거나 본인이 등록한 영상인 경우만 삭제 가능
-    const canDelete = isOwner || video.registeredBy === auth.currentUser?.email;
+    const canDelete = isOwner || video.registeredBy === auth.currentUser?.uid;
     
     if (!canDelete) {
       alert("이 영상을 삭제할 권한이 없습니다.");
@@ -495,6 +483,42 @@ function VideoListPage() {
                     </div>
                   )}
                   
+                  {/* 자동재생 모드 토글 스위치 */}
+                  {videoListState.length > 0 && (
+                    <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">🎬</span>
+                          <div>
+                            <span className="font-medium text-gray-800">순차 자동재생</span>
+                            <p className="text-xs text-gray-500">영상 종료 시 다음 영상으로 자동 이동</p>
+                          </div>
+                        </div>
+                        
+                        {/* 토글 스위치 */}
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => {
+                              setIsAutoPlayMode(!isAutoPlayMode);
+                            }}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                              isAutoPlayMode ? 'bg-blue-600' : 'bg-gray-300'
+                            }`}
+                          >
+                            <span
+                              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                isAutoPlayMode ? 'translate-x-6' : 'translate-x-1'
+                              }`}
+                            />
+                          </button>
+                          <span className={`text-sm font-medium ${isAutoPlayMode ? 'text-blue-600' : 'text-gray-500'}`}>
+                            {isAutoPlayMode ? 'ON' : 'OFF'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
                   {videoListState.map((video, idx) => {
                     // 삭제 버튼 표시 조건
                     const canUserDelete = isOwner || video.registeredBy === auth.currentUser?.email;
@@ -529,7 +553,10 @@ function VideoListPage() {
                       <div className="flex gap-3">
                         <div 
                           className="relative cursor-pointer"
-                          onClick={() => navigate(`/chat/${roomId}?video=${video.id}`)}
+                          onClick={() => {
+                            initializePlayer(roomId, videoListState, idx);
+                            navigate(`/chat/${roomId}?video=${video.id}`);
+                          }}
                         >
                           <img 
                             src={video.thumbnail} 
@@ -545,7 +572,10 @@ function VideoListPage() {
                         
                         <div 
                           className="flex-1 min-w-0 cursor-pointer"
-                          onClick={() => navigate(`/chat/${roomId}?video=${video.id}`)}
+                          onClick={() => {
+                            initializePlayer(roomId, videoListState, idx);
+                            navigate(`/chat/${roomId}?video=${video.id}`);
+                          }}
                         >
                           <h3 className="font-medium text-gray-900 text-sm leading-5 line-clamp-2 mb-1">
                             {video.title}
@@ -559,7 +589,8 @@ function VideoListPage() {
                           {/* 시청 상태 버튼 */}
                           <div 
                             onClick={(e) => {
-                              e.stopPropagation(); // 드래그 이벤트 방지
+                              e.stopPropagation();
+                              initializePlayer(roomId, videoListState, idx);
                               navigate(`/chat/${roomId}?video=${video.id}`);
                             }} 
                             className="cursor-pointer"
@@ -579,7 +610,7 @@ function VideoListPage() {
                           {canUserDelete && (
                             <button
                               onClick={(e) => {
-                                e.stopPropagation(); // 드래그 이벤트 방지
+                                e.stopPropagation();
                                 handleDeleteVideo(video.id, video.title);
                               }}
                               className="bg-red-500 hover:bg-red-600 text-white text-xs px-3 py-1.5 rounded-full font-medium text-center transition-colors shadow-md hover:shadow-lg transform hover:scale-105"
