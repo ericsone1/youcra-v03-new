@@ -8,7 +8,6 @@ import {
   query,
   orderBy,
   onSnapshot,
-  addDoc,
   getDocs,
 } from "firebase/firestore";
 
@@ -213,18 +212,21 @@ function UserProfile() {
 
       try {
         console.log('✅ [프로필] 구독 여부 확인 진행');
-        // TODO: 실제 YouTube API 연동 시 여기에 구독 여부 확인 로직 추가
-        // 현재는 시뮬레이션된 로직 사용
         
-        // 예시: 데이터베이스에서 구독 관계 확인
-        // const subscriptionDoc = await getDoc(doc(db, "subscriptions", `${uid}_${myChannel.channelId}`));
-        // setIsSubscribedToMe(subscriptionDoc.exists());
+        // Firebase에서 구독 관계 확인
+        // subscriptions 컬렉션에서 {구독자uid}_{채널id} 형태로 저장된 문서 확인
+        const subscriptionId = `${uid}_${myChannel.channelId}`;
+        const subscriptionDoc = await getDoc(doc(db, "subscriptions", subscriptionId));
+        const isSubscribed = subscriptionDoc.exists();
         
-        // 임시로 랜덤하게 구독 여부 결정 (실제 구현 시 제거)
-        const randomSubscribed = Math.random() > 0.5;
-        setIsSubscribedToMe(randomSubscribed);
+        setIsSubscribedToMe(isSubscribed);
         
-        console.log(`🎯 [프로필] 구독 여부 결과: 상대방(${user.displayName})이 내 채널(${myChannel.channelTitle}) 구독 여부:`, randomSubscribed);
+        console.log(`🎯 [프로필] 구독 여부 결과: 상대방(${user.displayName || user.email})이 내 채널(${myChannel.channelTitle}) 구독 여부:`, isSubscribed);
+        
+        if (isSubscribed) {
+          const subscriptionData = subscriptionDoc.data();
+          console.log('📅 [프로필] 구독 일시:', subscriptionData?.subscribedAt);
+        }
       } catch (error) {
         console.error("❌ [프로필] 구독 여부 확인 오류:", error);
         setIsSubscribedToMe(null);
@@ -271,27 +273,9 @@ function UserProfile() {
     setLoading(false);
   }, [user]);
 
-  // 구독 요청 처리
-  const handleSubscribeRequest = async () => {
-    if (!auth.currentUser) {
-      alert("로그인이 필요합니다.");
-      return;
-    }
 
-    try {
-      await addDoc(collection(db, "subscribeRequests"), {
-        fromUid: auth.currentUser.uid,
-        fromName: auth.currentUser.displayName || auth.currentUser.email,
-        toUid: uid,
-        createdAt: new Date(),
-        notified: false,
-      });
-      alert("구독 요청을 보냈습니다!");
-    } catch (err) {
-      console.error("구독 요청 실패", err);
-      alert("구독 요청 중 오류가 발생했습니다.");
-    }
-  };
+
+
 
   if (loading) return (
     <div className="max-w-md mx-auto bg-white rounded-2xl shadow-lg overflow-hidden min-h-screen flex items-center justify-center">
@@ -352,6 +336,19 @@ function UserProfile() {
         {coverUrl && (
           <img src={coverUrl} alt="커버" className="w-full h-full object-cover" />
         )}
+        
+        {/* 뒤로가기 버튼 */}
+        <button 
+          onClick={() => navigate(-1)}
+          className="absolute top-4 left-4 p-2 bg-black/30 hover:bg-black/50 text-white rounded-full transition-all duration-200 backdrop-blur-sm" 
+          aria-label="뒤로가기"
+          title="뒤로가기"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        
         {/* 프로필 이미지 */}
         <div className="absolute left-1/2 -bottom-10 transform -translate-x-1/2">
           {profileUrl ? (
@@ -370,7 +367,7 @@ function UserProfile() {
             <span className="text-yellow-500 text-xl" title="방장">👑</span>
           )}
         </div>
-        {user.youtubeChannel && (
+        {user.youtubeChannel ? (
           <div className="mt-1">
             <div className="flex items-center justify-center gap-2">
               <img src={user.youtubeChannel.channelThumbnail} alt="채널" className="w-8 h-8 rounded-full" />
@@ -385,21 +382,13 @@ function UserProfile() {
                 {isSubscribedToMe === true && (
                   <div className="flex items-center gap-1 bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-semibold">
                     <span>✅</span>
-                    <span>내 채널({myChannel.channelTitle}) 구독중</span>
+                    <span>내 채널 구독중입니다</span>
                   </div>
                 )}
                 {isSubscribedToMe === false && (
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1 bg-red-50 text-red-600 px-3 py-1 rounded-full text-xs font-semibold">
-                      <span>❌</span>
-                      <span>내 채널({myChannel.channelTitle}) 미구독</span>
-                    </div>
-                    <button
-                      onClick={handleSubscribeRequest}
-                      className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-full text-xs font-semibold"
-                    >
-                      구독요청
-                    </button>
+                  <div className="flex items-center gap-1 bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs">
+                    <span>❌</span>
+                    <span>미구독중</span>
                   </div>
                 )}
                 {isSubscribedToMe === null && myChannel && (
@@ -410,6 +399,30 @@ function UserProfile() {
                 )}
               </div>
             )}
+            
+            {/* 내가 채널 등록하지 않은 경우 */}
+            {!myChannel && auth.currentUser?.uid !== uid && (
+              <div className="flex items-center justify-center mt-2">
+                <div className="flex items-center gap-1 bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs">
+                  <span>⚠️</span>
+                  <span>내 유튜브 채널이 등록되지 않았습니다</span>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="mt-1">
+            <div className="flex items-center justify-center">
+              <div className="flex items-center gap-1 bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs">
+                <span>📺</span>
+                <span>
+                  {auth.currentUser?.uid === uid 
+                    ? "유튜브 채널이 등록되지 않았습니다" 
+                    : "상대방이 유튜브 채널 등록이 되어있지 않습니다"
+                  }
+                </span>
+              </div>
+            </div>
           </div>
         )}
       </div>

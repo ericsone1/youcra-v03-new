@@ -296,8 +296,34 @@ function DMChatRoom() {
                         {otherUser?.displayName || otherUser?.email?.split('@')[0] || '상대방'}
                       </div>
                       <div className="flex items-end gap-2 max-w-[85%]">
-                        <div className="relative px-4 py-3 rounded-2xl bg-white text-gray-800 rounded-bl-sm border border-gray-200 shadow-md break-words">
-                          <div className="absolute -left-2 bottom-3 w-0 h-0 border-r-8 border-r-white border-t-4 border-t-transparent border-b-4 border-b-transparent drop-shadow-sm"></div>
+                        <div className={`relative px-4 py-3 rounded-2xl ${msg.type === 'subscribe_request' ? 'bg-red-50 border-red-200' : 'bg-white border-gray-200'} text-gray-800 rounded-bl-sm border shadow-md break-words`}>
+                          <div className={`absolute -left-2 bottom-3 w-0 h-0 ${msg.type === 'subscribe_request' ? 'border-r-red-50' : 'border-r-white'} border-r-8 border-t-4 border-t-transparent border-b-4 border-b-transparent drop-shadow-sm`}></div>
+                          {msg.type === 'subscribe_request' && msg.channelInfo && (
+                            <div className="mb-3 p-3 bg-white rounded-lg border border-red-200">
+                              <div className="flex items-center gap-2 mb-2">
+                                <span className="text-lg">📺</span>
+                                <span className="font-semibold text-red-600">구독 요청</span>
+                              </div>
+                              {msg.channelInfo.channelThumbnail && (
+                                <img 
+                                  src={msg.channelInfo.channelThumbnail} 
+                                  alt="채널 썸네일" 
+                                  className="w-12 h-12 rounded-full mb-2"
+                                />
+                              )}
+                              <div className="text-sm font-medium text-gray-800 mb-1">
+                                {msg.channelInfo.channelTitle}
+                              </div>
+                              <a 
+                                href={`https://www.youtube.com/channel/${msg.channelInfo.channelId}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-block bg-red-500 text-white px-3 py-1 rounded text-xs hover:bg-red-600 transition-colors"
+                              >
+                                🔗 채널 방문
+                              </a>
+                            </div>
+                          )}
                           <div className="text-sm leading-relaxed text-left whitespace-pre-wrap font-normal">{msg.text}</div>
                         </div>
                         <div className="flex flex-col items-start gap-1 pb-1">
@@ -310,8 +336,34 @@ function DMChatRoom() {
                 {/* 내 메시지 */}
                 {isMine && (
                   <div className="flex items-end gap-2 max-w-[85%] flex-row-reverse">
-                    <div className="relative px-4 py-3 rounded-2xl bg-yellow-300 text-gray-800 rounded-br-sm shadow-md break-words">
-                      <div className="absolute -right-2 bottom-3 w-0 h-0 border-l-8 border-l-yellow-300 border-t-4 border-t-transparent border-b-4 border-b-transparent drop-shadow-sm"></div>
+                    <div className={`relative px-4 py-3 rounded-2xl ${msg.type === 'subscribe_request' ? 'bg-red-100' : 'bg-yellow-300'} text-gray-800 rounded-br-sm shadow-md break-words`}>
+                      <div className={`absolute -right-2 bottom-3 w-0 h-0 ${msg.type === 'subscribe_request' ? 'border-l-red-100' : 'border-l-yellow-300'} border-l-8 border-t-4 border-t-transparent border-b-4 border-b-transparent drop-shadow-sm`}></div>
+                      {msg.type === 'subscribe_request' && msg.channelInfo && (
+                        <div className="mb-3 p-3 bg-white rounded-lg border border-red-200">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-lg">📺</span>
+                            <span className="font-semibold text-red-600">구독 요청</span>
+                          </div>
+                          {msg.channelInfo.channelThumbnail && (
+                            <img 
+                              src={msg.channelInfo.channelThumbnail} 
+                              alt="채널 썸네일" 
+                              className="w-12 h-12 rounded-full mb-2"
+                            />
+                          )}
+                          <div className="text-sm font-medium text-gray-800 mb-1">
+                            {msg.channelInfo.channelTitle}
+                          </div>
+                          <a 
+                            href={`https://www.youtube.com/channel/${msg.channelInfo.channelId}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-block bg-red-500 text-white px-3 py-1 rounded text-xs hover:bg-red-600 transition-colors"
+                          >
+                            🔗 채널 방문
+                          </a>
+                        </div>
+                      )}
                       <div className="text-sm leading-relaxed text-left whitespace-pre-wrap font-normal">{msg.text}</div>
                     </div>
                     <div className="flex flex-col items-end gap-1 pb-1">

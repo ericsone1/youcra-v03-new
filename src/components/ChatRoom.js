@@ -245,6 +245,7 @@ function ChatRoom() {
   const [showDelete, setShowDelete] = useState(null);
   const [showImageModal, setShowImageModal] = useState(null); // 이미지 모달
   const [watching, setWatching] = useState(0); // 시청자 수
+  const [showParticipants, setShowParticipants] = useState(false); // 참여자 목록 표시
   
   // === Refs ===
   const messagesEndRef = useRef(null);
@@ -1061,13 +1062,17 @@ function ChatRoom() {
       if (showUploadMenu && !event.target.closest('.upload-menu-container')) {
         setShowUploadMenu(false);
       }
+      // 참여자 목록 외부 클릭 시 닫기
+      if (showParticipants && !event.target.closest('.participants-dropdown') && !event.target.closest('[data-participants-toggle]')) {
+        setShowParticipants(false);
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showUploadMenu]);
+  }, [showUploadMenu, showParticipants]);
 
   React.useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -1258,14 +1263,30 @@ function ChatRoom() {
     <div className="flex flex-col h-screen max-w-md mx-auto bg-white relative">
       {/* 헤더 */}
       <header className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-md flex-shrink-0 flex items-center justify-between px-4 py-3 border-b z-30 bg-rose-100" style={{ paddingTop: 'env(safe-area-inset-top, 12px)' }}>
+        {/* 좌측 뒤로가기 버튼 */}
+        <button 
+          onClick={() => navigate('/chat')}
+          className="p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-all duration-200" 
+          aria-label="뒤로가기"
+          title="채팅방 목록으로"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+
         <div className="flex-1 text-center">
           <div className="font-bold text-lg truncate">{roomName}</div>
           <div className="flex items-center justify-center gap-3 text-xs text-gray-600">
             {/* 온라인 사용자 수 - 작고 깔끔하게 */}
-            <div className="flex items-center gap-1 bg-green-100 text-green-700 px-2 py-1 rounded-full">
+            <button 
+              onClick={() => setShowParticipants(!showParticipants)}
+              className="flex items-center gap-1 bg-green-100 text-green-700 px-2 py-1 rounded-full hover:bg-green-200 transition-colors duration-200"
+              data-participants-toggle
+            >
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-xs font-medium">{participants.length}</span>
-            </div>
+              <span className="text-xs font-medium">LIVE {participants.length}</span>
+            </button>
             
             {/* 좋아요 버튼 */}
             <button
@@ -1304,6 +1325,64 @@ function ChatRoom() {
           <button onClick={() => navigate(`/chat/${roomId}/info`)} className="text-4xl text-gray-600 hover:text-blue-600 p-2" aria-label="메뉴">≡</button>
         </div>
       </header>
+
+      {/* 참여자 목록 드롭다운 */}
+      {showParticipants && (
+        <div className="participants-dropdown absolute top-20 left-1/2 transform -translate-x-1/2 z-50 bg-white rounded-lg shadow-lg border border-gray-200 min-w-64 max-w-80">
+          <div className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold text-gray-800">접속 중인 사용자</h3>
+              <button 
+                onClick={() => setShowParticipants(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {participants.map((participant) => (
+                <div key={participant.id} className="flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg">
+                  <img 
+                    src={`https://picsum.photos/seed/${participant.uid}/40/40`}
+                    alt="프로필"
+                    className="w-8 h-8 rounded-full"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.parentElement.innerHTML += `<div class="w-8 h-8 bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500 flex items-center justify-center text-xs font-bold text-white rounded-full">${(userNickMap[participant.uid] || participant.email?.split('@')[0] || '익명').slice(0, 2).toUpperCase()}</div>`;
+                    }}
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium text-sm text-gray-800 flex items-center gap-1">
+                      {userNickMap[participant.uid] || participant.displayName || participant.email?.split('@')[0] || '익명'}
+                      {/* 방장 아이콘 */}
+                      {roomInfo && participant.uid === roomInfo.createdBy && (
+                        <span title="방장" className="text-yellow-500 text-xs">👑</span>
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {participant.joinedAt ? '접속 중' : '참여자'}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowParticipants(false);
+                      navigate(`/profile/${roomId}/${participant.uid}`);
+                    }}
+                    className="text-blue-500 hover:text-blue-700 text-xs px-2 py-1 rounded hover:bg-blue-50"
+                  >
+                    프로필
+                  </button>
+                </div>
+              ))}
+              {participants.length === 0 && (
+                <div className="text-center text-gray-500 py-4">
+                  접속 중인 사용자가 없습니다
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 공유하기 토스트 메시지 */}
       {showShareToast && (

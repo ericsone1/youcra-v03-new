@@ -6,6 +6,7 @@ import { useMyVideos } from './hooks/useMyVideos';
 import YouTubeChannelManager from './YouTubeChannelManager';
 import ProfileSection from './ProfileSection';
 import VideoStatus from './VideoStatus';
+
 import BottomTabBar from './BottomTabBar';
 
 function MyChannel() {
@@ -107,6 +108,8 @@ function MyChannel() {
 
       {/* 영상 현황 */}
       <VideoStatus myVideosData={videoData.myVideosData} />
+
+
 
       {/* 하단 탭바 */}
       <BottomTabBar />

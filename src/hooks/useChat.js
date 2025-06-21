@@ -51,7 +51,6 @@ export function useChat(roomId) {
       (doc) => {
         if (doc.exists()) {
           setRoomInfo(doc.data());
-          setParticipants(doc.data().participants || []);
           setError(null);
         } else {
           setError('존재하지 않는 채팅방입니다.');
@@ -62,6 +61,28 @@ export function useChat(roomId) {
         console.error('채팅방 정보 로드 오류:', error);
         setError('채팅방 정보를 불러올 수 없습니다.');
         setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [roomId, authReady]);
+
+  // 실제 참여자 목록 로드 (서브컬렉션 기반)
+  useEffect(() => {
+    if (!roomId || !authReady) return;
+
+    const participantsRef = collection(db, 'chatRooms', roomId, 'participants');
+    
+    const unsubscribe = onSnapshot(participantsRef,
+      (snapshot) => {
+        const participantsList = [];
+        snapshot.forEach((doc) => {
+          participantsList.push({ id: doc.id, ...doc.data() });
+        });
+        setParticipants(participantsList);
+      },
+      (error) => {
+        console.error('참여자 목록 로드 오류:', error);
       }
     );
 

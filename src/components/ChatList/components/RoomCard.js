@@ -121,7 +121,7 @@ function RoomCard({ room, onEnter, variant = 'my' }) {
       
       {/* 우측 영역: 안읽음 메시지 개수 */}
       {variant === 'my' && room.unreadCount > 0 && (
-        <div className="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded-full min-w-[20px] text-center ml-2">
+        <div className="bg-yellow-500 text-white text-xs font-bold px-2 py-1 rounded-full min-w-[20px] text-center ml-2 shadow-md">
           {room.unreadCount > 99 ? '99+' : room.unreadCount}
         </div>
       )}
