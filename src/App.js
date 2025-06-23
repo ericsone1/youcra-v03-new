@@ -36,7 +36,7 @@ const SharedLinkHandler = () => {
 // 현재 위치를 표시하는 디버그 컴포넌트
 const LocationDisplay = () => {
   const location = useLocation();
-  console.log('🔍 현재 라우트:', location.pathname);
+
   return null;
 };
 import { AuthProvider } from "./contexts/AuthContext";

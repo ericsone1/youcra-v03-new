@@ -94,6 +94,26 @@ export function useChat(roomId) {
   useEffect(() => {
     if (!roomId || !authReady) return;
 
+    // 새로 만든 채팅방인지 확인 - sessionStorage 사용
+    const newChatRoomId = sessionStorage.getItem('newChatRoom');
+    const isNewRoom = newChatRoomId === roomId;
+
+    // 디버깅 로그
+    
+
+    if (isNewRoom) {
+      // 새로 만든 방: 메시지 로딩 스킵하고 즉시 완료
+      
+      setMessages([]);
+      setMessagesLoading(false);
+      
+      // 플래그 제거 (한 번만 적용)
+      sessionStorage.removeItem('newChatRoom');
+      
+      return;
+    }
+
+    // 기존 방: 정상적으로 메시지 로딩
     setMessagesLoading(true);
     const messagesRef = collection(db, 'chatRooms', roomId, 'messages');
     const q = query(messagesRef, orderBy('createdAt', 'desc'), limit(50));
@@ -106,6 +126,16 @@ export function useChat(roomId) {
         });
         setMessages(newMessages.reverse());
         setMessagesLoading(false);
+        
+        // 디버깅: 메시지 로딩 완료 로그
+        if (process.env.NODE_ENV === 'development') {
+
+        }
+        
+        // 메시지가 0개인 경우 즉시 로딩 완료 처리
+        if (newMessages.length === 0) {
+  
+        }
         
         // 알림: 새 메시지 감지 (로그인된 사용자만)
         if (auth.currentUser && newMessages.length > 0) {
@@ -163,8 +193,21 @@ export function useChat(roomId) {
     if (!roomId || !auth.currentUser) return;
 
     try {
-      // participants 서브컬렉션에 사용자 추가
+      // 이미 참여자인지 확인 (해당 계정이 이 채팅방에 참여한 적이 있는지)
       const participantRef = doc(db, 'chatRooms', roomId, 'participants', auth.currentUser.uid);
+      const participantDoc = await getDoc(participantRef);
+      const isAlreadyParticipant = participantDoc.exists();
+      
+      // 새로운 계정(UID)이면 무조건 입장 메시지 표시
+      const shouldShowJoinMessage = !isAlreadyParticipant;
+      
+      if (shouldShowJoinMessage) {
+        console.log('🎉 새로운 계정으로 첫 입장 - 입장 메시지 생성');
+      } else {
+        console.log('👤 이미 참여한 적이 있는 계정 - 입장 메시지 생성 안함');
+      }
+
+      // participants 서브컬렉션에 사용자 추가
       await setDoc(participantRef, {
         joinedAt: serverTimestamp(),
         lastReadAt: serverTimestamp(),
@@ -179,6 +222,30 @@ export function useChat(roomId) {
         participants: arrayUnion(auth.currentUser.uid)
       });
 
+      // 새로운 계정의 첫 입장인 경우 입장 알림 메시지 추가
+      if (shouldShowJoinMessage) {
+        console.log('🎉 새로운 계정의 첫 입장 - 입장 메시지 생성 중...');
+        
+        // 사용자 프로필에서 닉네임 가져오기
+        const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+        const userProfile = userDoc.exists() ? userDoc.data() : null;
+        const displayName = userProfile?.nickname || userProfile?.nick || userProfile?.displayName || auth.currentUser.displayName || auth.currentUser.email?.split('@')[0] || '익명';
+
+        console.log('📝 입장 메시지 생성:', `${displayName}님이 입장했습니다.`);
+
+        // 입장 알림 메시지 추가
+        const messagesRef = collection(db, 'chatRooms', roomId, 'messages');
+        await addDoc(messagesRef, {
+          text: `${displayName}님이 입장했습니다.`,
+          createdAt: serverTimestamp(),
+          type: 'system',
+          isSystemMessage: true,
+          uid: 'system'
+        });
+        
+        console.log('✅ 입장 메시지 생성 완료');
+      }
+
       setMyJoinedAt({ seconds: Date.now() / 1000 });
       setError(null);
     } catch (error) {
@@ -192,6 +259,11 @@ export function useChat(roomId) {
     if (!roomId || !auth.currentUser) return;
 
     try {
+      // 사용자 프로필에서 닉네임 가져오기 (퇴장 메시지용)
+      const userDoc = await getDoc(doc(db, 'users', auth.currentUser.uid));
+      const userProfile = userDoc.exists() ? userDoc.data() : null;
+      const displayName = userProfile?.nickname || userProfile?.nick || userProfile?.displayName || auth.currentUser.displayName || auth.currentUser.email?.split('@')[0] || '익명';
+
       // participants 서브컬렉션에서 사용자 제거
       const participantRef = doc(db, 'chatRooms', roomId, 'participants', auth.currentUser.uid);
       await deleteDoc(participantRef);
@@ -200,6 +272,16 @@ export function useChat(roomId) {
       const roomRef = doc(db, 'chatRooms', roomId);
       await updateDoc(roomRef, {
         participants: arrayRemove(auth.currentUser.uid)
+      });
+
+      // 퇴장 알림 메시지 추가
+      const messagesRef = collection(db, 'chatRooms', roomId, 'messages');
+      await addDoc(messagesRef, {
+        text: `${displayName}님이 퇴장했습니다.`,
+        createdAt: serverTimestamp(),
+        type: 'system',
+        isSystemMessage: true,
+        uid: 'system'
       });
     } catch (error) {
       console.error('채팅방 퇴장 오류:', error);

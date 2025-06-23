@@ -11,6 +11,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { getRoomTypeInfo, getAllRoomTypes } from "../utils/roomTypeUtils";
 
 function ChatRoomProfile() {
   const { roomId } = useParams();
@@ -72,6 +73,14 @@ function ChatRoomProfile() {
         ...doc.data() 
       }));
       setParticipants(participantsList);
+      
+      // 디버깅: 참여자 수 확인
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`🔍 [채팅방 프로필] ${roomId} 참여자 수:`, snapshot.size);
+        console.log('🔍 [채팅방 프로필] 참여자 목록:', participantsList.map(p => p.id));
+        console.log('🔍 [채팅방 프로필] participants.length:', participantsList.length);
+        console.log('🔍 [채팅방 프로필] snapshot.size:', snapshot.size);
+      }
     });
     return () => unsub();
   }, [roomId]);
@@ -107,21 +116,6 @@ function ChatRoomProfile() {
       </div>
     </div>
   );
-
-  // 방 타입별 정보
-  const getRoomTypeInfo = (roomType) => {
-    const types = {
-      "collaboration": { name: "🤝 협업방", color: "bg-blue-500" },
-      "subscribe": { name: "📺 맞구독방", color: "bg-red-500" },
-      "youtube": { name: "🎬 YouTube 시청방", color: "bg-red-600" },
-      "gaming": { name: "🎮 게임방", color: "bg-purple-500" },
-      "study": { name: "📚 스터디방", color: "bg-green-500" },
-      "chat": { name: "💬 자유채팅방", color: "bg-indigo-500" },
-      "fan": { name: "⭐ 팬클럽방", color: "bg-yellow-500" },
-      "event": { name: "🎉 이벤트방", color: "bg-pink-500" }
-    };
-    return types[roomType] || { name: "💬 채팅방", color: "bg-gray-500" };
-  };
 
   const roomTypeInfo = getRoomTypeInfo(roomData.roomType);
   const isOwner = auth.currentUser?.uid === roomData.createdBy;
@@ -449,16 +443,7 @@ function ChatRoomProfile() {
                   🏷️ 방 타입 선택 (필수)
                 </label>
                 <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { id: "collaboration", name: "🤝 협업방", desc: "프로젝트나 스터디를 함께해요" },
-                    { id: "subscribe", name: "📺 맞구독방", desc: "서로 구독하며 소통해요" },
-                    { id: "youtube", name: "🎬 YouTube 시청방", desc: "영상을 함께 시청해요" },
-                    { id: "gaming", name: "🎮 게임방", desc: "게임 이야기를 나눠요" },
-                    { id: "study", name: "📚 스터디방", desc: "함께 공부해요" },
-                    { id: "chat", name: "💬 자유채팅방", desc: "자유롭게 대화해요" },
-                    { id: "fan", name: "⭐ 팬클럽방", desc: "팬들끼리 모여요" },
-                    { id: "event", name: "🎉 이벤트방", desc: "특별한 이벤트를 진행해요" }
-                  ].map((type) => (
+                  {                  getAllRoomTypes().map((type) => (
                     <button
                       key={type.id}
                       type="button"

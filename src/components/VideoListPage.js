@@ -208,6 +208,7 @@ function VideoListPage() {
         ...videoMeta,
         registeredAt: serverTimestamp(),
         registeredBy: auth.currentUser.uid,
+        registeredByEmail: auth.currentUser.email, // 이메일도 함께 저장 (호환성)
       });
       setVideoUrl("");
       setVideoMeta(null);
@@ -233,7 +234,9 @@ function VideoListPage() {
     }
     
     // 권한 체크: 방장이거나 본인이 등록한 영상인 경우만 삭제 가능
-    const canDelete = isOwner || video.registeredBy === auth.currentUser?.uid;
+    const canDelete = isOwner || 
+                      video.registeredBy === auth.currentUser?.uid || 
+                      video.registeredBy === auth.currentUser?.email;
     
     if (!canDelete) {
       alert("이 영상을 삭제할 권한이 없습니다.");
@@ -471,7 +474,10 @@ function VideoListPage() {
                   )}
                   
                   {/* 일반 사용자용 안내 메시지 */}
-                  {!isOwner && videoList.length > 0 && videoList.some(v => v.registeredBy === auth.currentUser?.email) && (
+                  {!isOwner && videoList.length > 0 && videoList.some(v => 
+                    v.registeredBy === auth.currentUser?.uid || 
+                    v.registeredBy === auth.currentUser?.email
+                  ) && (
                     <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-4">
                       <div className="flex items-center gap-2">
                         <span className="text-green-600">📹</span>
@@ -520,8 +526,10 @@ function VideoListPage() {
                   )}
                   
                   {videoListState.map((video, idx) => {
-                    // 삭제 버튼 표시 조건
-                    const canUserDelete = isOwner || video.registeredBy === auth.currentUser?.email;
+                    // 삭제 버튼 표시 조건 (UID 또는 이메일 기준)
+                    const canUserDelete = isOwner || 
+                                         video.registeredBy === auth.currentUser?.uid || 
+                                         video.registeredBy === auth.currentUser?.email;
                     
                     return (
                     <div 

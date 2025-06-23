@@ -6,7 +6,8 @@ import {
   createUserWithEmailAndPassword, 
   updateProfile 
 } from 'firebase/auth';
-import { auth } from '../firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from '../firebase';
 
 const AuthContext = createContext();
 
@@ -51,14 +52,28 @@ export function AuthProvider({ children }) {
     }
 
     // Firebase Auth 상태 감지
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
-        // Firebase 사용자 로그인됨
+        // Firebase 사용자 로그인됨 - Firestore에서 사용자 프로필 정보 가져오기
+        let displayName = firebaseUser.displayName || '유크라 사용자';
+        let photoURL = firebaseUser.photoURL;
+        
+        try {
+          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            displayName = userData.nick || userData.displayName || userData.nickname || firebaseUser.displayName || '유크라 사용자';
+            photoURL = userData.photoURL || userData.profileImage || firebaseUser.photoURL;
+          }
+        } catch (error) {
+          console.error('사용자 프로필 정보 가져오기 실패:', error);
+        }
+
         setCurrentUser({
           uid: firebaseUser.uid,
           email: firebaseUser.email,
-          displayName: firebaseUser.displayName || '유크라 사용자',
-          photoURL: firebaseUser.photoURL,
+          displayName: displayName,
+          photoURL: photoURL,
           isTemporaryUser: false,
           isEmailUser: true
         });

@@ -42,7 +42,7 @@ export const useParticipants = (roomId, isOwner, myUid, myEmail) => {
                 return {
                   id: uid,
                   email: userData.email || participantData.email || '이메일 없음',
-                  displayName: userData.displayName || userData.nick || userData.name || userData.email?.split('@')[0] || '익명',
+                  displayName: userData.nickname || userData.displayName || userData.nick || userData.name || userData.email?.split('@')[0] || '익명',
                   avatar: userData.photoURL || userData.profileImage || null,
                   joinedAt: participantData.joinedAt,
                   role: participantData.role || 'member',
@@ -117,7 +117,7 @@ export const useParticipants = (roomId, isOwner, myUid, myEmail) => {
 
     // 선택된 사용자 정보 검증
     const userEmail = selectedTransferUser.email || selectedTransferUser.displayName || '선택된 사용자';
-    console.log('🔍 선택된 사용자 정보:', selectedTransferUser);
+    
 
     // 최종 확인
     if (!window.confirm(`정말로 ${userEmail}님에게 방장 권한을 위임하시겠습니까?\n\n⚠️ 이 작업 후에는 방 관리 권한을 잃게 됩니다!`)) {

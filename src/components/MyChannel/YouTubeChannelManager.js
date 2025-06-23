@@ -163,8 +163,25 @@ const YouTubeChannelManager = () => {
         return;
       }
 
+      // 원본 URL 정보 추가
+      channelInfo.originalUrl = newChannelUrl.trim();
+      
+      console.log('🎬 [채널등록] 입력된 URL:', newChannelUrl);
+      console.log('🎬 [채널등록] 추출된 정보:', channelInfo);
+
+      // 디버깅: 특정 URL 테스트
+      if (newChannelUrl.includes('찌은') || newChannelUrl.includes('%EC%B0%8C%EC%9D%80')) {
+        console.log('🐛 [디버깅] 찌은 채널 테스트');
+        console.log('🐛 [디버깅] 원본 URL:', newChannelUrl);
+        console.log('🐛 [디버깅] 디코딩된 URL:', decodeURIComponent(newChannelUrl));
+        console.log('🐛 [디버깅] 추출된 타입:', channelInfo.type);
+        console.log('🐛 [디버깅] 추출된 값:', channelInfo.value);
+      }
+
       const channelDetails = await fetchYouTubeChannelInfo(channelInfo);
       
+      console.log('🎬 [채널등록] 최종 채널 정보:', channelDetails);
+
       await setDoc(doc(db, 'users', currentUser.uid), {
         youtubeChannel: channelDetails
       }, { merge: true });
@@ -176,7 +193,7 @@ const YouTubeChannelManager = () => {
       if (channelDetails.isMockData) {
         setMessage('채널이 등록되었습니다. (YouTube API 키가 없어 기본 정보만 표시됩니다)');
       } else {
-        setMessage('채널이 성공적으로 등록되었습니다!');
+        setMessage('✅ 채널이 성공적으로 등록되었습니다! \n💡 참고: YouTube 채널은 채널 ID와 핸들(@사용자명)이 다를 수 있습니다.');
       }
       
     } catch (error) {
@@ -276,13 +293,27 @@ const YouTubeChannelManager = () => {
             </button>
           </div>
           
+          {/* 도움말 */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm">
+            <h4 className="font-semibold text-blue-800 mb-2">💡 YouTube 채널 URL 입력 가이드</h4>
+            <div className="text-blue-700 space-y-1">
+              <div>• <strong>채널 ID 형태:</strong> https://youtube.com/channel/UCxxxxx...</div>
+              <div>• <strong>핸들 형태:</strong> https://youtube.com/@채널핸들</div>
+              <div>• <strong>커스텀 URL:</strong> https://youtube.com/c/채널명</div>
+              <div className="text-blue-600 text-xs mt-2">
+                ⚠️ 하나의 채널은 여러 형태의 주소를 가질 수 있습니다. 
+                채널 ID(UC로 시작하는 24자리)가 실제 고유 식별자이며, @핸들은 사용자 친화적인 별명입니다.
+              </div>
+            </div>
+          </div>
+          
           {isEditing && (
             <button
               onClick={() => {
                 setIsEditing(false);
                 setNewChannelUrl('');
               }}
-              className="text-gray-500 text-sm hover:text-gray-700"
+              className="text-gray-500 text-sm hover:text-gray-700 mt-2"
             >
               취소
             </button>
@@ -317,8 +348,18 @@ const YouTubeChannelManager = () => {
               />
               <div className="flex-1 min-w-0">
                 <h4 className="font-bold text-gray-800 text-sm truncate">{channelData.channelTitle}</h4>
+                <div className="text-xs text-gray-500 mt-1 space-y-1">
+                  <div>채널 ID: {channelData.channelId}</div>
+                  {channelData.originalValue && channelData.originalType && (
+                    <div>
+                      입력된 {channelData.originalType === 'channel' ? '채널 ID' : 
+                              channelData.originalType === 'username' ? '핸들' : 
+                              channelData.originalType}: @{channelData.originalValue}
+                    </div>
+                  )}
+                </div>
                 {selectedCategory && (
-                  <div className="mt-1">
+                  <div className="mt-2">
                     <span className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded-full text-white ${selectedCategory.color}`}>
                       <span>{selectedCategory.icon}</span>
                       <span>{selectedCategory.name}</span>

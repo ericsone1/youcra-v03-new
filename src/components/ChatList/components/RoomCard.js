@@ -1,5 +1,6 @@
 import React from 'react';
 import { IoLockClosedOutline, IoEyeOutline, IoPeopleOutline } from 'react-icons/io5';
+import { getRoomTypeInfo } from '../../../utils/roomTypeUtils';
 
 // 시간 포맷팅 함수들
 const formatLastMessageTime = (lastMsgTime) => {
@@ -30,6 +31,8 @@ const formatLastMessageTime = (lastMsgTime) => {
 };
 
 function RoomCard({ room, onEnter, variant = 'my' }) {
+  const roomTypeInfo = getRoomTypeInfo(room.roomType);
+  
   return (
     <div className="flex items-center bg-white rounded-xl shadow p-4 gap-4 hover:bg-blue-50 transition cursor-pointer relative" onClick={() => onEnter(room.id)}>
       {/* 비밀방 락 아이콘 */}
@@ -54,12 +57,12 @@ function RoomCard({ room, onEnter, variant = 'my' }) {
       
       {/* 정보 */}
       <div className="flex-1 min-w-0">
-        {/* 첫 번째 줄: 방 제목 (모드 별) */}
+        {/* 첫 번째 줄: 방 제목 */}
         <div className="font-bold text-lg truncate mb-1 flex items-center gap-2">
-          {room.title}
+          <span className="truncate">{room.title}</span>
           {/* 전체 채팅방 모드일 때 참여 인원 크게 표시 */}
           {variant === 'all' && (
-            <span className="text-blue-600 font-semibold text-base flex items-center gap-1">
+            <span className="text-blue-600 font-semibold text-base flex items-center gap-1 flex-shrink-0">
               <IoPeopleOutline className="inline" />
               {room.participantCount || 0}
             </span>
@@ -84,6 +87,15 @@ function RoomCard({ room, onEnter, variant = 'my' }) {
           </div>
         )}
         
+        {/* 방 타입 배지 (전체 채팅방 모드일 때만 해시태그 위쪽에 표시) */}
+        {variant === 'all' && room.roomType && (
+          <div className="mb-2">
+            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${roomTypeInfo.color}`}>
+              {roomTypeInfo.name}
+            </span>
+          </div>
+        )}
+        
         {/* 통계 배지 */}
         <div className="flex gap-3 text-xs text-gray-500 mb-2 items-center">
           <span className="flex items-center gap-1">
@@ -95,6 +107,12 @@ function RoomCard({ room, onEnter, variant = 'my' }) {
             <span className="flex items-center gap-1">
               <IoPeopleOutline />
               {room.members}
+            </span>
+          )}
+          {/* 방 타입 배지 (my 모드에서만) */}
+          {variant === 'my' && room.roomType && (
+            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${roomTypeInfo.color}`}>
+              {roomTypeInfo.name}
             </span>
           )}
         </div>

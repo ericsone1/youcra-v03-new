@@ -21,7 +21,7 @@ const firebaseConfig = {
 let app;
 try {
   app = initializeApp(firebaseConfig);
-  console.log('✅ Firebase 초기화 성공');
+  
 } catch (error) {
   console.error('❌ Firebase 초기화 실패:', error);
   throw error;
@@ -35,7 +35,7 @@ export const db = getFirestore(app);
 let storage;
 try {
   storage = getStorage(app);
-  console.log('✅ Firebase Storage 초기화 성공');
+
 } catch (error) {
   console.error('❌ Firebase Storage 초기화 실패:', error);
   // 기본 Storage 인스턴스 생성
@@ -69,14 +69,11 @@ export const uploadFileWithTimeout = async (file, path, timeoutMs = 30000) => {
 
 // CORS 문제 해결을 위한 Storage 설정
 if (process.env.NODE_ENV === 'development') {
-  console.log('🔧 개발 환경에서 Firebase Storage CORS 설정 완료');
-  
   // Storage CORS 설정 체크
   try {
     const testRef = storage._delegate._bucket;
-    console.log('📦 Storage Bucket:', testRef);
   } catch (e) {
-    console.log('🔍 Storage Bucket 정보를 가져올 수 없음 (정상)');
+    // Storage Bucket 정보를 가져올 수 없음 (정상)
   }
 }
 
@@ -85,9 +82,8 @@ let analytics = null;
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'production') {
   try {
     analytics = getAnalytics(app);
-    console.log('📊 Firebase Analytics 초기화 성공');
   } catch (error) {
-    console.log('📊 Firebase Analytics 초기화 건너뜀');
+    // Firebase Analytics 초기화 건너뜀
   }
 }
 
@@ -99,7 +95,7 @@ if (typeof window !== 'undefined') {
     // 개발 환경에서 에뮬레이터 연결 (필요시)
     if (process.env.NODE_ENV === 'development' && process.env.REACT_APP_USE_EMULATOR === 'true') {
       connectFirestoreEmulator(db, 'localhost', 8080);
-      console.log('🔧 Firestore 에뮬레이터 연결됨');
+  
     }
     
     // Firestore 오류 이벤트 리스너
@@ -116,6 +112,6 @@ if (typeof window !== 'undefined') {
     });
     
   } catch (error) {
-    console.log('🔧 Firestore 추가 설정 건너뜀');
+    
   }
 }

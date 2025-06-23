@@ -58,7 +58,7 @@ export const useRoomData = (roomId, navigate) => {
           if (doc.exists()) {
             const updatedData = doc.data();
             setRoomData(updatedData);
-            console.log('🔄 방 데이터 실시간 업데이트:', updatedData.watchSettings);
+    
           }
         });
       } catch (error) {

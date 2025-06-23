@@ -32,13 +32,25 @@ export function useVideos() {
           );
           const videosSnapshot = await getDocs(videosQuery);
           
-          videosSnapshot.docs.forEach(videoDoc => {
+          for (const videoDoc of videosSnapshot.docs) {
             const videoData = videoDoc.data();
             if (videoData.videoId) {
+              // 실제 인증 수 가져오기
+              try {
+                const certificationsRef = collection(db, "chatRooms", roomDoc.id, "videos", videoDoc.id, "certifications");
+                const certificationsSnap = await getDocs(certificationsRef);
+                videoData.certificationCount = certificationsSnap.size;
+              } catch (error) {
+                videoData.certificationCount = 0;
+              }
+
+              // 실제 시청자 수는 인증자 수와 동일하게 설정 (실제 시청 데이터가 없으므로)
+              videoData.watchCount = videoData.certificationCount;
+
               const convertedVideo = convertVideoData(videoData, roomData, roomDoc.id);
               allVideos.push(convertedVideo);
             }
-          });
+          }
         }
         
         // 점수순으로 정렬하고 상위 20개만 선택

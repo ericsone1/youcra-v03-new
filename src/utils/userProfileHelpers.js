@@ -42,7 +42,7 @@ export function safeNavigateToProfile(navigate, roomId, uid, errorMessage) {
   
   try {
     navigate(`/profile/${roomId}/${uid}`);
-    console.log('✅ [프로필] 프로필 페이지로 이동:', { roomId, uid });
+  
     return true;
   } catch (error) {
     console.error('❌ [프로필] 네비게이션 오류:', error);
@@ -127,10 +127,7 @@ export function sanitizeParticipants(participants) {
 export function debugLogUserData(context, userData, uid) {
   if (process.env.NODE_ENV === 'development') {
     console.group(`🔍 [${context}] 사용자 정보 디버깅`);
-    console.log('📋 전달받은 uid:', uid);
-    console.log('✅ uid 유효성:', isValidUid(uid));
-    console.log('📄 사용자 데이터:', userData);
-    console.log('🏷️ 생성된 닉네임:', getSafeUserNickname(userData, uid));
+    
     console.groupEnd();
   }
 } 

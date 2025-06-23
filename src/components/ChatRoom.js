@@ -183,6 +183,7 @@ function ChatRoom() {
   // useChat hook 사용
   const {
     loading: chatLoading,
+    messagesLoading,
     error: chatError,
     roomInfo,
     messages,
@@ -299,33 +300,34 @@ function ChatRoom() {
   useEffect(() => {
     if (!auth.currentUser) return;
     const fetchCurrentUserNick = async () => {
-      const userDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
-      if (userDoc.exists()) {
-        const nickname = userDoc.data().nickname || auth.currentUser.email?.split("@")[0] || "나";
-        setUserNickMap(prev => ({
-          ...prev,
-          [auth.currentUser.uid]: nickname
-        }));
-      }
+                const userDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            const nickname = userData.nickname || userData.displayName || auth.currentUser.displayName || auth.currentUser.email?.split("@")[0] || "나";
+            setUserNickMap(prev => ({
+              ...prev,
+              [auth.currentUser.uid]: nickname
+            }));
+          }
     };
     fetchCurrentUserNick();
   }, [auth.currentUser]);
 
-  // 메시지 로딩 완료 상태 관리
+  // 메시지 로딩 완료 상태 관리 - messagesLoading 상태와 동기화
   useEffect(() => {
-    if (messages.length > 0 && !messagesLoaded) {
+    if (!messagesLoading) {
+      // messagesLoading이 false가 되면 즉시 messagesLoaded를 true로 설정
       setTimeout(() => {
         setMessagesLoaded(true);
       }, 100);
     }
-  }, [messages, messagesLoaded]);
+  }, [messagesLoading]);
 
   // 닉네임 매핑 - useChat에서 받은 메시지 기반
   useEffect(() => {
     if (!messages.length) return;
     
     const uids = Array.from(new Set(messages.map((m) => m.uid).filter(Boolean)));
-    
     setUserNickMap((currentNickMap) => {
       const unMappedUids = uids.filter(uid => !currentNickMap[uid]);
       
@@ -335,15 +337,16 @@ function ChatRoom() {
             try {
               const userDoc = await getDoc(doc(db, "users", uid));
               if (userDoc.exists()) {
+                const userData = userDoc.data();
                 return {
                   uid,
-                  nickname: userDoc.data().nickname || userDoc.data().email?.split("@")[0] || "익명"
+                  nickname: userData.nickname || userData.displayName || userData.email?.split("@")[0] || "익명"
                 };
               } else {
                 return { uid, nickname: "익명" };
               }
             } catch (error) {
-              console.error("닉네임 조회 오류:", error);
+              console.error(`🚨 ${uid} 닉네임 조회 오류:`, error);
               return { uid, nickname: "익명" };
             }
           })
@@ -597,7 +600,7 @@ function ChatRoom() {
 
     try {
       await deleteDoc(doc(db, "chatRooms", roomId, "messages", msgId));
-      console.log("방장이 메시지를 삭제했습니다:", msgId);
+
     } catch (error) {
       console.error("메시지 삭제 오류:", error);
       alert("메시지 삭제 중 오류가 발생했습니다.");
@@ -623,7 +626,7 @@ function ChatRoom() {
     try {
       // 참여자 목록에서 제거
       await deleteDoc(doc(db, "chatRooms", roomId, "participants", targetUid));
-      console.log("사용자를 추방했습니다:", targetEmail);
+      
       alert(`${targetEmail}님을 추방했습니다.`);
     } catch (error) {
       console.error("사용자 추방 오류:", error);
@@ -867,6 +870,15 @@ function ChatRoom() {
       // 파일 메시지 렌더링
       switch (msg.fileType) {
         case 'image':
+          // 이미지 URL 유효성 검사
+          if (!msg.fileUrl || typeof msg.fileUrl !== 'string') {
+            return (
+              <div className="text-red-500 text-sm p-2 bg-red-50 rounded max-w-xs">
+                이미지 파일을 찾을 수 없습니다.
+              </div>
+            );
+          }
+          
           return (
             <div className="max-w-xs">
               <img 
@@ -875,14 +887,26 @@ function ChatRoom() {
                 className="rounded-lg max-w-full h-auto cursor-pointer hover:opacity-80 transition-opacity"
                 onClick={() => setShowImageModal({ url: msg.fileUrl, name: msg.fileName || '이미지' })}
                 title="클릭하여 크게 보기"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  e.target.parentElement.innerHTML = '<div class="text-red-500 text-sm p-2 bg-red-50 rounded">이미지를 불러올 수 없습니다.</div>';
+                }}
               />
             </div>
           );
         case 'video':
+          // 비디오 URL 유효성 검사
+          if (!msg.fileUrl || typeof msg.fileUrl !== 'string') {
+            return (
+              <div className="text-red-500 text-sm p-2 bg-red-50 rounded max-w-xs">
+                비디오 파일을 찾을 수 없습니다.
+              </div>
+            );
+          }
+          
           return (
             <div className="max-w-xs">
               <video 
-                src={msg.fileUrl} 
                 controls 
                 className="rounded-lg max-w-full h-auto"
                 style={{ maxHeight: '200px' }}
@@ -892,13 +916,12 @@ function ChatRoom() {
                   e.target.style.display = 'none';
                   e.target.parentElement.innerHTML = '<div class="text-red-500 text-sm p-2 bg-red-50 rounded">비디오를 재생할 수 없습니다.</div>';
                 }}
-                onLoadStart={() => {
-                  console.log('비디오 로딩 시작:', msg.fileUrl);
-                }}
-                onCanPlay={() => {
-                  console.log('비디오 재생 준비 완료');
-                }}
-              />
+              >
+                <source src={msg.fileUrl} type="video/mp4" />
+                <source src={msg.fileUrl} type="video/webm" />
+                <source src={msg.fileUrl} type="video/ogg" />
+                비디오를 재생할 수 없습니다. 브라우저가 이 형식을 지원하지 않습니다.
+              </video>
             </div>
           );
         case 'file':
@@ -1258,6 +1281,95 @@ function ChatRoom() {
     }
   };
 
+  // 메시지 텍스트 복사 함수 (드래그 선택과 충돌하지 않도록 개선)
+  const handleCopyMessage = async (messageText, event) => {
+    // 텍스트가 선택되어 있으면 복사하지 않음 (사용자가 드래그 선택 중)
+    const selection = window.getSelection();
+    if (selection && selection.toString().length > 0) {
+      return;
+    }
+    
+    // 더블클릭이나 길게 누르기가 아닌 일반 클릭에서만 복사
+    if (event && event.detail === 1) {
+      // 단일 클릭은 복사하지 않음 (드래그 시작을 방해하지 않기 위해)
+      return;
+    }
+    
+    try {
+      await navigator.clipboard.writeText(messageText);
+      // 토스트 알림 (간단한 알림)
+      const toast = document.createElement('div');
+      toast.textContent = '메시지가 복사되었습니다!';
+      toast.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 12px 20px;
+        border-radius: 20px;
+        font-size: 14px;
+        z-index: 9999;
+        pointer-events: none;
+      `;
+      document.body.appendChild(toast);
+      
+      setTimeout(() => {
+        if (document.body.contains(toast)) {
+          document.body.removeChild(toast);
+        }
+      }, 2000);
+    } catch (error) {
+      console.error('복사 실패:', error);
+      alert('복사에 실패했습니다.');
+    }
+  };
+
+  // 동적 메타 태그 업데이트 (링크 공유 시 채팅방 정보 표시)
+  useEffect(() => {
+    if (roomInfo && roomInfo.name) {
+      // 페이지 제목 변경
+      document.title = `${roomInfo.name} - 유크라 채팅방`;
+      
+      // Open Graph 메타 태그 동적 업데이트
+      const updateMetaTag = (property, content) => {
+        let meta = document.querySelector(`meta[property="${property}"]`);
+        if (!meta) {
+          meta = document.createElement('meta');
+          meta.setAttribute('property', property);
+          document.head.appendChild(meta);
+        }
+        meta.setAttribute('content', content);
+      };
+      
+      const updateNameTag = (name, content) => {
+        let meta = document.querySelector(`meta[name="${name}"]`);
+        if (!meta) {
+          meta = document.createElement('meta');
+          meta.setAttribute('name', name);
+          document.head.appendChild(meta);
+        }
+        meta.setAttribute('content', content);
+      };
+      
+      // 채팅방 정보로 메타 태그 업데이트
+      const roomDescription = `🎬 "${roomInfo.name}" 채팅방에 참여하세요! 실시간으로 함께 소통하며 YouTube 영상을 시청할 수 있습니다. 현재 ${participants.length}명이 참여 중이에요! ✨`;
+      
+      updateMetaTag('og:title', `🎬 ${roomInfo.name} - 유크라 채팅방`);
+      updateMetaTag('og:description', roomDescription);
+      updateMetaTag('og:url', window.location.href);
+      updateMetaTag('twitter:title', `🎬 ${roomInfo.name} - 유크라 채팅방`);
+      updateMetaTag('twitter:description', roomDescription);
+      updateNameTag('description', roomDescription);
+    }
+    
+    // 컴포넌트 언마운트 시 원래 제목으로 복구
+    return () => {
+      document.title = '유크라';
+    };
+  }, [roomInfo, participants.length]);
+
   // ---------------------- return문 시작 ----------------------
   return (
     <div className="flex flex-col h-screen max-w-md mx-auto bg-white relative">
@@ -1401,7 +1513,7 @@ function ChatRoom() {
         style={{
           background: 'linear-gradient(180deg, #FFFEF7 0%, #FEFDF6 50%, #FDF9F0 100%)',
           paddingBottom: 160, // 입력창 공간 + 여유 공간 (70px input + 64px footer + 26px 여유)
-          paddingTop: 90, // 헤더 높이
+          paddingTop: 150, // 헤더 높이 + 여유 공간
           position: 'relative',
           zIndex: 10,
           height: '100vh', // 전체 화면 높이 사용
@@ -1483,7 +1595,10 @@ function ChatRoom() {
                       <div className="flex flex-col">
                         {/* 닉네임 + 방장 아이콘 */}
                         <div className="text-lg text-gray-600 font-medium mb-1 flex items-center gap-1 flex-wrap">
-                          {userNickMap[msg.uid] || msg.email?.split('@')[0] || '익명'}
+                          {(() => {
+                            const displayName = userNickMap[msg.uid] || msg.email?.split('@')[0] || '익명';
+                            return displayName;
+                          })()}
                           {/* 방장 아이콘 표시 */}
                           {roomInfo && msg.uid === roomInfo.createdBy && (
                             <span title="방장" className="text-yellow-500 text-lg">👑</span>
@@ -1491,14 +1606,18 @@ function ChatRoom() {
                         </div>
                         {/* 말풍선+시간 */}
                         <div className={`flex items-end gap-2 max-w-[85%]`}>
-                          <div className={`relative px-4 py-3 rounded-2xl bg-white text-gray-800 rounded-bl-sm border border-gray-200 shadow-md word-break-keep-all`}
+                          <div className={`relative px-4 py-3 rounded-2xl bg-white text-gray-800 rounded-bl-sm border border-gray-200 shadow-md word-break-keep-all select-text hover:bg-gray-50 transition-colors duration-200`}
                                style={{ 
                                  wordBreak: 'keep-all',
                                  overflowWrap: 'break-word',
                                  hyphens: 'auto',
                                  minWidth: '200px',
-                                 maxWidth: '100%'
-                               }}>
+                                 maxWidth: '100%',
+                                 userSelect: 'text'
+                               }}
+                               onDoubleClick={(e) => !msg.fileType && handleCopyMessage(msg.text, e)}
+                               title={!msg.fileType ? "드래그로 선택하거나 더블클릭하여 복사" : ""}
+                               >
                         <div className="absolute -left-2 bottom-3 w-0 h-0 border-r-8 border-r-white border-t-4 border-t-transparent border-b-4 border-b-transparent drop-shadow-sm"></div>
                       {msg.fileType ? (
                               <div className="text-left">{renderMessage(msg)}</div>
@@ -1535,14 +1654,18 @@ function ChatRoom() {
                   {/* 내 메시지는 기존과 동일 */}
                   {isMine && (
                     <div className={`flex items-end gap-2 max-w-[85%] flex-row-reverse`}>
-                      <div className={`relative px-4 py-3 rounded-2xl bg-yellow-300 text-gray-800 rounded-br-sm shadow-md word-break-keep-all`}
+                      <div className={`relative px-4 py-3 rounded-2xl bg-yellow-300 text-gray-800 rounded-br-sm shadow-md word-break-keep-all select-text hover:bg-yellow-200 transition-colors duration-200`}
                            style={{ 
                              wordBreak: 'keep-all',
                              overflowWrap: 'break-word',
                              hyphens: 'auto',
                              minWidth: '200px',
-                             maxWidth: '100%'
-                           }}>
+                             maxWidth: '100%',
+                             userSelect: 'text'
+                           }}
+                           onDoubleClick={(e) => !msg.fileType && handleCopyMessage(msg.text, e)}
+                           title={!msg.fileType ? "드래그로 선택하거나 더블클릭하여 복사" : ""}
+                           >
                         <div className="absolute -right-2 bottom-3 w-0 h-0 border-l-8 border-l-yellow-300 border-t-4 border-t-transparent border-b-4 border-b-transparent drop-shadow-sm"></div>
                         {msg.fileType ? (
                           <div className="text-left">{renderMessage(msg)}</div>

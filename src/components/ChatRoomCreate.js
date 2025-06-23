@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { db, storage, auth } from "../firebase";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { getAllRoomTypes } from "../utils/roomTypeUtils";
 
 function ChatRoomCreate() {
   const [name, setName] = useState("");
@@ -21,10 +22,7 @@ function ChatRoomCreate() {
   const navigate = useNavigate();
 
   // 방 타입 옵션들
-  const roomTypes = [
-    { id: "collaboration", name: "🤝 협업방", desc: "프로젝트나 스터디를 함께해요" },
-    { id: "subscribe", name: "📺 맞구독방", desc: "서로 구독하며 소통해요" }
-  ];
+  const roomTypes = getAllRoomTypes();
 
   // 해시태그 파싱 함수
   const parseHashtags = (text) => {
@@ -96,7 +94,10 @@ function ChatRoomCreate() {
     try {
       let thumbnailUrl = "";
       if (thumbnail) {
-        const storageRef = ref(storage, `chatRoomThumbnails/${Date.now()}_${thumbnail.name}`);
+        // Firebase Storage 규칙에 맞는 경로로 수정: chatrooms/{roomId}/
+        // 임시 roomId 생성 (실제 roomId는 아직 생성되지 않았으므로)
+        const tempRoomId = `temp_${Date.now()}_${auth.currentUser?.uid}`;
+        const storageRef = ref(storage, `chatrooms/${tempRoomId}/profile/${Date.now()}_${thumbnail.name}`);
         await uploadBytes(storageRef, thumbnail);
         thumbnailUrl = await getDownloadURL(storageRef);
       }
@@ -118,6 +119,10 @@ function ChatRoomCreate() {
         viewCount: 0
       });
       setLoading(false);
+      
+      // 새로 만든 채팅방임을 표시하는 플래그 설정
+      sessionStorage.setItem('newChatRoom', docRef.id);
+      
       navigate(`/chat/${docRef.id}`);
     } catch (err) {
       setError("채팅방 생성 중 오류가 발생했습니다.");
@@ -146,7 +151,7 @@ function ChatRoomCreate() {
           <label className="block text-sm font-medium text-gray-700 mb-3">
             🏷️ 방 타입 선택 (필수)
           </label>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-3">
             {roomTypes.map((type) => (
               <button
                 key={type.id}

@@ -123,7 +123,7 @@ function Home() {
         setShowCertificationModal(true);
       }, 500);
       
-      console.log('✅ 자동 시청 인증 완료:', selectedVideoId);
+      
     }
   };
 

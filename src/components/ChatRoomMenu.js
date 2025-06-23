@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { db } from '../firebase';
-import { collection, onSnapshot, doc, getDoc, deleteDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, onSnapshot, doc, getDoc, deleteDoc, addDoc, serverTimestamp, updateDoc, arrayRemove } from 'firebase/firestore';
 import { useAuth } from '../contexts/AuthContext';
 
 function getInitial(name) {
@@ -36,50 +36,35 @@ function ChatRoomMenu() {
   }, [roomId, currentUser]);
 
   useEffect(() => {
-    if (!roomId) {
-      console.log('🔍 [방메뉴] roomId 없음');
-      return;
-    }
-    
-    console.log('🔍 [방메뉴] 참여자 목록 로딩 시작:', roomId);
+    if (!roomId) return;
     
     const q = collection(db, 'chatRooms', roomId, 'participants');
     const unsub = onSnapshot(q, async (snap) => {
-      console.log('🔍 [방메뉴] participants 컬렉션 문서 수:', snap.size);
-      
       const list = await Promise.all(
         snap.docs.map(async (d) => {
           const uid = d.id;
           const participantData = d.data();
-          console.log('🔍 [방메뉴] 참여자 ID:', uid);
           
           // 사용자 정보 시도적으로 가져오기
           try {
             const userDoc = await getDoc(doc(db, 'users', uid));
             if (userDoc.exists()) {
               const u = userDoc.data();
-              console.log('🔍 [방메뉴] 사용자 정보:', u);
               return {
                 id: uid,
-                name: u.displayName || u.nick || u.email?.split('@')[0] || '익명',
+                name: u.nickname || u.displayName || u.nick || u.email?.split('@')[0] || '익명',
                 avatar: u.photoURL || null,
                 isOwner: u.role === 'owner' || false,
                 watchRate: participantData.watchRate || 0,
               };
-            } else {
-              console.log('🔍 [방메뉴] 사용자 문서 없음:', uid);
             }
           } catch (error) {
-            console.log('🔍 [방메뉴] 사용자 정보 가져오기 실패:', error);
+            // 사용자 정보 가져오기 실패
           }
           return { id: uid, name: uid.slice(0, 6), avatar: null, isOwner: false, watchRate: participantData.watchRate || 0 };
         })
       );
       
-      console.log('🔍 [방메뉴] 최종 참여자 목록:', list);
-      console.log('🔍 [방메뉴] 참여자 수:', list.length);
-      
-      // 실제 참여자만 설정
       setParticipants(list);
     });
     return () => unsub();
@@ -131,29 +116,31 @@ function ChatRoomMenu() {
     try {
       setLeaving(true);
       
-      // 참여자 목록에서 제거
+      // useChat의 leaveRoom 사용 (통합된 로직)
+      // 직접 Firebase 작업하지 않고 useChat hook을 통해 처리
+      // 하지만 여기서는 useChat을 사용할 수 없으므로 기존 로직 유지하되 메시지만 통일
+      
+      // 참여자 서브컬렉션에서 제거
       await deleteDoc(doc(db, 'chatRooms', roomId, 'participants', currentUser.uid));
       
-      // 시스템 메시지 추가
-      let nickname = currentUser.displayName;
-      try {
-        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-        if (userDoc.exists()) {
-          nickname = userDoc.data().nickname || userDoc.data().displayName;
-        }
-      } catch (error) {
-        console.error('사용자 정보 가져오기 오류:', error);
-      }
+      // 참여자 배열 필드에서도 제거 (홈 화면 호환성)
+      const roomRef = doc(db, 'chatRooms', roomId);
+      await updateDoc(roomRef, {
+        participants: arrayRemove(currentUser.uid)
+      });
       
-      const finalNickname = nickname || currentUser.email?.split('@')[0] || '익명';
+      // 사용자 프로필에서 닉네임 가져오기 (useChat과 동일한 로직)
+      const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+      const userProfile = userDoc.exists() ? userDoc.data() : null;
+      const displayName = userProfile?.nickname || userProfile?.nick || userProfile?.displayName || currentUser.displayName || currentUser.email?.split('@')[0] || '익명';
+      
+      // 퇴장 알림 메시지 추가 (useChat과 동일한 형식)
       await addDoc(collection(db, 'chatRooms', roomId, 'messages'), {
-        text: `${finalNickname}님이 퇴장했습니다.`,
+        text: `${displayName}님이 퇴장했습니다.`,
+        createdAt: serverTimestamp(),
         type: 'system',
         isSystemMessage: true,
-        system: true,
-        action: 'exit',
-        uid: 'system',
-        createdAt: serverTimestamp()
+        uid: 'system'
       });
       
       // 세션 스토리지 정리

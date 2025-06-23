@@ -2,10 +2,12 @@ import React, { useRef, useEffect, useMemo } from 'react';
 import { auth } from '../../firebase';
 import { Message } from './Message';
 
-export function MessageList({ messages, myJoinedAt, messagesLoading }) {
+export function MessageList({ messages, myJoinedAt, messagesLoading, userNickMap = {} }) {
   const scrollRef = useRef();
   const bottomRef = useRef();
   const currentUser = auth.currentUser;
+
+
 
   // 새 메시지가 올 때마다 부드럽게 스크롤
   useEffect(() => {
@@ -156,7 +158,7 @@ export function MessageList({ messages, myJoinedAt, messagesLoading }) {
               // 시스템 메시지 처리
               return (
                 <div key={item.id || `system-${index}`}>
-                  <Message message={item} />
+                  <Message message={item} userNickMap={userNickMap} />
                 </div>
               );
             } else {
@@ -172,6 +174,7 @@ export function MessageList({ messages, myJoinedAt, messagesLoading }) {
                     isMyMessage={item.uid === currentUser?.uid}
                     isFirstInGroup={item.isFirstInGroup}
                     isLastInGroup={item.isLastInGroup}
+                    userNickMap={userNickMap}
                   />
                 </div>
               );

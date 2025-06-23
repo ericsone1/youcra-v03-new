@@ -64,7 +64,7 @@ function ChatRoomParticipants() {
                 const userData = userSnapshot.data();
                 return {
                   id: uid,
-                  name: userData.displayName || userData.nick || userData.name || userData.email?.split('@')[0] || '익명',
+                  name: userData.nickname || userData.displayName || userData.nick || userData.name || userData.email?.split('@')[0] || '익명',
                   email: userData.email || '이메일 없음',
                   avatar: userData.photoURL || userData.profileImage || null,
                   joinedAt: participantData.joinedAt,
@@ -94,17 +94,45 @@ function ChatRoomParticipants() {
         // 자신이 목록에 없으면 추가
         const hasCurrentUser = participantsList.some(p => p.id === currentUser.uid);
         if (!hasCurrentUser) {
-          participantsList.push({
-            id: currentUser.uid,
-            name: currentUser.displayName || currentUser.email?.split('@')[0] || '나',
-            email: currentUser.email || '내 이메일',
-            avatar: currentUser.photoURL || null,
-            joinedAt: { toDate: () => new Date() }, // 현재 시간
-            role: 'member',
-            isOwner: roomData?.createdBy === currentUser.uid,
-            isOnline: true,
-            isMe: true, // 자신임을 표시
-          });
+          // 현재 사용자의 Firestore 정보 가져오기
+          try {
+            const currentUserRef = doc(db, 'users', currentUser.uid);
+            const currentUserSnapshot = await getDoc(currentUserRef);
+            let currentUserName = currentUser.displayName || currentUser.email?.split('@')[0] || '나';
+            let currentUserAvatar = currentUser.photoURL || null;
+            
+            if (currentUserSnapshot.exists()) {
+              const currentUserData = currentUserSnapshot.data();
+              currentUserName = currentUserData.nickname || currentUserData.displayName || currentUserData.nick || currentUser.displayName || currentUser.email?.split('@')[0] || '나';
+              currentUserAvatar = currentUserData.photoURL || currentUserData.profileImage || currentUser.photoURL || null;
+            }
+            
+            participantsList.push({
+              id: currentUser.uid,
+              name: currentUserName,
+              email: currentUser.email || '내 이메일',
+              avatar: currentUserAvatar,
+              joinedAt: { toDate: () => new Date() }, // 현재 시간
+              role: 'member',
+              isOwner: roomData?.createdBy === currentUser.uid,
+              isOnline: true,
+              isMe: true, // 자신임을 표시
+            });
+          } catch (error) {
+            console.error('현재 사용자 정보 로딩 실패:', error);
+            // 기본값으로 추가
+            participantsList.push({
+              id: currentUser.uid,
+              name: currentUser.displayName || currentUser.email?.split('@')[0] || '나',
+              email: currentUser.email || '내 이메일',
+              avatar: currentUser.photoURL || null,
+              joinedAt: { toDate: () => new Date() },
+              role: 'member',
+              isOwner: roomData?.createdBy === currentUser.uid,
+              isOnline: true,
+              isMe: true,
+            });
+          }
         } else {
           // 자신을 찾아서 isMe 플래그 추가
           participantsList.forEach(p => {

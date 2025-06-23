@@ -9,6 +9,7 @@ import {
   orderBy,
   onSnapshot,
   getDocs,
+  deleteDoc,
 } from "firebase/firestore";
 
 function UserProfile() {
@@ -31,29 +32,19 @@ function UserProfile() {
     async function fetchUser() {
       // uid 유효성 검사
       if (!uid || uid === 'undefined' || uid === 'null' || uid.trim() === '') {
-        console.log('❌ [프로필] 유효하지 않은 uid:', uid);
+    
         setUser(null);
         setLoading(false);
         return;
       }
 
       try {
-        console.log('🔍 [프로필] 상대방 사용자 정보 로딩 시작:', uid);
         const userDoc = await getDoc(doc(db, "users", uid));
         if (userDoc.exists()) {
           const userData = userDoc.data();
           setUser(userData);
-          console.log('✅ [프로필] 상대방 사용자 데이터:', userData);
-          console.log('✅ [프로필] 상대방 uid:', uid);
-          console.log('✅ [프로필] 상대방 email:', userData.email);
-          if (userData.youtubeChannel) {
-            console.log('✅ [프로필] 상대방 유튜브 채널:', userData.youtubeChannel);
-          } else {
-            console.log('❌ [프로필] 상대방 유튜브 채널 없음');
-          }
         } else {
           setUser(null);
-          console.log('❌ [프로필] 상대방 사용자 문서 없음 - uid:', uid);
         }
       } catch (error) {
         console.error('❌ [프로필] 사용자 정보 로딩 오류:', error);
@@ -67,23 +58,15 @@ function UserProfile() {
   useEffect(() => {
     async function fetchMyChannel() {
       if (!auth.currentUser) {
-        console.log('🔍 [프로필] 로그인된 사용자 없음');
         return;
       }
       
-      console.log('🔍 [프로필] 내 채널 정보 로딩 시작:', auth.currentUser.uid);
       const myUserDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
       if (myUserDoc.exists()) {
         const myData = myUserDoc.data();
-        console.log('✅ [프로필] 내 사용자 데이터:', myData);
         if (myData.youtubeChannel) {
           setMyChannel(myData.youtubeChannel);
-          console.log('✅ [프로필] 내 유튜브 채널 정보 설정:', myData.youtubeChannel);
-        } else {
-          console.log('❌ [프로필] 내 유튜브 채널 정보 없음');
         }
-      } else {
-        console.log('❌ [프로필] 내 사용자 문서 없음');
       }
     }
     fetchMyChannel();
@@ -162,12 +145,10 @@ function UserProfile() {
       return;
     }
 
-    console.log('📊 [시청률] 계산 시작...');
     try {
       const participantsRef = collection(db, "chatRooms", roomId, "participants");
       const participantsSnap = await getDocs(participantsRef);
       const totalParticipants = participantsSnap.size;
-      console.log('📊 [시청률] 총 참여자 수:', totalParticipants);
 
       if (totalParticipants === 0) {
         setVideoViewRates({});
@@ -184,11 +165,9 @@ function UserProfile() {
         const viewRate = Math.round((viewerCount / totalParticipants) * 100);
         
         rates[video.id] = { viewerCount, totalParticipants, viewRate };
-        console.log(`📊 [시청률] 영상 "${video.title}": ${viewerCount} / ${totalParticipants} (${viewRate}%)`);
       }
       
       setVideoViewRates(rates);
-      console.log('📊 [시청률] 계산 완료:', rates);
     } catch (error) {
       console.error('❌ [시청률] 계산 오류:', error);
       setVideoViewRates({});
@@ -198,21 +177,12 @@ function UserProfile() {
   // 상대방이 내 채널을 구독중인지 확인
   useEffect(() => {
     async function checkSubscription() {
-      console.log('🔍 [프로필] 구독 여부 확인 시작');
-      console.log('- 내 채널:', myChannel);
-      console.log('- 상대방 유튜브 채널:', user?.youtubeChannel);
-      console.log('- 현재 사용자 ID:', auth.currentUser?.uid);
-      console.log('- 프로필 사용자 ID:', uid);
-      
       if (!myChannel || !user?.youtubeChannel) {
-        console.log('❌ [프로필] 구독 여부 확인 불가 - 채널 정보 부족');
         setIsSubscribedToMe(null);
         return;
       }
 
       try {
-        console.log('✅ [프로필] 구독 여부 확인 진행');
-        
         // Firebase에서 구독 관계 확인
         // subscriptions 컬렉션에서 {구독자uid}_{채널id} 형태로 저장된 문서 확인
         const subscriptionId = `${uid}_${myChannel.channelId}`;
@@ -220,13 +190,6 @@ function UserProfile() {
         const isSubscribed = subscriptionDoc.exists();
         
         setIsSubscribedToMe(isSubscribed);
-        
-        console.log(`🎯 [프로필] 구독 여부 결과: 상대방(${user.displayName || user.email})이 내 채널(${myChannel.channelTitle}) 구독 여부:`, isSubscribed);
-        
-        if (isSubscribed) {
-          const subscriptionData = subscriptionDoc.data();
-          console.log('📅 [프로필] 구독 일시:', subscriptionData?.subscribedAt);
-        }
       } catch (error) {
         console.error("❌ [프로필] 구독 여부 확인 오류:", error);
         setIsSubscribedToMe(null);
@@ -235,6 +198,21 @@ function UserProfile() {
 
     checkSubscription();
   }, [myChannel, user]);
+
+  // 영상 삭제 함수
+  const handleDeleteVideo = async (videoId) => {
+    if (!window.confirm('정말로 이 영상을 삭제하시겠습니까?')) {
+      return;
+    }
+    
+    try {
+      await deleteDoc(doc(db, 'chatRooms', roomId, 'videos', videoId));
+      alert('영상이 성공적으로 삭제되었습니다.');
+    } catch (error) {
+      console.error('영상 삭제 오류:', error);
+      alert('영상 삭제 중 오류가 발생했습니다.');
+    }
+  };
 
   // 방장 여부 확인
   useEffect(() => {
@@ -334,7 +312,14 @@ function UserProfile() {
       {/* 커버 */}
       <div className="relative h-52 bg-gradient-to-r from-blue-400 to-purple-500">
         {coverUrl && (
-          <img src={coverUrl} alt="커버" className="w-full h-full object-cover" />
+          <img 
+            src={coverUrl} 
+            alt="커버" 
+            className="w-full h-full object-cover" 
+            onError={(e) => {
+              e.target.style.display = 'none';
+            }}
+          />
         )}
         
         {/* 뒤로가기 버튼 */}
@@ -476,6 +461,11 @@ function UserProfile() {
                     certStyle = "text-green-600 font-bold";
                   }
                   
+                  // 내가 등록한 영상인지 확인
+                  const isMyVideo = video.registeredBy === auth.currentUser?.uid || 
+                                   video.registeredBy === auth.currentUser?.email ||
+                                   (auth.currentUser?.uid === uid && video.registeredBy === user?.email);
+                  
                   return (
                     <div key={video.id} className="flex items-center gap-3 p-2 border rounded-lg bg-white">
                       <img src={video.thumbnail} alt="썸네일" className="w-20 h-12 rounded object-cover" />
@@ -487,9 +477,22 @@ function UserProfile() {
                         </div>
                         <div className="text-xs text-right text-gray-500 mt-0.5">{percent}%</div>
                       </div>
-                      <span className={`text-xs font-medium ${certStyle} whitespace-pre-line text-center`}>
-                        {certText}
-                      </span>
+                      
+                      <div className="flex flex-col items-center gap-1">
+                        <span className={`text-xs font-medium ${certStyle} whitespace-pre-line text-center`}>
+                          {certText}
+                        </span>
+                        
+                        {/* 삭제하기 버튼 (내가 등록한 영상인 경우에만 표시) */}
+                        {isMyVideo && (
+                          <button
+                            onClick={() => handleDeleteVideo(video.id)}
+                            className="px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 transition-colors"
+                          >
+                            삭제하기
+                          </button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -506,6 +509,9 @@ function UserProfile() {
                   const viewerCount = viewData?.viewerCount || 0;
                   const totalParticipants = viewData?.totalParticipants || 0;
                   const displayRate = Math.min(viewRate, 100); // UI 표시는 100%로 제한
+                  
+                  const isMyVideo = auth.currentUser?.uid === uid; // 내가 등록한 영상인지 확인
+                  const watched = certifiedIds.includes(video.id);
                   
                   return (
                     <div key={video.id} className="flex items-center gap-3 p-2 border rounded-lg bg-white">
@@ -531,6 +537,16 @@ function UserProfile() {
                           </div>
                         </div>
                       </div>
+                      
+                      {/* 삭제하기 버튼 (내가 등록한 영상인 경우에만 표시) */}
+                      {isMyVideo && (
+                        <button
+                          onClick={() => handleDeleteVideo(video.id)}
+                          className="px-3 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 transition-colors"
+                        >
+                          삭제하기
+                        </button>
+                      )}
                     </div>
                   );
                 })}

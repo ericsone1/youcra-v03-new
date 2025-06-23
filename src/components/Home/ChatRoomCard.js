@@ -1,7 +1,10 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { getRoomTypeInfo } from '../../utils/roomTypeUtils';
 
 function ChatRoomCard({ room, index, onClick }) {
+  const roomTypeInfo = getRoomTypeInfo(room.roomType);
+  
   return (
     <motion.button
       key={room.id}
@@ -23,7 +26,7 @@ function ChatRoomCard({ room, index, onClick }) {
       </div>
       
       <div className="flex-1">
-        <div className="font-semibold text-gray-800 truncate max-w-[160px]">
+        <div className="font-semibold text-gray-800 truncate mb-1">
           {room.name && room.name.length > 13 ? `${room.name.substring(0, 13)}...` : room.name}
         </div>
         
@@ -44,13 +47,20 @@ function ChatRoomCard({ room, index, onClick }) {
       
       <div className="flex flex-col items-end text-sm">
         {/* 사람수와 좋아요 수를 가로로 배치 */}
-        <div className="flex items-center gap-3 mb-2">
+        <div className="flex items-center gap-2 mb-2">
           <div className="flex items-center text-blue-500">
             <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
               <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z" />
             </svg>
             <span className="font-semibold">{room.participantCount}명</span>
           </div>
+          
+          {/* 방 타입 배지 */}
+          {room.roomType && (
+            <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${roomTypeInfo.color} flex-shrink-0`}>
+              {roomTypeInfo.shortName || roomTypeInfo.name}
+            </span>
+          )}
           
           <div className="flex items-center text-red-500">
             <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 24 24">

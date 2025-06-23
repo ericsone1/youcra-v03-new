@@ -134,7 +134,7 @@ const renderMessageWithPreview = (text) => {
   return elements;
 };
 
-function MessageComponent({ message, isMyMessage, isFirstInGroup, isLastInGroup }) {
+function MessageComponent({ message, isMyMessage, isFirstInGroup, isLastInGroup, userNickMap = {} }) {
   // 🔍 시스템 메시지 감지 (다중 조건 체크)
   const isSystemMessage = message.type === 'system' || 
                          message.isSystemMessage === true ||
@@ -172,8 +172,14 @@ function MessageComponent({ message, isMyMessage, isFirstInGroup, isLastInGroup 
       })
     : '';
 
-  // 이메일의 첫 두 글자를 대문자로 변환
-  const initials = message.email?.slice(0, 2).toUpperCase() || 'UN';
+  // 닉네임 우선순위: userNickMap > message.displayName > email > '익명'
+  const displayName = userNickMap[message.uid] || 
+                     message.displayName || 
+                     message.email?.split('@')[0] || 
+                     '익명';
+
+  // 이메일의 첫 두 글자를 대문자로 변환 (닉네임 기반으로 변경)
+  const initials = displayName.slice(0, 2).toUpperCase() || 'UN';
   
   // 더 다양한 그라디언트 색상
   const avatarColors = [
@@ -187,8 +193,8 @@ function MessageComponent({ message, isMyMessage, isFirstInGroup, isLastInGroup 
     'from-teal-400 to-teal-600'
   ];
   
-  // 이메일을 기반으로 일관된 색상 선택
-  const colorIndex = message.email ? message.email.charCodeAt(0) % avatarColors.length : 0;
+  // 사용자 ID를 기반으로 일관된 색상 선택
+  const colorIndex = message.uid ? message.uid.charCodeAt(0) % avatarColors.length : 0;
   const avatarColor = avatarColors[colorIndex];
 
   return (
@@ -205,8 +211,8 @@ function MessageComponent({ message, isMyMessage, isFirstInGroup, isLastInGroup 
           {/* 닉네임과 말풍선을 세로로 */}
           <div className="flex flex-col">
             {/* 닉네임 */}
-            <div className="text-xl text-gray-600 font-medium max-w-20 truncate mb-1 flex items-center gap-1">
-              {message.email?.split('@')[0] || '익명'}
+            <div className="text-lg text-gray-600 font-medium mb-1 flex items-center gap-1">
+              {displayName}
             </div>
             {/* 말풍선+시간 */}
             <div className={`flex items-end gap-2 max-w-[85%]`}>
@@ -219,7 +225,7 @@ function MessageComponent({ message, isMyMessage, isFirstInGroup, isLastInGroup 
                      maxWidth: '100%'
                    }}>
                 <div className="absolute -left-2 bottom-3 w-0 h-0 border-r-8 border-r-white border-t-4 border-t-transparent border-b-4 border-b-transparent drop-shadow-sm"></div>
-                <div className="text-lg leading-relaxed text-left whitespace-pre-wrap font-normal"
+                <div className="text-base leading-relaxed text-left whitespace-pre-wrap font-normal"
                      style={{ 
                        wordBreak: 'keep-all',
                        overflowWrap: 'break-word',
@@ -231,7 +237,7 @@ function MessageComponent({ message, isMyMessage, isFirstInGroup, isLastInGroup 
               
               {/* 시간 */}
               <div className="flex flex-col items-start gap-1 pb-1">
-                <div className="text-base text-gray-500 opacity-80 select-none whitespace-nowrap">{timestamp}</div>
+                <div className="text-sm text-gray-500 opacity-80 select-none whitespace-nowrap">{timestamp}</div>
               </div>
             </div>
           </div>
@@ -249,7 +255,7 @@ function MessageComponent({ message, isMyMessage, isFirstInGroup, isLastInGroup 
                  maxWidth: '100%'
                }}>
             <div className="absolute -right-2 bottom-3 w-0 h-0 border-l-8 border-l-yellow-300 border-t-4 border-t-transparent border-b-4 border-b-transparent drop-shadow-sm"></div>
-            <div className="text-lg leading-relaxed text-left whitespace-pre-wrap font-normal"
+            <div className="text-base leading-relaxed text-left whitespace-pre-wrap font-normal"
                  style={{ 
                    wordBreak: 'keep-all',
                    overflowWrap: 'break-word',
@@ -261,7 +267,7 @@ function MessageComponent({ message, isMyMessage, isFirstInGroup, isLastInGroup 
           
           {/* 시간 */}
           <div className="flex flex-col items-end gap-1 pb-1">
-            <div className="text-base text-gray-500 opacity-80 select-none whitespace-nowrap">{timestamp}</div>
+            <div className="text-sm text-gray-500 opacity-80 select-none whitespace-nowrap">{timestamp}</div>
           </div>
         </div>
       )}

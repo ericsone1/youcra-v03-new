@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { auth } from '../../firebase';
+import { auth, db } from '../../firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import { useChat } from '../../hooks/useChat';
 import { MessageList } from './MessageList';
 import VirtualizedMessageList from './VirtualizedMessageList';
@@ -10,6 +11,8 @@ export function ChatRoom() {
   const { roomId } = useParams();
   const navigate = useNavigate();
   const [useVirtualization, setUseVirtualization] = useState(false);
+  const [userNickMap, setUserNickMap] = useState({}); // 사용자 닉네임 매핑
+  
   const {
     loading,
     messagesLoading,
@@ -38,6 +41,62 @@ export function ChatRoom() {
     });
     return () => unsubscribe();
   }, [navigate]);
+
+  // 현재 사용자 닉네임 가져오기
+  useEffect(() => {
+    if (!auth.currentUser) return;
+    const fetchCurrentUserNick = async () => {
+      const userDoc = await getDoc(doc(db, "users", auth.currentUser.uid));
+      if (userDoc.exists()) {
+        const nickname = userDoc.data().nickname || auth.currentUser.email?.split("@")[0] || "나";
+        setUserNickMap(prev => ({
+          ...prev,
+          [auth.currentUser.uid]: nickname
+        }));
+      }
+    };
+    fetchCurrentUserNick();
+  }, [auth.currentUser]);
+
+  // 닉네임 매핑 - useChat에서 받은 메시지 기반
+  useEffect(() => {
+    if (!messages.length) return;
+    
+    const uids = Array.from(new Set(messages.map((m) => m.uid).filter(Boolean)));
+    
+    setUserNickMap((currentNickMap) => {
+      const unMappedUids = uids.filter(uid => !currentNickMap[uid]);
+      
+      if (unMappedUids.length > 0) {
+        Promise.all(
+          unMappedUids.map(async (uid) => {
+            try {
+              const userDoc = await getDoc(doc(db, "users", uid));
+              if (userDoc.exists()) {
+                return {
+                  uid,
+                  nickname: userDoc.data().nickname || userDoc.data().email?.split("@")[0] || "익명"
+                };
+              } else {
+                return { uid, nickname: "익명" };
+              }
+            } catch (error) {
+              console.error("닉네임 조회 오류:", error);
+              return { uid, nickname: "익명" };
+            }
+          })
+        ).then(results => {
+          const nickMap = {};
+          results.forEach(({ uid, nickname }) => {
+            nickMap[uid] = nickname;
+          });
+          setUserNickMap(prev => ({ ...prev, ...nickMap }));
+        });
+      }
+      
+      return currentNickMap;
+    });
+  }, [messages]);
 
   // 채팅방 입장
   useEffect(() => {
@@ -153,6 +212,7 @@ export function ChatRoom() {
           messages={messages} 
           myJoinedAt={myJoinedAt} 
           messagesLoading={messagesLoading}
+          userNickMap={userNickMap}
         />
       )}
 

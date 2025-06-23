@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { doc, getDoc, collection, onSnapshot, deleteDoc, addDoc, serverTimestamp, getDocs } from 'firebase/firestore';
+import { doc, getDoc, collection, onSnapshot, deleteDoc, addDoc, serverTimestamp, getDocs, updateDoc, arrayRemove } from 'firebase/firestore';
 import { db } from '../firebase';
 import { 
   IoChatbubbleEllipsesOutline, 
@@ -97,17 +97,27 @@ export default function ChatRoomInfo() {
     try {
       setLeaving(true);
       
+      // 사용자 프로필에서 닉네임 가져오기 (useChat과 동일한 로직)
+      const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+      const userProfile = userDoc.exists() ? userDoc.data() : null;
+      const displayName = userProfile?.nick || currentUser.displayName || currentUser.email?.split('@')[0] || '익명';
+      
       // 참여자 목록에서 제거
       await deleteDoc(doc(db, 'chatRooms', roomId, 'participants', currentUser.uid));
       
-      // 시스템 메시지 추가
-      const nick = currentUser.displayName || currentUser.email?.split('@')[0] || '익명';
+      // 참여자 배열 필드에서도 제거 (호환성)
+      const roomRef = doc(db, 'chatRooms', roomId);
+      await updateDoc(roomRef, {
+        participants: arrayRemove(currentUser.uid)
+      });
+      
+      // 퇴장 알림 메시지 추가 (useChat과 동일한 형식)
       await addDoc(collection(db, 'chatRooms', roomId, 'messages'), {
-        text: `${nick}님이 퇴장하셨습니다.`,
-        system: true,
-        action: 'exit',
-        uid: 'system',
-        createdAt: serverTimestamp()
+        text: `${displayName}님이 퇴장했습니다.`,
+        createdAt: serverTimestamp(),
+        type: 'system',
+        isSystemMessage: true,
+        uid: 'system'
       });
       
       // 세션 스토리지 정리
@@ -235,7 +245,7 @@ export default function ChatRoomInfo() {
                     const userData = userSnapshot.data();
                     return {
                       id: uid,
-                      name: userData.displayName || userData.nick || userData.name || currentUser.email?.split('@')[0] || '나',
+                      name: userData.nickname || userData.displayName || userData.nick || userData.name || currentUser.email?.split('@')[0] || '나',
                       email: userData.email || currentUser.email || '내 이메일',
                       avatar: userData.photoURL || userData.profileImage || currentUser.photoURL || null,
                       joinedAt: participantData.joinedAt,
@@ -274,7 +284,7 @@ export default function ChatRoomInfo() {
                   const userData = userSnapshot.data();
                   return {
                     id: uid,
-                    name: userData.displayName || userData.nick || userData.name || userData.email?.split('@')[0] || '익명',
+                    name: userData.nickname || userData.displayName || userData.nick || userData.name || userData.email?.split('@')[0] || '익명',
                     email: userData.email || '이메일 없음',
                     avatar: userData.photoURL || userData.profileImage || null,
                     joinedAt: participantData.joinedAt,
@@ -315,11 +325,28 @@ export default function ChatRoomInfo() {
           // 현재 사용자가 참여자 목록에 없는 경우 상단에 추가
           const hasCurrentUser = participantsList.some(p => p.id === currentUser.uid);
           if (!hasCurrentUser && currentUser) {
+            // 현재 사용자의 Firestore 정보 가져오기
+            let currentUserName = currentUser.displayName || currentUser.email?.split('@')[0] || '나';
+            let currentUserAvatar = currentUser.photoURL || null;
+            
+            try {
+              const currentUserRef = doc(db, 'users', currentUser.uid);
+              const currentUserSnapshot = await getDoc(currentUserRef);
+              
+              if (currentUserSnapshot.exists()) {
+                const currentUserData = currentUserSnapshot.data();
+                currentUserName = currentUserData.nickname || currentUserData.displayName || currentUserData.nick || currentUser.displayName || currentUser.email?.split('@')[0] || '나';
+                currentUserAvatar = currentUserData.photoURL || currentUserData.profileImage || currentUser.photoURL || null;
+              }
+            } catch (error) {
+              console.error('현재 사용자 정보 로딩 실패:', error);
+            }
+            
             const currentUserInfo = {
               id: currentUser.uid,
-              name: currentUser.displayName || currentUser.email?.split('@')[0] || '나',
+              name: currentUserName,
               email: currentUser.email || '내 이메일',
-              avatar: currentUser.photoURL || null,
+              avatar: currentUserAvatar,
               joinedAt: new Date(),
               role: 'member',
               isOwner: roomData?.createdBy === currentUser.uid,
@@ -538,16 +565,15 @@ export default function ChatRoomInfo() {
         </div>
 
         {/* 방 참여 인원 */}
-        <div className="bg-white/80 backdrop-blur-sm border border-blue-100 rounded-2xl shadow-lg mb-4 p-4">
-          <h3 className="text-lg font-bold text-blue-800 mb-4 flex items-center gap-2">
-            <span className="text-xl">👥</span>
-            방 참여 인원
-          </h3>
-          <p className="text-blue-600 text-sm mb-4">이 채팅방에 참여한 멤버들을 확인할 수 있습니다</p>
-        </div>
-
-        {/* 참여자 목록 */}
         <div className="bg-white/80 backdrop-blur-sm border border-blue-100 rounded-2xl shadow-lg">
+          <div className="p-4 border-b border-blue-100">
+            <h3 className="text-lg font-bold text-blue-800 mb-2 flex items-center gap-2">
+              <span className="text-xl">👥</span>
+              방 참여 인원
+            </h3>
+            <p className="text-blue-600 text-sm">이 채팅방에 참여한 멤버들을 확인할 수 있습니다</p>
+          </div>
+          
           {participants.map((participant) => (
             <div 
               key={participant.id} 
