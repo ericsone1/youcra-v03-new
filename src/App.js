@@ -106,7 +106,7 @@ function App() {
             <ToastContainer />
 
             {/* 메인 콘텐츠 */}
-            <div className="relative z-10 pb-20">
+            <div className="relative z-10 pb-24">
               <LocationDisplay />
               <SharedLinkHandler />
               <Suspense 
@@ -362,8 +362,8 @@ function App() {
                 </Routes>
               </Suspense>
             </div>
-
-            {/* 하단 네비게이션 */}
+            
+            {/* 하단 네비게이션 바 */}
             <Navigation />
             
             {/* 성능 모니터 (개발 모드에서만) */}

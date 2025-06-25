@@ -1,0 +1,792 @@
+import React, { useState, useCallback, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { FaYoutube, FaPlay, FaUsers, FaThumbsUp, FaHeart, FaChevronUp, FaChevronDown } from 'react-icons/fa';
+import { BsCheckCircleFill } from 'react-icons/bs';
+import { extractChannelId, fetchYouTubeChannelInfo, fetchChannelVideos } from '../services/videoService';
+
+const Home = () => {
+  // 단계별 진행 상태
+  const [completedSteps, setCompletedSteps] = useState([]);
+  const [channelConnected, setChannelConnected] = useState(false);
+  const [selectedVideos, setSelectedVideos] = useState([]);
+  const [activeTab, setActiveTab] = useState('watch'); // watch, myVideos
+  const [videoSelectionCollapsed, setVideoSelectionCollapsed] = useState(false);
+  
+  // 데이터 상태
+  const [channelInfo, setChannelInfo] = useState(null);
+  const [channelUrl, setChannelUrl] = useState('');
+  const [channelLoading, setChannelLoading] = useState(false);
+  const [channelError, setChannelError] = useState('');
+  const [myVideos, setMyVideos] = useState([]);
+  const [videosLoading, setVideosLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [watchedCount, setWatchedCount] = useState(0);
+  const [earnedViews, setEarnedViews] = useState(0);
+
+  // 기본 이미지 URL들 - useMemo로 메모이제이션
+  const defaultImages = useMemo(() => ({
+    channelAvatar: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTAwIiBoZWlnaHQ9IjEwMCIgdmlld0JveD0iMCAwIDEwMCAxMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxMDAiIGhlaWdodD0iMTAwIiBmaWxsPSIjRjNGNEY2Ii8+CjxjaXJjbGUgY3g9IjUwIiBjeT0iNDAiIHI9IjE1IiBmaWxsPSIjOUI5QkEzIi8+CjxwYXRoIGQ9Ik0yMCA3NUMyMCA2NS41IDI5LjUgNTggNDEgNThINTlDNzAuNSA1OCA4MCA2NS41IDgwIDc1VjgwSDIwVjc1WiIgZmlsbD0iIzlCOUJBMyIvPgo8L3N2Zz4K',
+    videoThumbnail: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIwIiBoZWlnaHQ9IjE4MCIgdmlld0JveD0iMCAwIDMyMCAxODAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMjAiIGhlaWdodD0iMTgwIiBmaWxsPSIjRjNGNEY2Ii8+CjxjaXJjbGUgY3g9IjE2MCIgY3k9IjkwIiByPSIzMCIgZmlsbD0iI0VGNDQ0NCIvPgo8cGF0aCBkPSJNMTUwIDc1TDE3NSA5MEwxNTAgMTA1Vjc1WiIgZmlsbD0iI0ZGRkZGRiIvPgo8L3N2Zz4K'
+  }), []);
+
+  // 임시 데이터 - useMemo로 메모이제이션
+  const mockWatchQueue = useMemo(() => [
+    {
+      id: '1',
+      title: '맛있는 요리 레시피 공유',
+      channelName: '요리왕김소연',
+      thumbnailUrl: defaultImages.videoThumbnail,
+      duration: '3:24',
+      type: 'short',
+      views: 1200,
+      isWatched: false
+    },
+    {
+      id: '2',
+      title: '10분만에 완성하는 홈트레이닝',
+      channelName: '헬스트레이너박',
+      thumbnailUrl: defaultImages.videoThumbnail,
+      duration: '10:15',
+      type: 'long',
+      views: 850,
+      isWatched: false
+    }
+  ], [defaultImages.videoThumbnail]);
+
+  const mockMyVideos = useMemo(() => [
+    {
+      id: 'my1',
+      title: '내가 올린 영상 1',
+      thumbnailUrl: defaultImages.videoThumbnail,
+      duration: '2:30',
+      type: 'short',
+      watchProgress: 75,
+      totalViewers: 12,
+      currentViewers: 3
+    },
+    {
+      id: 'my2',
+      title: '내가 올린 영상 2',
+      thumbnailUrl: defaultImages.videoThumbnail,
+      duration: '5:15',
+      type: 'long',
+      watchProgress: 45,
+      totalViewers: 8,
+      currentViewers: 1
+    },
+    {
+      id: 'my3',
+      title: '내가 올린 영상 3',
+      thumbnailUrl: defaultImages.videoThumbnail,
+      duration: '1:45',
+      type: 'short',
+      watchProgress: 90,
+      totalViewers: 15,
+      currentViewers: 2
+    }
+  ], [defaultImages.videoThumbnail]);
+
+  // 단계 완료 처리 - useCallback으로 메모이제이션
+  const completeStep = useCallback((stepNumber) => {
+    setCompletedSteps(prev => {
+      if (!prev.includes(stepNumber)) {
+        return [...prev, stepNumber];
+      }
+      return prev;
+    });
+  }, []);
+
+  // 이미지 에러 핸들링 - useCallback으로 메모이제이션
+  const handleImageError = useCallback((e) => {
+    e.target.src = defaultImages.videoThumbnail;
+  }, [defaultImages.videoThumbnail]);
+
+  const handleAvatarError = useCallback((e) => {
+    e.target.src = defaultImages.channelAvatar;
+  }, [defaultImages.channelAvatar]);
+
+  // 채널 연동 핸들러
+  const handleChannelConnect = useCallback(async () => {
+    if (!channelUrl.trim()) {
+      setChannelError('채널 URL을 입력해주세요.');
+      return;
+    }
+
+    setChannelLoading(true);
+    setChannelError('');
+
+    try {
+      // 1. URL에서 채널 정보 추출
+      const channelData = extractChannelId(channelUrl);
+      if (!channelData) {
+        throw new Error('유효한 유튜브 채널 URL이 아닙니다.');
+      }
+
+      // 2. YouTube API로 채널 정보 조회
+      console.log('🔍 채널 정보 조회 시작:', channelData);
+      const channelInfo = await fetchYouTubeChannelInfo(channelData);
+      
+      if (!channelInfo) {
+        throw new Error('채널 정보를 불러올 수 없습니다.');
+      }
+
+      // 3. 채널 정보 저장
+      setChannelInfo({
+        name: channelInfo.channelTitle,
+        subscribers: formatSubscriberCount(channelInfo.subscriberCount),
+        avatar: channelInfo.channelThumbnail || defaultImages.channelAvatar,
+        videoCount: channelInfo.videoCount,
+        viewCount: channelInfo.viewCount,
+        description: channelInfo.channelDescription,
+        channelId: channelInfo.channelId
+      });
+
+      // 4. 채널의 실제 영상 목록 가져오기
+      setVideosLoading(true);
+      console.log('🔍 채널 영상 목록 조회 시작...');
+      
+      try {
+        const videos = await fetchChannelVideos(channelInfo.channelId, 10); // 최신 10개 영상
+        
+        if (videos && videos.length > 0) {
+          setMyVideos(videos);
+          resetPagination(); // 새 영상 로드 시 첫 페이지로 이동
+          console.log(`✅ 실제 영상 ${videos.length}개 로드 완료`);
+          console.log('📊 숏폼/롱폼 분포:', {
+            shorts: videos.filter(v => v.type === 'short').length,
+            longs: videos.filter(v => v.type === 'long').length
+          });
+        } else {
+          console.warn('⚠️ 영상이 없어 Mock 데이터 사용');
+          setMyVideos(mockMyVideos);
+          resetPagination();
+        }
+              } catch (videoError) {
+          console.error('❌ 영상 목록 로드 실패:', videoError);
+          setMyVideos(mockMyVideos);
+          resetPagination();
+        } finally {
+        setVideosLoading(false);
+      }
+
+      setChannelConnected(true);
+      completeStep(1);
+      
+      console.log('✅ 채널 연동 완료:', channelInfo.channelTitle);
+    } catch (error) {
+      console.error('❌ 채널 연동 실패:', error);
+      setChannelError(error.message || '채널 연동에 실패했습니다.');
+    } finally {
+      setChannelLoading(false);
+    }
+  }, [channelUrl, defaultImages.channelAvatar, completeStep, mockMyVideos, resetPagination]);
+
+  // 구독자 수 포맷팅 함수
+  const formatSubscriberCount = useCallback((count) => {
+    if (!count) return '0';
+    if (count >= 1000000) {
+      return (count / 1000000).toFixed(1) + 'M';
+    } else if (count >= 1000) {
+      return (count / 1000).toFixed(1) + 'K';
+    } else {
+      return count.toString();
+    }
+  }, []);
+
+  // 조회수 포맷팅 함수
+  const formatViewCount = useCallback((count) => {
+    if (!count) return '0';
+    if (count >= 1000000000) {
+      return (count / 1000000000).toFixed(1) + 'B';
+    } else if (count >= 1000000) {
+      return (count / 1000000).toFixed(1) + 'M';
+    } else if (count >= 1000) {
+      return (count / 1000).toFixed(1) + 'K';
+    } else {
+      return count.toLocaleString();
+    }
+  }, []);
+
+  // 영상 선택 핸들러
+  const handleVideoSelect = useCallback((videoId) => {
+    console.log('영상 선택됨:', videoId);
+    setSelectedVideos(prev => {
+      console.log('현재 선택된 영상들:', prev);
+      if (prev.includes(videoId)) {
+        const newSelection = prev.filter(id => id !== videoId);
+        console.log('영상 선택 해제, 새로운 선택:', newSelection);
+        return newSelection;
+      } else if (prev.length < 3) {
+        const newSelection = [...prev, videoId];
+        console.log('영상 선택 추가, 새로운 선택:', newSelection);
+        return newSelection;
+      }
+      console.log('최대 3개까지만 선택 가능');
+      return prev;
+    });
+  }, []);
+
+  // 시청하기 핸들러
+  const handleWatchVideo = useCallback(() => {
+    setWatchedCount(prev => prev + 1);
+    setEarnedViews(prev => prev + 1);
+  }, []);
+
+  // 탭 변경 핸들러
+  const handleTabChange = useCallback((tab) => {
+    setActiveTab(tab);
+  }, []);
+
+  // 페이지네이션 상수 및 로직
+  const VIDEOS_PER_PAGE = 7;
+  const totalVideos = myVideos.length > 0 ? myVideos : mockMyVideos;
+  const totalPages = Math.ceil(totalVideos.length / VIDEOS_PER_PAGE);
+  const startIndex = currentPage * VIDEOS_PER_PAGE;
+  const endIndex = startIndex + VIDEOS_PER_PAGE;
+  const currentVideos = totalVideos.slice(startIndex, endIndex);
+
+  // 페이지 변경 핸들러
+  const handlePageChange = useCallback((pageIndex) => {
+    setCurrentPage(pageIndex);
+  }, []);
+
+  // 영상 선택 시 페이지 초기화
+  const resetPagination = useCallback(() => {
+    setCurrentPage(0);
+  }, []);
+
+  // 단계별 컴포넌트들을 React.memo로 최적화
+  const ChannelConnectionStep = React.memo(() => (
+    <motion.div
+      initial={{ opacity: 0, height: 0 }}
+      animate={{ opacity: 1, height: 'auto' }}
+      transition={{ duration: 0.5, ease: 'easeOut' }}
+      className="overflow-hidden"
+    >
+      <motion.div
+        initial={{ y: 20, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ delay: 0.2, duration: 0.5 }}
+        className="bg-white rounded-2xl p-6 mx-4 shadow-lg mb-6"
+      >
+        <div className="text-center mb-6">
+          <FaYoutube className="text-red-500 text-4xl mx-auto mb-2" />
+          <h2 className="text-xl font-bold text-gray-800">유튜브 채널 연동</h2>
+          <p className="text-gray-600 text-sm mt-2">
+            내 채널을 연동하고 시청받을 영상을 선택하세요
+          </p>
+        </div>
+
+        {!channelConnected ? (
+          <div className="space-y-4">
+            <input
+              type="text"
+              value={channelUrl}
+              onChange={(e) => setChannelUrl(e.target.value)}
+              placeholder="유튜브 채널 URL 또는 핸들 입력 (예: @채널명, https://youtube.com/@채널명)"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-blue-500 focus:outline-none"
+              disabled={channelLoading}
+            />
+            {channelError && (
+              <div className="text-red-500 text-sm bg-red-50 p-3 rounded-lg">
+                {channelError}
+              </div>
+            )}
+            <button
+              onClick={handleChannelConnect}
+              disabled={channelLoading || !channelUrl.trim()}
+              className="w-full bg-red-500 text-white py-3 rounded-xl font-medium hover:bg-red-600 transition-colors duration-150 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              {channelLoading ? '연동 중...' : '채널 연동하기'}
+            </button>
+          </div>
+        ) : (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="p-4 bg-green-50 rounded-xl border-2 border-green-200"
+          >
+            <div className="flex items-center gap-4 mb-3">
+              <img
+                src={channelInfo?.avatar}
+                alt="채널"
+                className="w-16 h-16 rounded-full object-cover"
+                onError={handleAvatarError}
+              />
+              <div className="flex-1">
+                <h3 className="font-bold text-lg">{channelInfo?.name}</h3>
+                <p className="text-gray-500">구독자 {channelInfo?.subscribers}명</p>
+              </div>
+              <BsCheckCircleFill className="text-green-500 text-2xl" />
+            </div>
+            
+            {/* 추가 정보 */}
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="bg-white rounded-lg p-3">
+                <div className="text-gray-500">업로드 영상</div>
+                <div className="font-bold text-lg">{channelInfo?.videoCount?.toLocaleString() || 0}개</div>
+              </div>
+              <div className="bg-white rounded-lg p-3">
+                <div className="text-gray-500">총 조회수</div>
+                <div className="font-bold text-lg">{formatViewCount(channelInfo?.viewCount)}</div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </motion.div>
+    </motion.div>
+  ));
+
+  const VideoSelectionStep = React.memo(() => (
+    <AnimatePresence initial={false}>
+      {completedSteps.includes(1) && (
+        <motion.div
+          key="video-selection-container"
+          initial={false}
+          animate={{ opacity: 1, height: 'auto' }}
+          transition={{ duration: 0.3, ease: 'easeOut' }}
+          className="overflow-hidden"
+        >
+          <motion.div
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.2, duration: 0.5 }}
+            className="bg-white rounded-2xl p-6 mx-4 shadow-lg mb-6"
+          >
+            {/* 헤더 - 항상 표시 */}
+            <div 
+              className="flex justify-between items-center mb-4 cursor-pointer"
+              onClick={() => setVideoSelectionCollapsed(!videoSelectionCollapsed)}
+            >
+              <h3 className="text-xl font-bold">시청받을 영상 선택</h3>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500">
+                  {selectedVideos.length}/3 선택
+                  {totalPages > 1 && !videosLoading && ` • ${currentPage + 1}/${totalPages} 페이지`}
+                </span>
+                {completedSteps.includes(2) && (
+                  <motion.div
+                    animate={{ rotate: videoSelectionCollapsed ? 0 : 180 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <FaChevronDown className="text-gray-400" />
+                  </motion.div>
+                )}
+              </div>
+            </div>
+
+            {/* 완료 상태 요약 - 접혔을 때 표시 */}
+            {completedSteps.includes(2) && videoSelectionCollapsed && (
+              <div className="flex justify-between items-center">
+                <div className="text-sm text-gray-600">
+                  <span>✅ 선택 완료 ({selectedVideos.length}개)</span>
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setVideoSelectionCollapsed(false);
+                  }}
+                  className="px-3 py-1 bg-blue-100 text-blue-600 rounded-lg text-sm hover:bg-blue-200 transition-colors duration-150"
+                >
+                  수정하기
+                </button>
+              </div>
+            )}
+
+            {/* 영상 리스트 - 접기/펼치기 */}
+            <AnimatePresence initial={false}>
+              {!videoSelectionCollapsed && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: 'auto', opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="overflow-hidden"
+                >
+                  {videosLoading ? (
+                    <div className="text-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-3"></div>
+                      <p className="text-gray-500 text-sm">영상 목록을 불러오는 중...</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 mb-4">
+                      {currentVideos.map((video) => {
+                      const isSelected = selectedVideos.includes(video.id);
+                      return (
+                        <motion.div
+                          key={video.id}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleVideoSelect(video.id);
+                          }}
+                          className={`relative flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors duration-150 select-none ${
+                            isSelected 
+                              ? 'bg-blue-50 border-2 border-blue-500' 
+                              : 'bg-gray-50 hover:bg-gray-100 border-2 border-transparent'
+                          }`}
+                          style={{ userSelect: 'none' }}
+                        >
+                          <img
+                            src={video.thumbnailUrl}
+                            alt={video.title}
+                            className="w-16 h-12 rounded-lg object-cover pointer-events-none"
+                            onError={handleImageError}
+                            draggable={false}
+                          />
+                          <div className="flex-1 pointer-events-none">
+                            <h4 className="font-medium text-sm line-clamp-2">{video.title}</h4>
+                            <div className="flex items-center gap-2 text-xs text-gray-500 mt-1">
+                              <span>{video.duration}</span>
+                              <span>•</span>
+                              <span className={`px-2 py-0.5 rounded-full ${
+                                video.type === 'short' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'
+                              }`}>
+                                {video.type === 'short' ? '숏폼' : '롱폼'}
+                              </span>
+                              {video.viewCount && (
+                                <>
+                                  <span>•</span>
+                                  <span>조회수 {formatViewCount(video.viewCount)}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <div className="pointer-events-none">
+                            <BsCheckCircleFill
+                              className={`text-2xl transition-colors duration-150 ${
+                                isSelected ? 'text-blue-500' : 'text-gray-300'
+                              }`}
+                            />
+                          </div>
+                        </motion.div>
+                      );
+                    })}
+                    </div>
+
+                    {/* 페이지네이션 */}
+                    {totalPages > 1 && (
+                      <div className="flex justify-center items-center gap-2 py-4">
+                        <button
+                          onClick={() => handlePageChange(Math.max(0, currentPage - 1))}
+                          disabled={currentPage === 0}
+                          className="px-3 py-1 rounded-lg text-sm font-medium transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed bg-gray-100 text-gray-600 hover:bg-gray-200"
+                        >
+                          이전
+                        </button>
+                        
+                        <div className="flex gap-1">
+                          {Array.from({ length: totalPages }, (_, index) => (
+                            <button
+                              key={index}
+                              onClick={() => handlePageChange(index)}
+                              className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors duration-150 ${
+                                currentPage === index
+                                  ? 'bg-blue-500 text-white'
+                                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                              }`}
+                            >
+                              {index + 1}
+                            </button>
+                          ))}
+                        </div>
+                        
+                        <button
+                          onClick={() => handlePageChange(Math.min(totalPages - 1, currentPage + 1))}
+                          disabled={currentPage === totalPages - 1}
+                          className="px-3 py-1 rounded-lg text-sm font-medium transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed bg-gray-100 text-gray-600 hover:bg-gray-200"
+                        >
+                          다음
+                        </button>
+                      </div>
+                    )}
+                  )}
+
+                  {selectedVideos.length > 0 && !videosLoading && (
+                    <button
+                      onClick={() => {
+                        completeStep(2);
+                        setVideoSelectionCollapsed(true);
+                      }}
+                      className="w-full bg-blue-500 text-white py-3 rounded-xl font-medium hover:bg-blue-600 transition-colors duration-150"
+                    >
+                      {completedSteps.includes(2) ? '영상 수정 완료' : '영상 등록하기'} ({selectedVideos.length}개)
+                    </button>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  ));
+
+  const MainPlatformStep = React.memo(() => (
+    <AnimatePresence>
+      {completedSteps.includes(2) && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          transition={{ duration: 0.5, ease: 'easeOut' }}
+          className="overflow-hidden"
+        >
+          <motion.div
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.2, duration: 0.5 }}
+            className="space-y-4"
+          >
+            {/* 상태 카드 */}
+            <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl p-6 mx-4 text-white shadow-lg">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold">{watchedCount}</div>
+                  <div className="text-sm opacity-90">내가 시청한 영상</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold">{earnedViews}</div>
+                  <div className="text-sm opacity-90">받은 시청수</div>
+                </div>
+              </div>
+            </div>
+
+            {/* 탭 네비게이션 */}
+            <div className="flex bg-gray-100 rounded-2xl p-1 mx-4">
+              <button
+                onClick={() => handleTabChange('watch')}
+                className={`flex-1 py-3 rounded-xl font-medium transition-colors duration-150 ${
+                  activeTab === 'watch'
+                    ? 'bg-white text-blue-600'
+                    : 'text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                <FaPlay className="inline mr-2" />
+                시청할 영상 ({mockWatchQueue.length})
+              </button>
+              <button
+                onClick={() => handleTabChange('myVideos')}
+                className={`flex-1 py-3 rounded-xl font-medium transition-colors duration-150 ${
+                  activeTab === 'myVideos'
+                    ? 'bg-white text-blue-600'
+                    : 'text-gray-600 hover:text-gray-800'
+                }`}
+              >
+                <FaUsers className="inline mr-2" />
+                내 영상 현황
+              </button>
+            </div>
+
+            {/* 탭 컨텐츠 */}
+            <AnimatePresence mode="wait">
+              {activeTab === 'watch' ? (
+                <WatchQueueTab key="watch" />
+              ) : (
+                <MyVideosTab key="myVideos" />
+              )}
+            </AnimatePresence>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  ));
+
+  const WatchQueueTab = React.memo(() => (
+    <motion.div
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 20 }}
+      transition={{ duration: 0.3 }}
+      className="space-y-3 mx-4"
+    >
+      <div className="flex gap-2 mb-4">
+        <button className="px-4 py-2 bg-blue-100 text-blue-600 rounded-full text-sm font-medium">
+          전체
+        </button>
+        <button className="px-4 py-2 bg-gray-100 text-gray-600 rounded-full text-sm hover:bg-gray-200 transition-colors">
+          숏폼
+        </button>
+        <button className="px-4 py-2 bg-gray-100 text-gray-600 rounded-full text-sm hover:bg-gray-200 transition-colors">
+          롱폼
+        </button>
+      </div>
+
+      {mockWatchQueue.map((video, index) => (
+        <motion.div 
+          key={video.id} 
+          className="bg-white rounded-2xl p-4 shadow-sm"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 * index }}
+        >
+          <div className="flex gap-3">
+            <img
+              src={video.thumbnailUrl}
+              alt={video.title}
+              className="w-20 h-14 rounded-lg object-cover"
+              onError={handleImageError}
+            />
+            <div className="flex-1">
+              <h4 className="font-medium text-sm mb-1">{video.title}</h4>
+              <p className="text-xs text-gray-500 mb-2">{video.channelName}</p>
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <span>{video.duration}</span>
+                <span>•</span>
+                <span>조회수 {video.views.toLocaleString()}</span>
+                <span className={`px-2 py-1 rounded-full text-xs ${
+                  video.type === 'short' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'
+                }`}>
+                  {video.type === 'short' ? '숏폼' : '롱폼'}
+                </span>
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={handleWatchVideo}
+              className="flex-1 bg-red-500 text-white py-2 rounded-lg text-sm font-medium hover:bg-red-600 transition-colors"
+            >
+              <FaPlay className="inline mr-1" />
+              시청하기
+            </button>
+            <button className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+              <FaThumbsUp className="text-gray-600" />
+            </button>
+            <button className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+              <FaHeart className="text-gray-600" />
+            </button>
+          </div>
+        </motion.div>
+      ))}
+
+      {mockWatchQueue.length === 0 && (
+        <div className="text-center py-8 text-gray-500">
+          <FaPlay className="text-4xl mx-auto mb-2 opacity-30" />
+          <p>시청할 영상이 없습니다</p>
+          <p className="text-sm">다른 사용자가 영상을 등록하면 나타납니다</p>
+        </div>
+      )}
+    </motion.div>
+  ));
+
+  const MyVideosTab = React.memo(() => (
+    <motion.div
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      transition={{ duration: 0.3 }}
+      className="space-y-3 mx-4"
+    >
+      {selectedVideos.map((videoId, index) => {
+        const video = (myVideos.length > 0 ? myVideos : mockMyVideos).find(v => v.id === videoId);
+        if (!video) return null;
+        
+        return (
+          <motion.div 
+            key={video.id} 
+            className="bg-white rounded-2xl p-4 shadow-sm"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 * index }}
+          >
+            <div className="flex gap-3 mb-3">
+              <img
+                src={video.thumbnailUrl}
+                alt={video.title}
+                className="w-20 h-14 rounded-lg object-cover"
+                onError={handleImageError}
+              />
+              <div className="flex-1">
+                <h4 className="font-medium text-sm mb-1">{video.title}</h4>
+                <div className="text-xs text-gray-500">
+                  <span>{video.duration}</span>
+                  <span className="ml-2">현재 시청자 {video.currentViewers}명</span>
+                </div>
+              </div>
+            </div>
+
+            {/* 시청률 게이지 */}
+            <div className="mb-3">
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-gray-600">시청 진행률</span>
+                <span className="font-medium">{video.watchProgress}%</span>
+              </div>
+              <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${video.watchProgress}%` }}
+                  transition={{ duration: 1, delay: 0.2 * index }}
+                  className="h-full bg-green-500 rounded-full"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-between text-sm text-gray-600">
+              <span>총 시청자 {video.totalViewers}명</span>
+              <span>누적 시청 완료</span>
+            </div>
+          </motion.div>
+        );
+      })}
+
+      {selectedVideos.length === 0 && (
+        <div className="text-center py-8 text-gray-500">
+          <FaUsers className="text-4xl mx-auto mb-2 opacity-30" />
+          <p>등록된 영상이 없습니다</p>
+        </div>
+      )}
+    </motion.div>
+  ));
+
+  return (
+    <div className="min-h-screen bg-gray-50 pb-20">
+      {/* 헤더 */}
+      <header className="bg-white shadow-sm sticky top-0 z-10">
+        <div className="px-4 py-4">
+          <h1 className="text-xl font-bold text-center mb-4">유크라 상호시청</h1>
+          
+          {/* 진행 상황 표시 */}
+          <div className="flex items-center justify-center space-x-4">
+            <div className={`flex items-center space-x-2 ${completedSteps.includes(1) ? 'text-green-600' : 'text-blue-600'}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                completedSteps.includes(1) ? 'bg-green-100' : 'bg-blue-100'
+              }`}>
+                1
+              </div>
+              <span className="text-sm">채널 연동</span>
+            </div>
+            <div className={`w-8 h-0.5 ${completedSteps.includes(1) ? 'bg-green-300' : 'bg-gray-300'}`}></div>
+            <div className={`flex items-center space-x-2 ${completedSteps.includes(2) ? 'text-green-600' : completedSteps.includes(1) ? 'text-blue-600' : 'text-gray-400'}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                completedSteps.includes(2) ? 'bg-green-100' : completedSteps.includes(1) ? 'bg-blue-100' : 'bg-gray-100'
+              }`}>
+                2
+              </div>
+              <span className="text-sm">영상 선택</span>
+            </div>
+            <div className={`w-8 h-0.5 ${completedSteps.includes(2) ? 'bg-green-300' : 'bg-gray-300'}`}></div>
+            <div className={`flex items-center space-x-2 ${completedSteps.includes(2) ? 'text-blue-600' : 'text-gray-400'}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                completedSteps.includes(2) ? 'bg-blue-100' : 'bg-gray-100'
+              }`}>
+                3
+              </div>
+              <span className="text-sm">메인 플랫폼</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* 메인 컨텐츠 */}
+      <main className="py-6">
+        {/* 단계별 진행 - 순차적 확장 방식 */}
+        <ChannelConnectionStep />
+        <VideoSelectionStep />
+        <MainPlatformStep />
+      </main>
+    </div>
+  );
+};
+
+export default Home;

@@ -16,6 +16,19 @@ export default function AdminPage() {
   const [allParticipants, setAllParticipants] = useState([]);
   const [showAllUsers, setShowAllUsers] = useState(false);
 
+  // 영상 관리 관련 상태 추가
+  const [videoManagementRoomId, setVideoManagementRoomId] = useState('');
+  const [roomVideos, setRoomVideos] = useState([]);
+  const [isLoadingVideos, setIsLoadingVideos] = useState(false);
+  const [selectedVideos, setSelectedVideos] = useState([]);
+  const [isDeletingVideos, setIsDeletingVideos] = useState(false);
+
+  // 채팅방 관리 관련 상태 추가
+  const [allChatRooms, setAllChatRooms] = useState([]);
+  const [isLoadingRooms, setIsLoadingRooms] = useState(false);
+  const [selectedRooms, setSelectedRooms] = useState([]);
+  const [isDeletingRooms, setIsDeletingRooms] = useState(false);
+
   // 더미 게시물 데이터
   const dummyPosts = [
     // 협업모집 게시판
@@ -424,6 +437,272 @@ export default function AdminPage() {
     setShowAllUsers(!showAllUsers);
   };
 
+  // 채팅방 영상 목록 로드 함수 추가
+  const loadRoomVideos = async () => {
+    if (!videoManagementRoomId.trim()) {
+      alert('채팅방 ID를 입력해주세요.');
+      return;
+    }
+
+    setIsLoadingVideos(true);
+    setRoomVideos([]);
+    setSelectedVideos([]);
+
+    try {
+      console.log('🎬 채팅방 영상 목록 로드 시작:', videoManagementRoomId);
+      
+      const videosRef = collection(db, 'chatRooms', videoManagementRoomId, 'videos');
+      const videosSnapshot = await getDocs(videosRef);
+      
+      if (videosSnapshot.empty) {
+        console.log('📭 해당 채팅방에 등록된 영상이 없습니다.');
+        alert('해당 채팅방에 등록된 영상이 없습니다.');
+        return;
+      }
+
+      const videosList = videosSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        docRef: doc.ref
+      }));
+
+      console.log(`✅ ${videosList.length}개의 영상을 찾았습니다.`);
+      setRoomVideos(videosList);
+
+    } catch (error) {
+      console.error('❌ 영상 목록 로드 실패:', error);
+      alert('영상 목록을 불러오는데 실패했습니다: ' + error.message);
+    } finally {
+      setIsLoadingVideos(false);
+    }
+  };
+
+  // 영상 선택/해제 함수
+  const toggleVideoSelection = (videoId) => {
+    setSelectedVideos(prev => {
+      if (prev.includes(videoId)) {
+        return prev.filter(id => id !== videoId);
+      } else {
+        return [...prev, videoId];
+      }
+    });
+  };
+
+  // 전체 선택/해제 함수
+  const toggleAllVideos = () => {
+    if (selectedVideos.length === roomVideos.length) {
+      setSelectedVideos([]);
+    } else {
+      setSelectedVideos(roomVideos.map(video => video.id));
+    }
+  };
+
+  // 선택된 영상들 삭제 함수
+  const deleteSelectedVideos = async () => {
+    if (selectedVideos.length === 0) {
+      alert('삭제할 영상을 선택해주세요.');
+      return;
+    }
+
+    const confirmMessage = `정말로 선택된 ${selectedVideos.length}개의 영상을 삭제하시겠습니까?\n\n⚠️ 이 작업은 되돌릴 수 없습니다.`;
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    setIsDeletingVideos(true);
+
+    try {
+      console.log('🗑️ 영상 삭제 시작:', selectedVideos);
+
+      // 선택된 영상들을 하나씩 삭제
+      const deletePromises = selectedVideos.map(async (videoId) => {
+        const videoRef = doc(db, 'chatRooms', videoManagementRoomId, 'videos', videoId);
+        await deleteDoc(videoRef);
+        console.log('✅ 영상 삭제 완료:', videoId);
+      });
+
+      await Promise.all(deletePromises);
+
+      console.log(`✅ ${selectedVideos.length}개 영상 삭제 완료`);
+      alert(`✅ ${selectedVideos.length}개의 영상이 성공적으로 삭제되었습니다.`);
+
+      // 목록 새로고침
+      setSelectedVideos([]);
+      await loadRoomVideos();
+
+    } catch (error) {
+      console.error('❌ 영상 삭제 실패:', error);
+      alert('영상 삭제 중 오류가 발생했습니다: ' + error.message);
+    } finally {
+      setIsDeletingVideos(false);
+    }
+  };
+
+  // 모든 채팅방 로드 함수 추가
+  const loadAllChatRooms = async () => {
+    setIsLoadingRooms(true);
+    setAllChatRooms([]);
+    setSelectedRooms([]);
+
+    try {
+      console.log('🏠 모든 채팅방 로드 시작');
+      
+      const chatRoomsRef = collection(db, 'chatRooms');
+      const chatRoomsSnapshot = await getDocs(chatRoomsRef);
+      
+      if (chatRoomsSnapshot.empty) {
+        console.log('📭 등록된 채팅방이 없습니다.');
+        alert('등록된 채팅방이 없습니다.');
+        return;
+      }
+
+      const roomsList = await Promise.all(
+        chatRoomsSnapshot.docs.map(async (roomDoc) => {
+          const roomData = roomDoc.data();
+          
+          // 참여자 수 계산
+          try {
+            const participantsRef = collection(db, 'chatRooms', roomDoc.id, 'participants');
+            const participantsSnapshot = await getDocs(participantsRef);
+            const participantCount = participantsSnapshot.size;
+
+            // 영상 수 계산
+            const videosRef = collection(db, 'chatRooms', roomDoc.id, 'videos');
+            const videosSnapshot = await getDocs(videosRef);
+            const videoCount = videosSnapshot.size;
+
+            return {
+              id: roomDoc.id,
+              ...roomData,
+              participantCount,
+              videoCount,
+              createdAt: roomData.createdAt || null
+            };
+          } catch (error) {
+            console.error(`❌ 채팅방 ${roomDoc.id} 정보 로드 실패:`, error);
+            return {
+              id: roomDoc.id,
+              ...roomData,
+              participantCount: 0,
+              videoCount: 0,
+              createdAt: roomData.createdAt || null
+            };
+          }
+        })
+      );
+
+      // 생성일 기준으로 정렬 (최신순)
+      roomsList.sort((a, b) => {
+        if (!a.createdAt) return 1;
+        if (!b.createdAt) return -1;
+        return b.createdAt.seconds - a.createdAt.seconds;
+      });
+
+      console.log(`✅ ${roomsList.length}개의 채팅방을 찾았습니다.`);
+      setAllChatRooms(roomsList);
+
+    } catch (error) {
+      console.error('❌ 채팅방 목록 로드 실패:', error);
+      alert('채팅방 목록을 불러오는데 실패했습니다: ' + error.message);
+    } finally {
+      setIsLoadingRooms(false);
+    }
+  };
+
+  // 채팅방 선택/해제 함수
+  const toggleRoomSelection = (roomId) => {
+    setSelectedRooms(prev => {
+      if (prev.includes(roomId)) {
+        return prev.filter(id => id !== roomId);
+      } else {
+        return [...prev, roomId];
+      }
+    });
+  };
+
+  // 모든 채팅방 선택/해제 함수
+  const toggleAllRooms = () => {
+    if (selectedRooms.length === allChatRooms.length) {
+      setSelectedRooms([]);
+    } else {
+      setSelectedRooms(allChatRooms.map(room => room.id));
+    }
+  };
+
+  // 선택된 채팅방들 삭제 함수
+  const deleteSelectedRooms = async () => {
+    if (selectedRooms.length === 0) {
+      alert('삭제할 채팅방을 선택해주세요.');
+      return;
+    }
+
+    const selectedRoomNames = selectedRooms.map(roomId => {
+      const room = allChatRooms.find(r => r.id === roomId);
+      return room?.title || roomId;
+    }).join(', ');
+
+    const confirmMessage = `정말로 다음 ${selectedRooms.length}개의 채팅방을 삭제하시겠습니까?\n\n${selectedRoomNames}\n\n⚠️ 모든 메시지, 참여자, 영상 데이터가 함께 삭제되며 되돌릴 수 없습니다.`;
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    setIsDeletingRooms(true);
+
+    try {
+      console.log('🗑️ 채팅방 삭제 시작:', selectedRooms);
+
+      // 선택된 채팅방들을 하나씩 삭제
+      for (const roomId of selectedRooms) {
+        console.log(`🏠 채팅방 삭제 중: ${roomId}`);
+        
+        try {
+          // 1. 참여자 데이터 삭제
+          const participantsRef = collection(db, 'chatRooms', roomId, 'participants');
+          const participantsSnapshot = await getDocs(participantsRef);
+          const participantDeletePromises = participantsSnapshot.docs.map(doc => deleteDoc(doc.ref));
+          await Promise.all(participantDeletePromises);
+          console.log(`✅ 참여자 ${participantsSnapshot.size}명 삭제 완료`);
+
+          // 2. 메시지 데이터 삭제
+          const messagesRef = collection(db, 'chatRooms', roomId, 'messages');
+          const messagesSnapshot = await getDocs(messagesRef);
+          const messageDeletePromises = messagesSnapshot.docs.map(doc => deleteDoc(doc.ref));
+          await Promise.all(messageDeletePromises);
+          console.log(`✅ 메시지 ${messagesSnapshot.size}개 삭제 완료`);
+
+          // 3. 영상 데이터 삭제
+          const videosRef = collection(db, 'chatRooms', roomId, 'videos');
+          const videosSnapshot = await getDocs(videosRef);
+          const videoDeletePromises = videosSnapshot.docs.map(doc => deleteDoc(doc.ref));
+          await Promise.all(videoDeletePromises);
+          console.log(`✅ 영상 ${videosSnapshot.size}개 삭제 완료`);
+
+          // 4. 채팅방 문서 삭제
+          const roomRef = doc(db, 'chatRooms', roomId);
+          await deleteDoc(roomRef);
+          console.log(`✅ 채팅방 ${roomId} 삭제 완료`);
+
+        } catch (error) {
+          console.error(`❌ 채팅방 ${roomId} 삭제 실패:`, error);
+          throw error;
+        }
+      }
+
+      console.log(`✅ ${selectedRooms.length}개 채팅방 삭제 완료`);
+      alert(`✅ ${selectedRooms.length}개의 채팅방이 성공적으로 삭제되었습니다.`);
+
+      // 목록 새로고침
+      setSelectedRooms([]);
+      await loadAllChatRooms();
+
+    } catch (error) {
+      console.error('❌ 채팅방 삭제 실패:', error);
+      alert('채팅방 삭제 중 오류가 발생했습니다: ' + error.message);
+    } finally {
+      setIsDeletingRooms(false);
+    }
+  };
+
   return (
     <div style={{ maxWidth: 480, margin: '40px auto', padding: 32, background: '#fff', borderRadius: 16, boxShadow: '0 2px 16px #0001' }}>
       <h1 style={{ fontSize: 28, fontWeight: 'bold', marginBottom: 24, color: '#d00' }}>관리자 페이지</h1>
@@ -611,6 +890,179 @@ export default function AdminPage() {
         )}
       </div>
 
+      {/* 영상 관리 섹션 추가 */}
+      <div style={{ marginBottom: 40, padding: 20, backgroundColor: '#f0f8ff', borderRadius: 12, border: '2px solid #007bff' }}>
+        <h2 style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 16, color: '#007bff' }}>🎬 채팅방 영상 관리</h2>
+        
+        {/* 채팅방 ID 입력 */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold', color: '#333' }}>
+            📂 채팅방 ID:
+          </label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              type="text"
+              value={videoManagementRoomId}
+              onChange={(e) => setVideoManagementRoomId(e.target.value)}
+              placeholder="채팅방 ID를 입력하세요"
+              style={{
+                flex: 1,
+                padding: '12px',
+                border: '1px solid #ddd',
+                borderRadius: 6,
+                fontSize: 14
+              }}
+            />
+            <button
+              onClick={loadRoomVideos}
+              disabled={isLoadingVideos}
+              style={{
+                padding: '12px 16px',
+                backgroundColor: isLoadingVideos ? '#6c757d' : '#007bff',
+                color: 'white',
+                border: 'none',
+                borderRadius: 6,
+                fontWeight: 'bold',
+                cursor: isLoadingVideos ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {isLoadingVideos ? '🔄 로딩...' : '🔍 영상 조회'}
+            </button>
+          </div>
+        </div>
+
+        {/* 영상 목록 */}
+        {roomVideos.length > 0 && (
+          <div>
+            {/* 상단 컨트롤 */}
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center', 
+              marginBottom: 12,
+              padding: 12,
+              backgroundColor: '#fff',
+              borderRadius: 6,
+              border: '1px solid #ddd'
+            }}>
+              <div>
+                <span style={{ fontWeight: 'bold', color: '#333' }}>
+                  총 {roomVideos.length}개 영상 | 선택됨: {selectedVideos.length}개
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={toggleAllVideos}
+                  style={{
+                    padding: '8px 12px',
+                    backgroundColor: '#6c757d',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 4,
+                    fontSize: 12,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {selectedVideos.length === roomVideos.length ? '🔄 전체 해제' : '☑️ 전체 선택'}
+                </button>
+                <button
+                  onClick={deleteSelectedVideos}
+                  disabled={selectedVideos.length === 0 || isDeletingVideos}
+                  style={{
+                    padding: '8px 12px',
+                    backgroundColor: selectedVideos.length === 0 || isDeletingVideos ? '#6c757d' : '#dc3545',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 4,
+                    fontSize: 12,
+                    cursor: selectedVideos.length === 0 || isDeletingVideos ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {isDeletingVideos ? '⏳ 삭제 중...' : '🗑️ 선택 삭제'}
+                </button>
+              </div>
+            </div>
+
+            {/* 영상 리스트 */}
+            <div style={{ 
+              maxHeight: 400, 
+              overflowY: 'auto', 
+              border: '1px solid #ddd', 
+              borderRadius: 6,
+              backgroundColor: '#fff'
+            }}>
+              {roomVideos.map((video, index) => (
+                <div 
+                  key={video.id} 
+                  style={{ 
+                    padding: 12, 
+                    borderBottom: index < roomVideos.length - 1 ? '1px solid #eee' : 'none',
+                    display: 'flex', 
+                    alignItems: 'center',
+                    backgroundColor: selectedVideos.includes(video.id) ? '#e3f2fd' : 'transparent',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => toggleVideoSelection(video.id)}
+                >
+                  {/* 체크박스 */}
+                  <input
+                    type="checkbox"
+                    checked={selectedVideos.includes(video.id)}
+                    onChange={() => toggleVideoSelection(video.id)}
+                    style={{ marginRight: 12, cursor: 'pointer' }}
+                  />
+                  
+                  {/* 썸네일 */}
+                  <img 
+                    src={video.thumbnail} 
+                    alt="썸네일" 
+                    style={{ 
+                      width: 80, 
+                      height: 45, 
+                      objectFit: 'cover', 
+                      borderRadius: 4, 
+                      marginRight: 12 
+                    }} 
+                  />
+                  
+                  {/* 영상 정보 */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ 
+                      fontWeight: 'bold', 
+                      marginBottom: 4, 
+                      color: '#333',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      {video.title}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#666', marginBottom: 2 }}>
+                      채널: {video.channelTitle || '알 수 없음'}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#999' }}>
+                      등록자: {video.registeredByEmail || video.registeredBy || '알 수 없음'} | 
+                      등록일: {video.registeredAt ? new Date(video.registeredAt.seconds * 1000).toLocaleDateString() : '알 수 없음'}
+                    </div>
+                  </div>
+                  
+                  {/* 영상 ID */}
+                  <div style={{ 
+                    fontSize: 10, 
+                    color: '#999', 
+                    fontFamily: 'monospace',
+                    marginLeft: 12,
+                    minWidth: 80
+                  }}>
+                    ID: {video.videoId}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* 더미 게시물 생성 섹션 */}
       <div style={{ marginBottom: 40, padding: 20, backgroundColor: '#f8f9fa', borderRadius: 12, border: '2px solid #e9ecef' }}>
         <h2 style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 16, color: '#495057' }}>📝 더미 게시물 생성</h2>
@@ -647,6 +1099,162 @@ export default function AdminPage() {
           <span style={{ color: '#d00', fontWeight: 'bold' }}>되돌릴 수 없으니 신중히 사용하세요!</span>
         </p>
         <AdminDeleteAllChatRooms />
+      </div>
+
+      {/* 채팅방 관리 섹션 추가 */}
+      <div style={{ marginBottom: 40, padding: 20, backgroundColor: '#fff5f5', borderRadius: 12, border: '2px solid #dc3545' }}>
+        <h2 style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 16, color: '#dc3545' }}>🏠 채팅방 선택 삭제</h2>
+        
+        {/* 채팅방 로드 버튼 */}
+        <div style={{ marginBottom: 16 }}>
+          <button
+            onClick={loadAllChatRooms}
+            disabled={isLoadingRooms}
+            style={{
+              padding: '12px 24px',
+              backgroundColor: isLoadingRooms ? '#6c757d' : '#dc3545',
+              color: 'white',
+              border: 'none',
+              borderRadius: 6,
+              fontWeight: 'bold',
+              cursor: isLoadingRooms ? 'not-allowed' : 'pointer',
+              fontSize: 16
+            }}
+          >
+            {isLoadingRooms ? '🔄 로딩 중...' : '🔍 모든 채팅방 조회'}
+          </button>
+        </div>
+
+        {/* 채팅방 목록 */}
+        {allChatRooms.length > 0 && (
+          <div>
+            {/* 상단 컨트롤 */}
+            <div style={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center', 
+              marginBottom: 12,
+              padding: 12,
+              backgroundColor: '#fff',
+              borderRadius: 6,
+              border: '1px solid #ddd'
+            }}>
+              <div>
+                <span style={{ fontWeight: 'bold', color: '#333' }}>
+                  총 {allChatRooms.length}개 채팅방 | 선택됨: {selectedRooms.length}개
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={toggleAllRooms}
+                  style={{
+                    padding: '8px 12px',
+                    backgroundColor: '#6c757d',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 4,
+                    fontSize: 12,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {selectedRooms.length === allChatRooms.length ? '🔄 전체 해제' : '☑️ 전체 선택'}
+                </button>
+                <button
+                  onClick={deleteSelectedRooms}
+                  disabled={selectedRooms.length === 0 || isDeletingRooms}
+                  style={{
+                    padding: '8px 12px',
+                    backgroundColor: selectedRooms.length === 0 || isDeletingRooms ? '#6c757d' : '#dc3545',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: 4,
+                    fontSize: 12,
+                    cursor: selectedRooms.length === 0 || isDeletingRooms ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {isDeletingRooms ? '⏳ 삭제 중...' : '🗑️ 선택 삭제'}
+                </button>
+              </div>
+            </div>
+
+            {/* 채팅방 리스트 */}
+            <div style={{ 
+              maxHeight: 500, 
+              overflowY: 'auto', 
+              border: '1px solid #ddd', 
+              borderRadius: 6,
+              backgroundColor: '#fff'
+            }}>
+              {allChatRooms.map((room, index) => (
+                <div 
+                  key={room.id} 
+                  style={{ 
+                    padding: 12, 
+                    borderBottom: index < allChatRooms.length - 1 ? '1px solid #eee' : 'none',
+                    display: 'flex', 
+                    alignItems: 'center',
+                    backgroundColor: selectedRooms.includes(room.id) ? '#fee' : 'transparent',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => toggleRoomSelection(room.id)}
+                >
+                  {/* 체크박스 */}
+                  <input
+                    type="checkbox"
+                    checked={selectedRooms.includes(room.id)}
+                    onChange={() => toggleRoomSelection(room.id)}
+                    style={{ marginRight: 12, cursor: 'pointer' }}
+                  />
+                  
+                  {/* 채팅방 정보 */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ 
+                      fontWeight: 'bold', 
+                      marginBottom: 4, 
+                      color: '#333',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      {room.title || '제목 없음'}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#666', marginBottom: 2 }}>
+                      👥 참여자: {room.participantCount}명 | 🎬 영상: {room.videoCount}개
+                    </div>
+                    <div style={{ fontSize: 11, color: '#999' }}>
+                      생성자: {room.createdBy || '알 수 없음'} | 
+                      생성일: {room.createdAt ? new Date(room.createdAt.seconds * 1000).toLocaleDateString() : '알 수 없음'}
+                    </div>
+                    {room.description && (
+                      <div style={{ 
+                        fontSize: 11, 
+                        color: '#777', 
+                        marginTop: 4,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
+                      }}>
+                        📝 {room.description}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* 채팅방 ID */}
+                  <div style={{ 
+                    fontSize: 10, 
+                    color: '#999', 
+                    fontFamily: 'monospace',
+                    marginLeft: 12,
+                    minWidth: 120,
+                    textAlign: 'right'
+                  }}>
+                    ID: {room.id}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

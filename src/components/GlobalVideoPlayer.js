@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import YouTube from 'react-youtube';
 import { useVideoPlayer } from '../contexts/VideoPlayerContext';
 import { doc, addDoc, collection, serverTimestamp, onSnapshot, query, where, updateDoc, increment } from 'firebase/firestore';
@@ -141,57 +141,55 @@ function GlobalVideoPlayer() {
     }
   }, [selectedVideoIdx]);
 
+  // certAvailable 계산: 렌더링 및 useEffect에서 모두 사용
+  const certAvailable = useMemo(() => {
+    if (
+      selectedVideoIdx === null ||
+      !videoList[selectedVideoIdx] ||
+      typeof videoList[selectedVideoIdx].duration !== 'number'
+    ) {
+      return false;
+    }
+
+    if (roomId === 'watchqueue') {
+      // 홈탭: 무조건 풀시청
+      return videoEnded;
+    }
+
+    if (watchSettings.watchMode === 'partial') {
+      const minWatchTime = Math.min(30, videoList[selectedVideoIdx].duration * 0.8);
+      return videoList[selectedVideoIdx].duration >= 180
+        ? watchSeconds >= 180
+        : videoEnded && watchSeconds >= minWatchTime;
+    }
+
+    // watchMode === 'full'
+    const videoDuration = videoList[selectedVideoIdx].duration;
+    if (videoDuration > 3600) {
+      return watchSeconds >= 1800;
+    } else if (videoDuration > 1800) {
+      return watchSeconds >= 1800 || videoEnded;
+    } else {
+      const minWatchTime = Math.min(30, videoDuration * 0.8);
+      return videoEnded && watchSeconds >= minWatchTime;
+    }
+  }, [roomId, watchSettings.watchMode, videoEnded, watchSeconds, selectedVideoIdx, videoList]);
+
   // 시청인증 완료 시 자동 인증 및 다음 영상 이동 (바로 인증 후 5초 카운트다운)
   useEffect(() => {
     if (!watchSettings.enabled) return;
     
-    // certAvailable 계산 (ChatRoom.js와 동일한 로직)
-    let certAvailable = false;
-    if (
-      selectedVideoIdx !== null &&
-      videoList[selectedVideoIdx] &&
-      typeof videoList[selectedVideoIdx].duration === "number"
-    ) {
-      if (watchSettings.watchMode === 'partial') {
-        // 부분 시청 허용: 3분 이상 영상은 3분 시청, 3분 미만은 완시청 + 최소 시청 시간
-        const minWatchTime = Math.min(30, videoList[selectedVideoIdx].duration * 0.8); // 영상 길이의 80% 또는 30초 중 작은 값
-        certAvailable =
-          videoList[selectedVideoIdx].duration >= 180
-            ? watchSeconds >= 180
-            : videoEnded && watchSeconds >= minWatchTime;
-      } else {
-        // 전체 시청 필수: 1시간 초과 영상은 30분 시청, 1시간 이하는 30분 시청 또는 완시청, 30분 미만은 완시청
-        const videoDuration = videoList[selectedVideoIdx].duration;
-        if (videoDuration > 3600) {
-          // 1시간 초과 영상: 30분(1800초) 시청으로 인증
-          certAvailable = watchSeconds >= 1800;
-        } else if (videoDuration > 1800) {
-          // 30분~1시간 영상: 30분 시청 또는 완시청
-          certAvailable = watchSeconds >= 1800 || videoEnded;
-        } else {
-          // 30분 미만 영상: 완시청 필요 + 최소 시청 시간
-          const minWatchTime = Math.min(30, videoDuration * 0.8); // 영상 길이의 80% 또는 30초 중 작은 값
-          certAvailable = videoEnded && watchSeconds >= minWatchTime;
-        }
-      }
-    }
-
-    // 시청인증이 활성화되고, 인증 가능하고, 로딩 중이 아니고, 최소 1초는 지났을 때 바로 인증 처리
-    if (watchSettings.enabled && certAvailable && !certLoading && !isCertified && watchSeconds > 0) {
-      // 바로 인증 처리 (카운트다운은 별도 useEffect에서 처리)
-      handleCertify().then(() => {
-        // 인증 완료
-      }).catch((error) => {
+    if (certAvailable && !certLoading && !isCertified && watchSeconds > 0) {
+      handleCertify().catch((error) => {
         // 인증 실패 시에도 다음 영상으로 이동 (반복 재생)
         if (selectedVideoIdx < videoList.length - 1) {
           selectVideo(selectedVideoIdx + 1);
         } else {
-          // 마지막 영상이면 첫 번째 영상으로 이동
           selectVideo(0);
         }
       });
     }
-  }, [watchSettings.enabled, watchSettings.watchMode, isCertified, certLoading, selectedVideoIdx, videoList.length, watchSeconds, videoEnded, handleCertify]);
+  }, [certAvailable, isCertified, certLoading, watchSeconds, handleCertify, videoList.length, selectedVideoIdx]);
 
   // 영상 선택 시 좋아요 상태 초기화
   useEffect(() => {
@@ -205,8 +203,6 @@ function GlobalVideoPlayer() {
   // 드래그 핸들러
   const handleDragStart = (e) => {
     e.stopPropagation();
-    if (e.cancelable) e.preventDefault();
-
     setDragging(true);
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -219,8 +215,6 @@ function GlobalVideoPlayer() {
   
   const handleDrag = (e) => {
     e.stopPropagation();
-    if (e.cancelable) e.preventDefault();
-
     if (!dragging) return;
     
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -310,37 +304,16 @@ function GlobalVideoPlayer() {
     // 시청인증이 활성화된 경우, 자동 인증 useEffect에서 처리됨
   };
 
-  // certAvailable 계산 - useEffect와 동일한 로직 사용
-  let certAvailable = false;
-  if (
-    selectedVideoIdx !== null &&
-    videoList[selectedVideoIdx] &&
-    typeof videoList[selectedVideoIdx].duration === "number" &&
-    watchSettings.enabled
-  ) {
-    if (watchSettings.watchMode === 'partial') {
-      // 부분 시청 허용: 3분 이상 영상은 3분 시청, 3분 미만은 완시청 + 최소 시청 시간
-      const minWatchTime = Math.min(30, videoList[selectedVideoIdx].duration * 0.8);
-      certAvailable =
-        videoList[selectedVideoIdx].duration >= 180
-          ? watchSeconds >= 180
-          : videoEnded && watchSeconds >= minWatchTime;
-    } else {
-      // 전체 시청 필수: 1시간 초과 영상은 30분 시청, 1시간 이하는 30분 시청 또는 완시청, 30분 미만은 완시청
-      const videoDuration = videoList[selectedVideoIdx].duration;
-      if (videoDuration > 3600) {
-        // 1시간 초과 영상: 30분(1800초) 시청으로 인증
-        certAvailable = watchSeconds >= 1800;
-      } else if (videoDuration > 1800) {
-        // 30분~1시간 영상: 30분 시청 또는 완시청
-        certAvailable = watchSeconds >= 1800 || videoEnded;
-      } else {
-        // 30분 미만 영상: 완시청 필요 + 최소 시청 시간
-        const minWatchTime = Math.min(30, videoDuration * 0.8);
-        certAvailable = videoEnded && watchSeconds >= minWatchTime;
-      }
+  // 페이지 스크롤 잠금: 드래그 중에는 body 스크롤 금지
+  useEffect(() => {
+    if (dragging) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
     }
-  }
+  }, [dragging]);
 
   return (
     <div
@@ -350,7 +323,8 @@ function GlobalVideoPlayer() {
       style={{
         top: popupPos.y,
         left: popupPos.x,
-        cursor: dragging ? 'grabbing' : 'grab'
+        cursor: dragging ? 'grabbing' : 'grab',
+        touchAction: 'none' // 드래그 중 배경 스크롤 방지
       }}
       onMouseDown={handleDragStart}
       onMouseMove={handleDrag}
@@ -412,8 +386,6 @@ function GlobalVideoPlayer() {
                 e.stopPropagation();
                 setMinimized(false);
               }}
-              onMouseDown={(e) => e.stopPropagation()}
-              onTouchStart={(e) => e.stopPropagation()}
               title="영상 플레이어 열기"
             >
               ▶️
@@ -426,8 +398,6 @@ function GlobalVideoPlayer() {
                 e.stopPropagation();
                 closePlayer();
               }}
-              onMouseDown={(e) => e.stopPropagation()}
-              onTouchStart={(e) => e.stopPropagation()}
               title="닫기"
             >
               ×
@@ -450,8 +420,6 @@ function GlobalVideoPlayer() {
                     e.stopPropagation();
                     setMinimized(true);
                   }}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onTouchStart={(e) => e.stopPropagation()}
                   title="최소화"
                 >
                   ➖
@@ -463,8 +431,6 @@ function GlobalVideoPlayer() {
                     e.stopPropagation();
                     closePlayer();
                   }}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onTouchStart={(e) => e.stopPropagation()}
                   title="닫기"
                 >
                   ×
@@ -511,7 +477,7 @@ function GlobalVideoPlayer() {
               <div className="text-center">
                 {watchSettings.enabled ? (
                   <span className="text-purple-600 font-medium">
-                    {watchSettings.watchMode === 'partial' ? '⚡ 부분시청' : '🎯 풀시청'} 모드
+                    {(roomId === 'watchqueue' || watchSettings.watchMode !== 'partial') ? '🎯 풀시청' : '⚡ 부분시청'} 모드
                   </span>
                 ) : (
                   <span className="text-gray-500">시청인증 비활성화</span>
@@ -593,9 +559,11 @@ function GlobalVideoPlayer() {
                   <div className="text-sm opacity-90">
                     {(certAvailable || isCertified)
                       ? (isCertified ? '인증완료! 잠시만 기다려주세요...' : '인증 처리중...')
-                      : (watchSettings.watchMode === 'partial' 
-                          ? '3분 시청하면 자동 인증됩니다' 
-                          : '영상을 끝까지 시청하면 인증됩니다')
+                      : (roomId === 'watchqueue'
+                          ? '영상을 끝까지 시청하면 인증됩니다'
+                          : (watchSettings.watchMode === 'partial'
+                              ? '3분 시청하면 자동 인증됩니다'
+                              : '영상을 끝까지 시청하면 인증됩니다'))
                     }
                   </div>
                 </div>
