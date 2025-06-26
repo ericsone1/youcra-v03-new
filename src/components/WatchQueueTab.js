@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { FaPlay, FaThumbsUp, FaHeart } from 'react-icons/fa';
+import { FaPlay } from 'react-icons/fa';
 import { useAuth } from '../hooks/useAuth';
 import { db } from '../firebase';
 import { collection, query, getDocs, orderBy, where, setDoc, doc, serverTimestamp } from 'firebase/firestore';
@@ -80,6 +80,7 @@ const WatchQueueTab = ({ filter, onFilterChange, handleImageError, handleWatchVi
               durationSec,
               type: durationSec <= 180 ? 'short' : 'long',
               thumbnailUrl: videoData.thumbnail || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`,
+              channelId: videoData.channelId || videoData.channelId || '',
               channelName: videoData.channelTitle || videoData.channel || '',
               views: videoData.views || 0,
               watchCount: videoData.watchCount || 0,
@@ -280,11 +281,16 @@ const WatchQueueTab = ({ filter, onFilterChange, handleImageError, handleWatchVi
                       <><FaPlay className="inline mr-1" />시청하기</>
                     )}
                   </button>
-                  <button className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-                    <FaThumbsUp className="text-gray-600" />
-                  </button>
-                  <button className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-                    <FaHeart className="text-gray-600" />
+                  <button
+                    onClick={() => {
+                      const url = video.channelId
+                        ? `https://www.youtube.com/channel/${video.channelId}?sub_confirmation=1`
+                        : `https://www.youtube.com/watch?v=${video.videoId}`;
+                      window.open(url, '_blank');
+                    }}
+                    className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-colors"
+                  >
+                    구독하기
                   </button>
                 </div>
               </motion.div>
@@ -353,11 +359,16 @@ const WatchQueueTab = ({ filter, onFilterChange, handleImageError, handleWatchVi
                       <><FaPlay className="inline mr-1" />시청하기</>
                     )}
                   </button>
-                  <button className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-                    <FaThumbsUp className="text-gray-600" />
-                  </button>
-                  <button className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-                    <FaHeart className="text-gray-600" />
+                  <button
+                    onClick={() => {
+                      const url = video.channelId
+                        ? `https://www.youtube.com/channel/${video.channelId}?sub_confirmation=1`
+                        : `https://www.youtube.com/watch?v=${video.videoId}`;
+                      window.open(url, '_blank');
+                    }}
+                    className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-colors"
+                  >
+                    구독하기
                   </button>
                 </div>
               </motion.div>
@@ -404,11 +415,16 @@ const WatchQueueTab = ({ filter, onFilterChange, handleImageError, handleWatchVi
                       <><FaPlay className="inline mr-1" />시청하기</>
                     )}
                   </button>
-                  <button className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-                    <FaThumbsUp className="text-gray-600" />
-                  </button>
-                  <button className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-                    <FaHeart className="text-gray-600" />
+                  <button
+                    onClick={() => {
+                      const url = video.channelId
+                        ? `https://www.youtube.com/channel/${video.channelId}?sub_confirmation=1`
+                        : `https://www.youtube.com/watch?v=${video.videoId}`;
+                      window.open(url, '_blank');
+                    }}
+                    className="px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold transition-colors"
+                  >
+                    구독하기
                   </button>
                 </div>
               </motion.div>
