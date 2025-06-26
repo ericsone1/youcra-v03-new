@@ -69,11 +69,22 @@ export const CategoryInputBox = ({ selectedCategories, onCategoriesChange, onCom
   };
 
   const handleSuggestionClick = (word) => {
-    setInputValue(word);
+    if (keywords.length >= 3) return;
+    if (keywords.includes(word)) return;
+    setKeywords([...keywords, word]);
+    setInputValue('');
   };
 
   const handleComplete = () => {
-    const validKeywords = keywords.filter(Boolean);
+    let combined = [...keywords];
+    const trimmed = inputValue.trim();
+    if (trimmed) {
+      if (!combined.includes(trimmed) && combined.length < 3) {
+        combined.push(trimmed);
+      }
+    }
+    // 최대 3개 제한 및 빈 값 제거
+    const validKeywords = combined.filter(Boolean).slice(0, 3);
     if (validKeywords.length === 0) return;
     // 내부 사전 기반 자동 매칭
     const mapped = validKeywords.map(word => ({
@@ -82,6 +93,9 @@ export const CategoryInputBox = ({ selectedCategories, onCategoriesChange, onCom
     }));
     onCategoriesChange(mapped);
     onComplete();
+    // 상태 리셋
+    setKeywords(validKeywords);
+    setInputValue('');
   };
 
   return (
@@ -160,7 +174,7 @@ export const CategoryInputBox = ({ selectedCategories, onCategoriesChange, onCom
         type="button"
         onClick={handleComplete}
         className="mt-6 w-full py-3 rounded-lg font-bold text-white bg-blue-500 hover:bg-blue-600 transition-colors text-lg shadow"
-        disabled={keywords.length === 0}
+        disabled={keywords.length === 0 && inputValue.trim() === ''}
       >
         선택 완료
       </button>
