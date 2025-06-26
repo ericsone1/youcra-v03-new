@@ -429,6 +429,7 @@ const Home = () => {
               onFilterChange={setWatchFilter}
               handleImageError={handleImageError}
               handleWatchVideo={handleWatchVideo}
+              myChannelId={channelInfo?.channelId}
             />
           ) : (
             <MyVideosTab

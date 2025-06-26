@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { FaYoutube } from 'react-icons/fa';
-import { BsCheckCircleFill } from 'react-icons/bs';
+import { FiSettings } from 'react-icons/fi';
 
 const ChannelConnectionStep = ({
   channelConnected,
@@ -84,9 +84,13 @@ const ChannelConnectionStep = ({
             <div className="absolute top-4 right-4">
               <button
                 ref={manageBtnRef}
-                className="border border-blue-500 text-blue-600 px-3 py-1 rounded-full text-xs font-semibold hover:bg-blue-50 transition-colors"
+                className="border border-blue-500 text-blue-600 p-2 rounded-full text-xl hover:bg-blue-50 transition-colors flex items-center justify-center"
                 onClick={() => setShowManage((v) => !v)}
-              >관리</button>
+                title="설정"
+                aria-label="설정"
+              >
+                <FiSettings />
+              </button>
               {showManage && (
                 <div className="absolute right-0 mt-2 w-32 bg-white border border-gray-200 rounded-xl shadow-lg z-20">
                   <button
@@ -111,7 +115,6 @@ const ChannelConnectionStep = ({
                 <h3 className="font-bold text-lg">{channelInfo?.name}</h3>
                 <p className="text-gray-500">구독자 {channelInfo?.subscribers}명</p>
               </div>
-              <BsCheckCircleFill className="text-green-500 text-2xl" />
             </div>
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div className="bg-white rounded-lg p-3">

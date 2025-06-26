@@ -6,12 +6,12 @@ import { db } from '../firebase';
 import { collection, query, getDocs, orderBy } from 'firebase/firestore';
 import { parseDuration } from './Home/utils/videoUtils';
 
-const WatchQueueTab = ({ filter, onFilterChange, handleImageError, handleWatchVideo }) => {
+const WatchQueueTab = ({ filter, onFilterChange, handleImageError, handleWatchVideo, myChannelId }) => {
   const { user } = useAuth();
   const [videos, setVideos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
-  const [sortKey, setSortKey] = useState('recent'); // recent | views | duration | watch
+  const [sortKey, setSortKey] = useState('duration'); // duration(영상길이순) 기본값
 
   useEffect(() => {
     if (!user) return;
@@ -31,7 +31,8 @@ const WatchQueueTab = ({ filter, onFilterChange, handleImageError, handleWatchVi
           const videoData = videoDoc.data();
           if (
             videoData.registeredBy !== user.uid &&
-            videoData.registeredBy !== user.email
+            videoData.registeredBy !== user.email &&
+            (!myChannelId || videoData.channelId !== myChannelId)
           ) {
             // videoId 보정: Firestore 문서 id가 11자리면 videoId로 간주, 아니면 videoData.videoId 사용
             let videoId = videoData.videoId;
@@ -70,7 +71,7 @@ const WatchQueueTab = ({ filter, onFilterChange, handleImageError, handleWatchVi
       setLoading(false);
     }
     fetchVideos();
-  }, [user]);
+  }, [user, myChannelId]);
 
   // 필터링
   const filteredVideos = videos.filter(video => {
