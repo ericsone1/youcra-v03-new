@@ -455,9 +455,9 @@ function GlobalVideoPlayer() {
                 lineHeight: '1.4',
                 wordBreak: 'break-word'
               }}
-              title={videoList[selectedVideoIdx].title}
+              title={videoList[selectedVideoIdx]?.title || '제목 없음'}
             >
-              {videoList[selectedVideoIdx].title}
+              {videoList[selectedVideoIdx]?.title || '제목 없음'}
             </div>
             
             {/* 시청 시간과 인증 정보 */}

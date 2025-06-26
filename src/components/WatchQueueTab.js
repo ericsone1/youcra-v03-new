@@ -3,22 +3,46 @@ import { motion } from 'framer-motion';
 import { FaPlay, FaThumbsUp, FaHeart } from 'react-icons/fa';
 import { useAuth } from '../hooks/useAuth';
 import { db } from '../firebase';
-import { collection, query, getDocs, orderBy } from 'firebase/firestore';
+import { collection, query, getDocs, orderBy, where, setDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { parseDuration } from './Home/utils/videoUtils';
 
-const WatchQueueTab = ({ filter, onFilterChange, handleImageError, handleWatchVideo, myChannelId }) => {
+const WatchQueueTab = ({ filter, onFilterChange, handleImageError, handleWatchVideo, myChannelId, watchedCounts = {}, selectedCategories = [] }) => {
   const { user } = useAuth();
   const [videos, setVideos] = useState([]);
+  const [priorityVideos, setPriorityVideos] = useState([]); // 내 영상을 시청해준 사람들의 영상
+  const [otherVideos, setOtherVideos] = useState([]); // 일반 영상
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
-  const [sortKey, setSortKey] = useState('duration'); // duration(영상길이순) 기본값
+  const [sortKey, setSortKey] = useState('duration');
 
   useEffect(() => {
     if (!user) return;
     setLoading(true);
-    async function fetchVideos() {
+    async function fetchVideosAndMutuals() {
+      // 1. 내 영상 시청자 uid 추출
+      const myViewerUids = new Set();
       const roomsQuery = query(collection(db, "chatRooms"));
       const roomsSnapshot = await getDocs(roomsQuery);
+      // 내 영상 찾기
+      for (const roomDoc of roomsSnapshot.docs) {
+        const videosQuery = query(
+          collection(db, "chatRooms", roomDoc.id, "videos"),
+          where("registeredBy", "==", user.uid)
+        );
+        const myVideosSnapshot = await getDocs(videosQuery);
+        for (const myVideoDoc of myVideosSnapshot.docs) {
+          // 인증자 서브컬렉션
+          const certsCol = collection(db, "chatRooms", roomDoc.id, "videos", myVideoDoc.id, "certifications");
+          const certsSnap = await getDocs(certsCol);
+          certsSnap.forEach(certDoc => {
+            const certData = certDoc.data();
+            if (certData.uid && certData.uid !== user.uid) {
+              myViewerUids.add(certData.uid);
+            }
+          });
+        }
+      }
+      // 2. 전체 영상 불러오기
       const allVideos = [];
       const videoIdSet = new Set();
       for (const roomDoc of roomsSnapshot.docs) {
@@ -34,26 +58,23 @@ const WatchQueueTab = ({ filter, onFilterChange, handleImageError, handleWatchVi
             videoData.registeredBy !== user.email &&
             (!myChannelId || videoData.channelId !== myChannelId)
           ) {
-            // videoId 보정: Firestore 문서 id가 11자리면 videoId로 간주, 아니면 videoData.videoId 사용
             let videoId = videoData.videoId;
             if ((!videoId || typeof videoId !== 'string' || videoId.length !== 11) && videoDoc.id && videoDoc.id.length === 11) {
               videoId = videoDoc.id;
             }
-            // videoId가 11자리 문자열이 아니면 제외
             if (!videoId || typeof videoId !== 'string' || videoId.length !== 11) return;
-            // duration 파싱 (숏폼/롱폼 분류용)
             let durationSec = 0;
             if (typeof videoData.duration === 'string') {
               durationSec = parseDuration(videoData.duration);
             } else if (typeof videoData.duration === 'number') {
               durationSec = videoData.duration;
             }
-            if (videoIdSet.has(videoId)) return; // deduplicate
+            if (videoIdSet.has(videoId)) return;
             videoIdSet.add(videoId);
             allVideos.push({
               ...videoData,
               id: videoDoc.id,
-              videoId, // 반드시 포함
+              videoId,
               roomId: roomDoc.id,
               roomName: roomDoc.data().name || '제목 없음',
               durationSec,
@@ -62,45 +83,103 @@ const WatchQueueTab = ({ filter, onFilterChange, handleImageError, handleWatchVi
               channelName: videoData.channelTitle || videoData.channel || '',
               views: videoData.views || 0,
               watchCount: videoData.watchCount || 0,
+              registeredBy: videoData.registeredBy,
             });
           }
         });
       }
-      console.log('시청 리스트', allVideos); // 디버깅용
+      // 3. priority/other 분리 및 구독여부 확인
+      const priority = [];
+      const others = [];
+      // 구독여부 병렬 fetch
+      const subscribeChecks = [];
+      allVideos.forEach(v => {
+        if (myViewerUids.has(v.registeredBy)) {
+          subscribeChecks.push(
+            (async () => {
+              let isSubscribed = false;
+              if (myChannelId) {
+                const subDocId = `${v.registeredBy}_${myChannelId}`;
+                const subDocRef = doc(db, 'subscriptions', subDocId);
+                const subDocSnap = await getDocs(query(collection(db, 'subscriptions'), where('subscriberUid', '==', v.registeredBy), where('channelId', '==', myChannelId)));
+                isSubscribed = !subDocSnap.empty;
+              }
+              priority.push({ ...v, isMutual: true, isSubscribed });
+            })()
+          );
+        } else {
+          others.push(v);
+        }
+      });
+      await Promise.all(subscribeChecks);
       setVideos(allVideos);
+      setPriorityVideos(priority);
+      setOtherVideos(others);
       setLoading(false);
     }
-    fetchVideos();
+    fetchVideosAndMutuals();
   }, [user, myChannelId]);
 
-  // 필터링
-  const filteredVideos = videos.filter(video => {
-    if (filter === 'all') return true;
+  // 필터링/정렬
+  const isTypeFilter = (filter === 'short' || filter === 'long');
+
+  const matchesCategory = (video) => {
+    if (!selectedCategories || selectedCategories.length === 0) return true;
+    const videoCats = Array.isArray(video.categories) ? video.categories : (video.category ? [video.category] : []);
+    if (videoCats.length === 0) return false;
+    return videoCats.some((cat) => selectedCategories.includes(cat));
+  };
+
+  const filteredPriority = priorityVideos.filter(video => {
+    if (filter !== 'rewatch' && !matchesCategory(video)) return false;
+    if (!isTypeFilter) return true; // 'all' 또는 'rewatch' 탭이면 타입 필터링 없음
     return video.type === filter;
   });
 
-  // 정렬
-  const sortedVideos = [...filteredVideos].sort((a, b) => {
-    switch (sortKey) {
-      case 'views':
-        return b.views - a.views;
-      case 'duration':
-        return a.durationSec - b.durationSec; // 짧은 영상 먼저
-      case 'watch':
-        return b.watchCount - a.watchCount;
-      default: // recent
-        return 0;
-    }
+  const filteredOthers = otherVideos.filter(video => {
+    if (filter !== 'rewatch' && !matchesCategory(video)) return false;
+    if (!isTypeFilter) return true;
+    return video.type === filter;
   });
+  const sortFn = (a, b) => {
+    switch (sortKey) {
+      case 'views': return b.views - a.views;
+      case 'duration': return a.durationSec - b.durationSec;
+      case 'watch': return b.watchCount - a.watchCount;
+      default: return 0;
+    }
+  };
+  const sortedPriority = [...filteredPriority].sort(sortFn);
+  const sortedOthers = [...filteredOthers].sort(sortFn);
 
-  // 페이지네이션
+  // 미시청/재시청 분리
+  const unwatchedPriority = sortedPriority.filter(video => !(watchedCounts[video.videoId] || watchedCounts[video.id]));
+  const unwatchedOthers = sortedOthers.filter(video => !(watchedCounts[video.videoId] || watchedCounts[video.id]));
+  const rewatchList = [...sortedPriority, ...sortedOthers].filter(video => (watchedCounts[video.videoId] || watchedCounts[video.id]));
+
+  // 페이지네이션 (미시청만 적용)
   const VIDEOS_PER_PAGE = 5;
-  const displayedVideos = sortedVideos.slice(0, (page + 1) * VIDEOS_PER_PAGE);
+  const displayedUnwatchedOthers = unwatchedOthers.slice(0, Math.max(0, (page + 1) * VIDEOS_PER_PAGE - unwatchedPriority.length));
 
-  // 정렬, 필터, 영상 목록이 바뀌면 페이지 초기화
   useEffect(() => {
     setPage(0);
   }, [filter, sortKey, videos]);
+
+  // 구독요청 핸들러
+  const handleSubscribeRequest = async (toUid) => {
+    if (!user) return;
+    try {
+      const reqRef = doc(collection(db, 'subscribeRequests'));
+      await setDoc(reqRef, {
+        fromUid: user.uid,
+        toUid,
+        createdAt: serverTimestamp(),
+      });
+      alert('구독 요청이 전송되었습니다!');
+    } catch (e) {
+      alert('구독 요청 전송 실패: ' + e.message);
+    }
+  };
 
   return (
     <motion.div
@@ -110,6 +189,7 @@ const WatchQueueTab = ({ filter, onFilterChange, handleImageError, handleWatchVi
       transition={{ duration: 0.3 }}
       className="space-y-3 mx-4"
     >
+      {/* 기존 필터/정렬 UI */}
       <div className="flex flex-wrap gap-2 mb-4">
         <button
           className={`px-4 py-2 rounded-full text-sm font-medium ${filter === 'all' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
@@ -123,6 +203,10 @@ const WatchQueueTab = ({ filter, onFilterChange, handleImageError, handleWatchVi
           className={`px-4 py-2 rounded-full text-sm font-medium ${filter === 'long' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
           onClick={() => onFilterChange('long')}
         >롱폼</button>
+        <button
+          className={`px-4 py-2 rounded-full text-sm font-medium ${filter === 'rewatch' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+          onClick={() => onFilterChange('rewatch')}
+        >재시청</button>
         <select
           value={sortKey}
           onChange={(e)=>setSortKey(e.target.value)}
@@ -136,72 +220,212 @@ const WatchQueueTab = ({ filter, onFilterChange, handleImageError, handleWatchVi
       </div>
       {loading ? (
         <div className="text-center py-8 text-gray-500">영상 목록을 불러오는 중...</div>
-      ) : sortedVideos.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
-          <FaPlay className="text-4xl mx-auto mb-2 opacity-30" />
-          <p>시청할 영상이 없습니다</p>
-          <p className="text-sm">다른 사용자가 영상을 등록하면 나타납니다</p>
-        </div>
-      ) : (
-        displayedVideos.map((video, index) => (
-          <motion.div
-            key={video.id}
-            className="bg-white rounded-2xl p-4 shadow-sm"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 * index }}
-          >
-            <div className="flex gap-3">
-              <img
-                src={video.thumbnailUrl}
-                alt={video.title}
-                className="w-20 h-14 rounded-lg object-cover"
-                onError={handleImageError}
-              />
-              <div className="flex-1">
-                <h4 className="font-medium text-sm mb-1">{video.title}</h4>
-                <p className="text-xs text-gray-500 mb-2">{video.channelName}</p>
-                <div className="flex items-center gap-2 text-xs text-gray-500">
-                  <span>{typeof video.duration === 'number' ? `${Math.floor(video.duration/60)}:${(video.duration%60).toString().padStart(2,'0')}` : video.duration}</span>
-                  <span>•</span>
-                  <span>조회수 {video.views?.toLocaleString?.() || 0}</span>
-                  <span className={`px-2 py-1 rounded-full text-xs ${
-                    video.type === 'short' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'
-                  }`}>
-                    {video.type === 'short' ? '숏폼' : '롱폼'}
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-2 mt-3">
-              <button
-                onClick={() => handleWatchVideo(video, sortedVideos)}
-                className="flex-1 bg-red-500 text-white py-2 rounded-lg text-sm font-medium hover:bg-red-600 transition-colors"
+      ) : filter === 'rewatch' ? (
+        rewatchList.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            <FaPlay className="text-4xl mx-auto mb-2 opacity-30" />
+            <p>재시청할 영상이 없습니다</p>
+          </div>
+        ) : (
+          <>
+            {rewatchList.map((video, index) => (
+              <motion.div
+                key={video.id}
+                className="bg-white rounded-2xl p-4 shadow-sm border-2 border-blue-300"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 * index }}
               >
-                <FaPlay className="inline mr-1" />
-                시청하기
-              </button>
-              <button className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-                <FaThumbsUp className="text-gray-600" />
-              </button>
-              <button className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
-                <FaHeart className="text-gray-600" />
-              </button>
-            </div>
-          </motion.div>
-        ))
-      )}
-
-      {/* 더보기 버튼 */}
-      {displayedVideos.length < sortedVideos.length && (
-        <div className="text-center mt-4">
-          <button
-            className="px-6 py-2 bg-gray-100 hover:bg-gray-200 rounded-full text-sm font-medium text-gray-600"
-            onClick={() => setPage(prev => prev + 1)}
-          >
-            더보기
-          </button>
-        </div>
+                <div className="flex gap-3">
+                  <img
+                    src={video.thumbnailUrl}
+                    alt={video.title}
+                    className="w-20 h-14 rounded-lg object-cover"
+                    onError={handleImageError}
+                  />
+                  <div className="flex-1">
+                    <h4 className="font-medium text-sm mb-1">{video.title}</h4>
+                    <p className="text-xs text-gray-500 mb-2">{video.channelName}</p>
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <span>{typeof video.duration === 'number' ? `${Math.floor(video.duration/60)}:${(video.duration%60).toString().padStart(2,'0')}` : video.duration}</span>
+                      <span>•</span>
+                      <span>조회수 {video.views?.toLocaleString?.() || 0}</span>
+                      {video.isMutual ? (
+                        <span className="px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-600 font-bold">상호시청</span>
+                      ) : (
+                        <>
+                          <span className="px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-600 font-bold">나를 구독하지 않았습니다</span>
+                          <button
+                            className="ml-2 px-2 py-1 rounded bg-yellow-400 text-white text-xs font-bold hover:bg-yellow-500 transition"
+                            onClick={() => handleSubscribeRequest(video.registeredBy)}
+                          >구독요청</button>
+                        </>
+                      )}
+                      <span className={`px-2 py-1 rounded-full text-xs ${
+                        video.type === 'short' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'
+                      }`}>
+                        {video.type === 'short' ? '숏폼' : '롱폼'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={() => handleWatchVideo(video, [...sortedPriority, ...sortedOthers])}
+                    className={`flex-1 text-white py-2 rounded-lg text-sm font-medium transition-colors ${(watchedCounts[video.videoId] || watchedCounts[video.id]) ? 'bg-blue-500 hover:bg-blue-600' : 'bg-red-500 hover:bg-red-600'}`}
+                  >
+                    {(watchedCounts[video.videoId] || watchedCounts[video.id]) ? (
+                      `${watchedCounts[video.videoId] || watchedCounts[video.id]}회 시청완료 (재시청하기)`
+                    ) : (
+                      <><FaPlay className="inline mr-1" />시청하기</>
+                    )}
+                  </button>
+                  <button className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+                    <FaThumbsUp className="text-gray-600" />
+                  </button>
+                  <button className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+                    <FaHeart className="text-gray-600" />
+                  </button>
+                </div>
+              </motion.div>
+            ))}
+          </>
+        )
+      ) : (
+        (unwatchedPriority.length + unwatchedOthers.length === 0) ? (
+          <div className="text-center py-8 text-gray-500">
+            <FaPlay className="text-4xl mx-auto mb-2 opacity-30" />
+            <p>시청할 영상이 없습니다</p>
+            <p className="text-sm">다른 사용자가 영상을 등록하면 나타납니다</p>
+          </div>
+        ) : (
+          <>
+            {/* 미시청 우선순위(상호시청) 영상 */}
+            {unwatchedPriority.map((video, index) => (
+              <motion.div
+                key={video.id}
+                className="bg-white rounded-2xl p-4 shadow-sm border-2 border-blue-300"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 * index }}
+              >
+                <div className="flex gap-3">
+                  <img
+                    src={video.thumbnailUrl}
+                    alt={video.title}
+                    className="w-20 h-14 rounded-lg object-cover"
+                    onError={handleImageError}
+                  />
+                  <div className="flex-1">
+                    <h4 className="font-medium text-sm mb-1">{video.title}</h4>
+                    <p className="text-xs text-gray-500 mb-2">{video.channelName}</p>
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <span>{typeof video.duration === 'number' ? `${Math.floor(video.duration/60)}:${(video.duration%60).toString().padStart(2,'0')}` : video.duration}</span>
+                      <span>•</span>
+                      <span>조회수 {video.views?.toLocaleString?.() || 0}</span>
+                      {video.isSubscribed ? (
+                        <span className="px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-600 font-bold">내 구독자 영상</span>
+                      ) : (
+                        <>
+                          <span className="px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-600 font-bold">나를 구독하지 않았습니다</span>
+                          <button
+                            className="ml-2 px-2 py-1 rounded bg-yellow-400 text-white text-xs font-bold hover:bg-yellow-500 transition"
+                            onClick={() => handleSubscribeRequest(video.registeredBy)}
+                          >구독요청</button>
+                        </>
+                      )}
+                      <span className={`px-2 py-1 rounded-full text-xs ${
+                        video.type === 'short' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'
+                      }`}>
+                        {video.type === 'short' ? '숏폼' : '롱폼'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={() => handleWatchVideo(video, [...sortedPriority, ...sortedOthers])}
+                    className={`flex-1 text-white py-2 rounded-lg text-sm font-medium transition-colors ${(watchedCounts[video.videoId] || watchedCounts[video.id]) ? 'bg-blue-500 hover:bg-blue-600' : 'bg-red-500 hover:bg-red-600'}`}
+                  >
+                    {(watchedCounts[video.videoId] || watchedCounts[video.id]) ? (
+                      `${watchedCounts[video.videoId] || watchedCounts[video.id]}회 시청완료 (재시청하기)`
+                    ) : (
+                      <><FaPlay className="inline mr-1" />시청하기</>
+                    )}
+                  </button>
+                  <button className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+                    <FaThumbsUp className="text-gray-600" />
+                  </button>
+                  <button className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+                    <FaHeart className="text-gray-600" />
+                  </button>
+                </div>
+              </motion.div>
+            ))}
+            {/* 미시청 일반 영상 */}
+            {displayedUnwatchedOthers.map((video, index) => (
+              <motion.div
+                key={video.id}
+                className="bg-white rounded-2xl p-4 shadow-sm"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.1 * (index + unwatchedPriority.length) }}
+              >
+                <div className="flex gap-3">
+                  <img
+                    src={video.thumbnailUrl}
+                    alt={video.title}
+                    className="w-20 h-14 rounded-lg object-cover"
+                    onError={handleImageError}
+                  />
+                  <div className="flex-1">
+                    <h4 className="font-medium text-sm mb-1">{video.title}</h4>
+                    <p className="text-xs text-gray-500 mb-2">{video.channelName}</p>
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <span>{typeof video.duration === 'number' ? `${Math.floor(video.duration/60)}:${(video.duration%60).toString().padStart(2,'0')}` : video.duration}</span>
+                      <span>•</span>
+                      <span>조회수 {video.views?.toLocaleString?.() || 0}</span>
+                      <span className={`px-2 py-1 rounded-full text-xs ${
+                        video.type === 'short' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'
+                      }`}>
+                        {video.type === 'short' ? '숏폼' : '롱폼'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2 mt-3">
+                  <button
+                    onClick={() => handleWatchVideo(video, [...sortedPriority, ...sortedOthers])}
+                    className={`flex-1 text-white py-2 rounded-lg text-sm font-medium transition-colors ${(watchedCounts[video.videoId] || watchedCounts[video.id]) ? 'bg-blue-500 hover:bg-blue-600' : 'bg-red-500 hover:bg-red-600'}`}
+                  >
+                    {(watchedCounts[video.videoId] || watchedCounts[video.id]) ? (
+                      `${watchedCounts[video.videoId] || watchedCounts[video.id]}회 시청완료 (재시청하기)`
+                    ) : (
+                      <><FaPlay className="inline mr-1" />시청하기</>
+                    )}
+                  </button>
+                  <button className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+                    <FaThumbsUp className="text-gray-600" />
+                  </button>
+                  <button className="p-2 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+                    <FaHeart className="text-gray-600" />
+                  </button>
+                </div>
+              </motion.div>
+            ))}
+            {/* 더보기 버튼 */}
+            {displayedUnwatchedOthers.length < unwatchedOthers.length && (
+              <div className="text-center mt-4">
+                <button
+                  className="px-6 py-2 bg-gray-100 hover:bg-gray-200 rounded-full text-sm font-medium text-gray-600"
+                  onClick={() => setPage(prev => prev + 1)}
+                >
+                  더보기
+                </button>
+              </div>
+            )}
+          </>
+        )
       )}
     </motion.div>
   );

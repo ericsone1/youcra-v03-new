@@ -14,11 +14,17 @@ import { useAuth } from '../contexts/AuthContext';
 import { auth } from '../firebase';
 import { ChannelRegisterCard } from './Home/components/ChannelRegisterCard';
 import { CategoryInputBox } from './Home/components/CategoryInputBox';
+import { getDoc, doc } from 'firebase/firestore';
+import { db } from '../firebase';
 
 const Home = () => {
-  const { initializePlayer } = useVideoPlayer();
-  // 인증 완료 감지
-  const { isCertified: playerCertified, roomId: playerRoomId } = useVideoPlayer();
+  const {
+    initializePlayer,
+    isCertified: playerCertified,
+    roomId: playerRoomId,
+    videoList: contextVideoList,
+    selectedVideoIdx
+  } = useVideoPlayer();
 
   // 단계별 진행 상태
   const [completedSteps, setCompletedSteps] = useState([]);
@@ -43,7 +49,11 @@ const Home = () => {
   const [watchedCount, setWatchedCount] = useState(0);
   const [earnedViews, setEarnedViews] = useState(0);
   const [selectedCategories, setSelectedCategories] = useState([]);
-  const [categoryInputCollapsed, setCategoryInputCollapsed] = useState(false);
+  const [categoryInputCollapsed, setCategoryInputCollapsed] = useState(() => {
+    const saved = localStorage.getItem('categoryInputCollapsed');
+    return saved === 'true';
+  });
+  const [watchedCounts, setWatchedCounts] = useState({});
 
   // 기본 이미지 URL들 - useMemo로 메모이제이션
   const defaultImages = useMemo(() => ({
@@ -276,13 +286,12 @@ const Home = () => {
   }, [currentUser]);
 
   // 시청하기 핸들러 (자동재생)
-  const handleWatchVideo = useCallback((video, videoList) => {
-    if (!videoList || videoList.length === 0) return;
-    // id, videoId 모두 비교
-    const idx = videoList.findIndex(
+  const handleWatchVideo = useCallback((video, videoListParam) => {
+    if (!videoListParam || videoListParam.length === 0) return;
+    const idx = videoListParam.findIndex(
       v => v.id === video.id || v.videoId === video.videoId
     );
-    initializePlayer('watchqueue', videoList, idx >= 0 ? idx : 0);
+    initializePlayer('watchqueue', videoListParam, idx >= 0 ? idx : 0);
   }, [initializePlayer]);
 
   // 탭 변경 핸들러
@@ -366,8 +375,102 @@ const Home = () => {
   }, []);
 
   const handleToggleCategoryCard = useCallback(() => {
-    setCategoryInputCollapsed(prev => !prev);
+    setCategoryInputCollapsed(prev => {
+      localStorage.setItem('categoryInputCollapsed', String(!prev));
+      return !prev;
+    });
   }, []);
+
+  // 초기 watchedCounts 로드 (Firestore 우선, 없으면 localStorage)
+  React.useEffect(() => {
+    if (!currentUser) return;
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, 'users', currentUser.uid));
+        if (snap.exists() && snap.data().watchedCounts) {
+          setWatchedCounts(snap.data().watchedCounts);
+          localStorage.setItem(
+            `watchedCounts_${currentUser.uid}`,
+            JSON.stringify(snap.data().watchedCounts)
+          );
+          return;
+        }
+      } catch (e) {
+        console.error('watchedCounts Firestore 로드 실패', e);
+      }
+      // Firestore에 없으면 localStorage 사용
+      const raw = localStorage.getItem(`watchedCounts_${currentUser.uid}`);
+      if (raw) {
+        try {
+          setWatchedCounts(JSON.parse(raw));
+        } catch (_) {}
+      }
+    })();
+  }, [currentUser]);
+
+  // 인증 완료 시 watchedCounts 업데이트
+  React.useEffect(() => {
+    if (playerRoomId === 'watchqueue' && playerCertified && contextVideoList && selectedVideoIdx !== null) {
+      const v = contextVideoList[selectedVideoIdx];
+      if (!v) return;
+      setWatchedCounts(prev => {
+        const updated = { ...prev };
+        if (v.videoId) {
+          updated[v.videoId] = (updated[v.videoId] || 0) + 1;
+        }
+        if (v.id) {
+          updated[v.id] = (updated[v.id] || 0) + 1;
+        }
+        if (currentUser) {
+          localStorage.setItem(`watchedCounts_${currentUser.uid}`, JSON.stringify(updated));
+        }
+        return updated;
+      });
+      handleEarnedView();
+    }
+  }, [playerCertified, playerRoomId, contextVideoList, selectedVideoIdx, currentUser, handleEarnedView]);
+
+  // watchedCounts 변화 시 watchedCount 동기화
+  React.useEffect(() => {
+    const total = Object.values(watchedCounts).reduce((sum, v) => sum + (typeof v === 'number' ? v : 0), 0);
+    setWatchedCount(total);
+  }, [watchedCounts]);
+
+  // videoSelectionCollapsed / categoryInputCollapsed 값이 외부 로직으로 변할 때도 항상 localStorage와 동기화
+  React.useEffect(() => {
+    localStorage.setItem('videoSelectionCollapsed', String(videoSelectionCollapsed));
+  }, [videoSelectionCollapsed]);
+
+  React.useEffect(() => {
+    localStorage.setItem('categoryInputCollapsed', String(categoryInputCollapsed));
+  }, [categoryInputCollapsed]);
+
+  // earnedViews 초기 로드 (Firestore 우선, 없으면 localStorage)
+  React.useEffect(() => {
+    if (!currentUser) return;
+    (async () => {
+      try {
+        const snap = await getDoc(doc(db, 'users', currentUser.uid));
+        if (snap.exists() && snap.data().earnedViews !== undefined) {
+          setEarnedViews(snap.data().earnedViews);
+          localStorage.setItem('earnedViews', String(snap.data().earnedViews));
+          return;
+        }
+      } catch (e) {
+        console.error('earnedViews Firestore 로드 실패', e);
+      }
+      const localEarned = localStorage.getItem('earnedViews');
+      if (localEarned !== null) {
+        setEarnedViews(Number(localEarned));
+      }
+    })();
+  }, [currentUser]);
+
+  React.useEffect(() => {
+    if (selectedVideos.length > 0 && !completedSteps.includes(2)) {
+      setCompletedSteps(prev => [...prev, 2]);
+    }
+  }, [selectedVideos, completedSteps]);
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
@@ -461,6 +564,8 @@ const Home = () => {
               handleImageError={handleImageError}
               handleWatchVideo={handleWatchVideo}
               myChannelId={channelInfo?.channelId}
+              watchedCounts={watchedCounts}
+              selectedCategories={selectedCategories}
             />
           ) : (
             <MyVideosTab
