@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { FaUsers } from 'react-icons/fa';
 
-const MyVideosTab = ({ selectedVideos, myVideos, mockMyVideos, handleImageError }) => (
+const MyVideosTab = ({ selectedVideos, myVideos, handleImageError }) => (
   <motion.div
     initial={{ opacity: 0, x: 20 }}
     animate={{ opacity: 1, x: 0 }}
@@ -11,7 +11,7 @@ const MyVideosTab = ({ selectedVideos, myVideos, mockMyVideos, handleImageError 
     className="space-y-3 mx-4"
   >
     {selectedVideos.map((videoId, index) => {
-      const video = (myVideos.length > 0 ? myVideos : mockMyVideos).find(v => v.id === videoId);
+      const video = myVideos.find(v => v.id === videoId);
       if (!video) return null;
       return (
         <motion.div

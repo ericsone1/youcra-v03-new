@@ -15,9 +15,7 @@ import { auth } from '../firebase';
 import { ChannelRegisterCard } from './Home/components/ChannelRegisterCard';
 
 const Home = () => {
-  const { initializePlayer } = useVideoPlayer();
-  // 인증 완료 감지
-  const { isCertified: playerCertified, roomId: playerRoomId } = useVideoPlayer();
+  const { initializePlayer, isCertified: playerCertified, roomId: playerRoomId, selectedVideoIdx, videoList } = useVideoPlayer();
 
   // 단계별 진행 상태
   const [completedSteps, setCompletedSteps] = useState([]);
@@ -48,7 +46,62 @@ const Home = () => {
     videoThumbnail: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIwIiBoZWlnaHQ9IjE4MCIgdmlld0JveD0iMCAwIDMyMCAxODAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMjAiIGhlaWdodD0iMTgwIiBmaWxsPSIjRjNGNEY2Ii8+CjxjaXJjbGUgY3g9IjE2MCIgY3k9IjkwIiByPSIzMCIgZmlsbD0iI0VGNDQ0NCIvPgo8cGF0aCBkPSJNMTUwIDc1TDE3NSA5MEwxNTAgMTA1Vjc1WiIgZmlsbD0iI0ZGRkZGRiIvPgo8L3N2Zz4K'
   }), []);
 
-  // Mock 데이터 제거 - 실제 사용자 데이터만 사용
+  // 임시 데이터 - useMemo로 메모이제이션
+  const mockWatchQueue = useMemo(() => [
+    {
+      id: '1',
+      title: '맛있는 요리 레시피 공유',
+      channelName: '요리왕김소연',
+      thumbnailUrl: defaultImages.videoThumbnail,
+      duration: '3:24',
+      type: 'short',
+      views: 1200,
+      isWatched: false
+    },
+    {
+      id: '2',
+      title: '10분만에 완성하는 홈트레이닝',
+      channelName: '헬스트레이너박',
+      thumbnailUrl: defaultImages.videoThumbnail,
+      duration: '10:15',
+      type: 'long',
+      views: 850,
+      isWatched: false
+    }
+  ], [defaultImages.videoThumbnail]);
+
+  const mockMyVideos = useMemo(() => [
+    {
+      id: 'my1',
+      title: '내가 올린 영상 1',
+      thumbnailUrl: defaultImages.videoThumbnail,
+      duration: '2:30',
+      type: 'short',
+      watchProgress: 75,
+      totalViewers: 12,
+      currentViewers: 3
+    },
+    {
+      id: 'my2',
+      title: '내가 올린 영상 2',
+      thumbnailUrl: defaultImages.videoThumbnail,
+      duration: '5:15',
+      type: 'long',
+      watchProgress: 45,
+      totalViewers: 8,
+      currentViewers: 1
+    },
+    {
+      id: 'my3',
+      title: '내가 올린 영상 3',
+      thumbnailUrl: defaultImages.videoThumbnail,
+      duration: '1:45',
+      type: 'short',
+      watchProgress: 90,
+      totalViewers: 15,
+      currentViewers: 2
+    }
+  ], [defaultImages.videoThumbnail]);
 
   // 단계 완료 처리 - useCallback으로 메모이제이션
   const completeStep = useCallback((stepNumber) => {
@@ -69,9 +122,9 @@ const Home = () => {
     e.target.src = defaultImages.channelAvatar;
   }, [defaultImages.channelAvatar]);
 
-  // 페이지네이션 상수 및 로직 - 실제 myVideos만 사용
+  // 페이지네이션 상수 및 로직
   const VIDEOS_PER_PAGE = 7;
-  const totalVideos = myVideos;
+  const totalVideos = myVideos.length > 0 ? myVideos : mockMyVideos;
   const totalPages = Math.ceil(totalVideos.length / VIDEOS_PER_PAGE);
   const startIndex = currentPage * VIDEOS_PER_PAGE;
   const endIndex = startIndex + VIDEOS_PER_PAGE;
@@ -110,9 +163,21 @@ const Home = () => {
         // 내 영상이 시청된 수 불러오기 (localStorage 우선, 없으면 Firestore)
         const localEarned = localStorage.getItem('earnedViews');
         if (localEarned) {
-          setEarnedViews(Number(localEarned));
+          const count = Number(localEarned);
+          // 비정상적으로 큰 값이면 0으로 리셋 (100 이상)
+          if (count > 100) {
+            setEarnedViews(0);
+            localStorage.setItem('earnedViews', '0');
+          } else {
+            setEarnedViews(count);
+          }
         } else if (profile.earnedViews !== undefined) {
-          setEarnedViews(profile.earnedViews);
+          const count = profile.earnedViews;
+          if (count > 100) {
+            setEarnedViews(0);
+          } else {
+            setEarnedViews(count);
+          }
         }
 
         // 채널 실영상 가져오기
@@ -133,8 +198,31 @@ const Home = () => {
     loadProfile();
   }, [currentUser]);
 
+  // 최초 마운트 시 watchedCount 불러오기
+  React.useEffect(() => {
+    const localWatched = localStorage.getItem('watchedCount');
+    if (localWatched) {
+      const count = Number(localWatched);
+      // 비정상적으로 큰 값이면 0으로 리셋 (100 이상)
+      if (count > 100) {
+        setWatchedCount(0);
+        localStorage.setItem('watchedCount', '0');
+      } else {
+        setWatchedCount(count);
+      }
+    }
+  }, []);
+
   // 채널 연동 핸들러
   const handleChannelConnect = useCallback(async () => {
+    // 이전 선택/단계 초기화
+    setSelectedVideos([]);
+    localStorage.removeItem('selectedVideos');
+    setCompletedSteps(prev => prev.filter(s => s !== 2));
+    if (currentUser) {
+      updateUserProfile(currentUser.uid, { selectedVideos: [] }).catch(console.error);
+    }
+
     if (!channelUrl.trim()) {
       setChannelError('채널 URL을 입력해주세요.');
       return;
@@ -193,13 +281,13 @@ const Home = () => {
             longs: videos.filter(v => v.type === 'long').length
           });
         } else {
-          console.warn('⚠️ 영상이 없음');
-          setMyVideos([]);
+          console.warn('⚠️ 영상이 없어 Mock 데이터 사용');
+          setMyVideos(mockMyVideos);
           resetPagination();
         }
               } catch (videoError) {
           console.error('❌ 영상 목록 로드 실패:', videoError);
-          setMyVideos([]);
+          setMyVideos(mockMyVideos);
           resetPagination();
         } finally {
         setVideosLoading(false);
@@ -215,7 +303,7 @@ const Home = () => {
     } finally {
       setChannelLoading(false);
     }
-  }, [channelUrl, defaultImages.channelAvatar, completeStep, resetPagination]);
+  }, [channelUrl, defaultImages.channelAvatar, completeStep, mockMyVideos, resetPagination]);
 
   // 구독자 수 포맷팅 함수
   const formatSubscriberCount = useCallback((count) => {
@@ -285,13 +373,20 @@ const Home = () => {
     return min * 60 + sec;
   }
 
-  // 시청 대기열은 실제 데이터에서 가져올 예정 - 현재는 빈 배열
-  const filteredWatchQueue = [];
+  const filteredWatchQueue = mockWatchQueue.filter(video => {
+    const seconds = parseDuration(video.duration);
+    if (watchFilter === 'all') return true;
+    if (watchFilter === 'short') return seconds <= 180;
+    if (watchFilter === 'long') return seconds > 180;
+    return true;
+  });
 
   // 내 영상이 시청된 수 증가 (인증/시청 발생 시 호출)
-  const handleEarnedView = useCallback(() => {
+  const handleEarnedView = useCallback((durationSec = 0) => {
     setEarnedViews(prev => {
-      const newCount = prev + 1;
+      // 시청시간 10분당 1크레딧 차감 (최소 1)
+      const creditDeducted = Math.max(1, Math.ceil(durationSec / 600));
+      const newCount = prev + creditDeducted;
       // Firestore, localStorage 모두 저장
       if (currentUser) {
         updateUserProfile(currentUser.uid, { earnedViews: newCount });
@@ -303,35 +398,68 @@ const Home = () => {
 
   // 인증 완료 감지 (내 영상이 시청된 경우 handleEarnedView 호출)
   React.useEffect(() => {
+    const currentVideoId = videoList && selectedVideoIdx !== null && videoList[selectedVideoIdx]?.id;
+    const currentVideo = videoList && selectedVideoIdx !== null ? videoList[selectedVideoIdx] : null;
+    if (!currentVideoId || !currentVideo || !currentUser) return;
+
+    // 내 영상 여부
+    const isMyVideo = myVideos.some(v => v.id === currentVideoId);
+    // 시청자가 영상 소유자인지
+    const isMe = currentVideo.ownerId === currentUser.uid;
+
     if (playerRoomId === 'watchqueue' && playerCertified) {
-      setWatchedCount((prev) => prev + 1);
-      handleEarnedView();
+      // 1. 내가 남의 영상을 시청한 경우
+      if (!isMe) {
+        const durationSec = currentVideo.durationSec || currentVideo.duration || 0;
+        const creditEarned = Math.max(1, Math.ceil(durationSec / 600));
+        const newCount = watchedCount + creditEarned;
+        setWatchedCount(newCount);
+        localStorage.setItem('watchedCount', String(newCount));
+
+        // watched video ids 저장
+        const watchedId = currentVideo.videoId || currentVideoId;
+        const key = `watchedCounts_${currentUser.uid}`;
+        const counts = JSON.parse(localStorage.getItem(key) || '{}');
+        
+        // 기존 값이 비정상적으로 크면 1로 리셋 후 증가
+        const currentCount = counts[watchedId] || 0;
+        if (currentCount > 100) {
+          counts[watchedId] = 2; // 1로 리셋 후 +1
+        } else {
+          counts[watchedId] = currentCount + 1;
+        }
+        
+        localStorage.setItem(key, JSON.stringify(counts));
+      }
+      // 2. 내 영상을 다른 사람이 시청한 경우
+      if (isMyVideo && !isMe) {
+        const durationSec = currentVideo.durationSec || currentVideo.duration || 0;
+        handleEarnedView(durationSec);
+      }
     }
-  }, [playerCertified, playerRoomId, handleEarnedView]);
+  }, [playerCertified, playerRoomId, handleEarnedView, myVideos, selectedVideoIdx, videoList, currentUser, watchedCount]);
+
+  // 노출 크레딧을 프로필에 저장
+  React.useEffect(() => {
+    if (currentUser) {
+      const exposureCredit = watchedCount - earnedViews;
+      updateUserProfile(currentUser.uid, { exposureCredit });
+    }
+  }, [watchedCount, earnedViews, currentUser]);
 
   // 채널 수정 (리셋)
   const handleChannelEdit = useCallback(async () => {
     setChannelConnected(false);
     setChannelInfo(null);
-    setCompletedSteps([]); // 모든 단계 초기화
-    setSelectedVideos([]); // 선택된 영상 초기화
-    setMyVideos([]); // 내 영상 목록 초기화
-    setVideoSelectionCollapsed(false); // 영상 선택 카드 펼치기
-    setCurrentPage(0); // 페이지네이션 초기화
-    
-    // 프로필에서 채널 관련 정보 제거
+    setSelectedVideos([]);
+    localStorage.removeItem('selectedVideos');
+    setCompletedSteps(prev => prev.filter(s => ![1,2].includes(s)));
+    // 프로필에서 channelInfo 제거
     try {
       if (currentUser) {
-        await updateUserProfile(currentUser.uid, { 
-          channelInfo: null,
-          selectedVideos: []
-        });
+        await updateUserProfile(currentUser.uid, { channelInfo: null, selectedVideos: [] });
       }
     } catch(e){console.error(e);} 
-    
-    // localStorage도 초기화
-    localStorage.removeItem('selectedVideos');
-    localStorage.removeItem('videoSelectionCollapsed');
   }, [currentUser]);
 
   // 카드 열림/닫힘 토글 핸들러 (localStorage에도 저장)
@@ -341,6 +469,26 @@ const Home = () => {
       return !prev;
     });
   }, []);
+
+  // 카드 열림/닫힘 상태 저장(useEffect로 변화 감지)
+  React.useEffect(() => {
+    localStorage.setItem('videoSelectionCollapsed', String(videoSelectionCollapsed));
+  }, [videoSelectionCollapsed]);
+
+  // 보정: 선택 완료 전에는 카드가 자동으로 펼쳐지도록
+  React.useEffect(() => {
+    if (videoSelectionCollapsed && !completedSteps.includes(2)) {
+      setVideoSelectionCollapsed(false);
+    }
+  }, [videoSelectionCollapsed, completedSteps]);
+
+  // 영상 선택 저장 핸들러 (명시적으로 저장 버튼 클릭 시에만 호출)
+  const handleSaveSelectedVideos = useCallback(() => {
+    if (selectedVideos.length > 0 && !completedSteps.includes(2)) {
+      setCompletedSteps((prev) => [...prev, 2]);
+      setVideoSelectionCollapsed(true);
+    }
+  }, [selectedVideos, completedSteps]);
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
@@ -414,13 +562,17 @@ const Home = () => {
           handlePageChange={handlePageChange}
           completeStep={completeStep}
           setVideoSelectionCollapsedTrue={() => setVideoSelectionCollapsed(true)}
+          mockMyVideos={mockMyVideos}
+          handleSaveSelectedVideos={handleSaveSelectedVideos}
         />
         <MainPlatformStep
           completedSteps={completedSteps}
           watchedCount={watchedCount}
           earnedViews={earnedViews}
+          exposureCredit={watchedCount - earnedViews}
           activeTab={activeTab}
           handleTabChange={setActiveTab}
+          mockWatchQueue={mockWatchQueue}
           earnedViewsLabel="내 영상이 시청된 수"
         >
           {activeTab === 'watch' ? (
@@ -434,6 +586,7 @@ const Home = () => {
             <MyVideosTab
               selectedVideos={selectedVideos}
               myVideos={myVideos}
+              mockMyVideos={mockMyVideos}
               handleImageError={handleImageError}
             />
           )}

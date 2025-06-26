@@ -17,6 +17,8 @@ const VideoSelectionStep = ({
   handlePageChange,
   completeStep,
   setVideoSelectionCollapsedTrue,
+  mockMyVideos,
+  handleSaveSelectedVideos,
 }) => (
   <AnimatePresence initial={false}>
     {completedSteps.includes(1) && (
@@ -38,30 +40,28 @@ const VideoSelectionStep = ({
             className="flex justify-between items-center mb-4 cursor-pointer"
             onClick={() => setVideoSelectionCollapsed(!videoSelectionCollapsed)}
           >
-            <h3 className="text-xl font-bold">시청받을 영상 선택</h3>
+            <h3 className="text-xl font-bold">유크라에 노출할 영상을 선택해주세요</h3>
             <div className="flex items-center gap-2">
               <span className="text-sm text-gray-500">
                 {selectedVideos.length}/3 선택
                 {totalPages > 1 && !videosLoading && ` • ${currentPage + 1}/${totalPages} 페이지`}
               </span>
-              <motion.div
-                animate={{ rotate: videoSelectionCollapsed ? 0 : 180 }}
-                transition={{ duration: 0.2 }}
-              >
-                <FaChevronDown className="text-gray-400" />
-              </motion.div>
+              {completedSteps.includes(2) && (
+                <motion.div
+                  animate={{ rotate: videoSelectionCollapsed ? 0 : 180 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <FaChevronDown className="text-gray-400" />
+                </motion.div>
+              )}
             </div>
           </div>
 
-          {/* 접혔을 때 표시되는 요약 */}
-          {videoSelectionCollapsed && (
+          {/* 완료 상태 요약 - 접혔을 때 표시 */}
+          {completedSteps.includes(2) && videoSelectionCollapsed && (
             <div className="flex justify-between items-center">
               <div className="text-sm text-gray-600">
-                {completedSteps.includes(2) ? (
-                  <span>✅ 선택 완료 ({selectedVideos.length}개)</span>
-                ) : (
-                  <span>영상을 선택하여 시청받을 콘텐츠를 등록하세요</span>
-                )}
+                <span>✅ 선택 완료 ({selectedVideos.length}개)</span>
               </div>
               <button
                 onClick={(e) => {
@@ -70,7 +70,7 @@ const VideoSelectionStep = ({
                 }}
                 className="px-3 py-1 bg-blue-100 text-blue-600 rounded-lg text-sm hover:bg-blue-200 transition-colors duration-150"
               >
-                {completedSteps.includes(2) ? '수정하기' : '영상 선택하기'}
+                수정하기
               </button>
             </div>
           )}
@@ -189,8 +189,7 @@ const VideoSelectionStep = ({
                 {selectedVideos.length > 0 && !videosLoading && (
                   <button
                     onClick={() => {
-                      completeStep(2);
-                      setVideoSelectionCollapsedTrue();
+                      handleSaveSelectedVideos();
                     }}
                     className="w-full bg-blue-500 text-white py-3 rounded-xl font-medium hover:bg-blue-600 transition-colors duration-150"
                   >

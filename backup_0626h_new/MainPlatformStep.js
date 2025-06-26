@@ -6,8 +6,10 @@ const MainPlatformStep = ({
   completedSteps,
   watchedCount,
   earnedViews,
+  exposureCredit,
   activeTab,
   handleTabChange,
+  mockWatchQueue,
   children,
 }) => (
   <AnimatePresence>
@@ -26,6 +28,12 @@ const MainPlatformStep = ({
         >
           {/* 상태 카드 */}
           <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl p-6 mx-4 text-white shadow-lg">
+            {/* 노출 크레딧 */}
+            <div className="text-center mb-4">
+              <div className="text-3xl font-extrabold">{exposureCredit}</div>
+              <div className="text-sm opacity-90">내 노출 크레딧</div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="text-center">
                 <div className="text-2xl font-bold">{watchedCount}</div>
@@ -49,7 +57,7 @@ const MainPlatformStep = ({
               }`}
             >
               <FaPlay className="inline mr-2" />
-              시청할 영상
+              시청할 영상 ({mockWatchQueue.length})
             </button>
             <button
               onClick={() => handleTabChange('myVideos')}
@@ -60,7 +68,7 @@ const MainPlatformStep = ({
               }`}
             >
               <FaUsers className="inline mr-2" />
-              내 영상 현황
+              내영상 시청현황
             </button>
           </div>
 
