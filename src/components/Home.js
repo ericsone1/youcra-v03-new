@@ -13,6 +13,7 @@ import { getUserProfile, updateUserProfile } from '../services/userService';
 import { useAuth } from '../contexts/AuthContext';
 import { auth } from '../firebase';
 import { ChannelRegisterCard } from './Home/components/ChannelRegisterCard';
+import { CategoryInputBox } from './Home/components/CategoryInputBox';
 
 const Home = () => {
   const { initializePlayer } = useVideoPlayer();
@@ -41,6 +42,8 @@ const Home = () => {
   const [currentPage, setCurrentPage] = useState(0);
   const [watchedCount, setWatchedCount] = useState(0);
   const [earnedViews, setEarnedViews] = useState(0);
+  const [selectedCategories, setSelectedCategories] = useState([]);
+  const [categoryInputCollapsed, setCategoryInputCollapsed] = useState(false);
 
   // 기본 이미지 URL들 - useMemo로 메모이제이션
   const defaultImages = useMemo(() => ({
@@ -113,6 +116,14 @@ const Home = () => {
           setEarnedViews(Number(localEarned));
         } else if (profile.earnedViews !== undefined) {
           setEarnedViews(profile.earnedViews);
+        }
+
+        // 카테고리 불러오기 (localStorage 우선, 없으면 Firestore)
+        const localCategories = localStorage.getItem('selectedCategories');
+        if (localCategories) {
+          setSelectedCategories(JSON.parse(localCategories));
+        } else if (profile.selectedCategories) {
+          setSelectedCategories(profile.selectedCategories);
         }
 
         // 채널 실영상 가져오기
@@ -197,17 +208,17 @@ const Home = () => {
           setMyVideos([]);
           resetPagination();
         }
-              } catch (videoError) {
-          console.error('❌ 영상 목록 로드 실패:', videoError);
-          setMyVideos([]);
-          resetPagination();
-        } finally {
+      } catch (videoError) {
+        console.error('❌ 영상 목록 로드 실패:', videoError);
+        setMyVideos([]);
+        resetPagination();
+      } finally {
         setVideosLoading(false);
       }
 
       setChannelConnected(true);
       completeStep(1);
-      
+      setCategoryInputCollapsed(false); // 채널 연동 후 카테고리 입력 폼 자동 오픈
       console.log('✅ 채널 연동 완료:', channelInfo.channelTitle);
     } catch (error) {
       console.error('❌ 채널 연동 실패:', error);
@@ -309,6 +320,17 @@ const Home = () => {
     }
   }, [playerCertified, playerRoomId, handleEarnedView]);
 
+  // 카테고리 변경 핸들러
+  const handleCategoriesChange = useCallback((categories) => {
+    setSelectedCategories(categories);
+    // Firestore에 저장
+    if (currentUser) {
+      updateUserProfile(currentUser.uid, { selectedCategories: categories });
+    }
+    // localStorage에도 저장
+    localStorage.setItem('selectedCategories', JSON.stringify(categories));
+  }, [currentUser]);
+
   // 채널 수정 (리셋)
   const handleChannelEdit = useCallback(async () => {
     setChannelConnected(false);
@@ -318,20 +340,21 @@ const Home = () => {
     setMyVideos([]); // 내 영상 목록 초기화
     setVideoSelectionCollapsed(false); // 영상 선택 카드 펼치기
     setCurrentPage(0); // 페이지네이션 초기화
-    
+    setSelectedCategories([]); // 카테고리 초기화
     // 프로필에서 채널 관련 정보 제거
     try {
       if (currentUser) {
         await updateUserProfile(currentUser.uid, { 
           channelInfo: null,
-          selectedVideos: []
+          selectedVideos: [],
+          selectedCategories: []
         });
       }
     } catch(e){console.error(e);} 
-    
     // localStorage도 초기화
     localStorage.removeItem('selectedVideos');
     localStorage.removeItem('videoSelectionCollapsed');
+    localStorage.removeItem('selectedCategories');
   }, [currentUser]);
 
   // 카드 열림/닫힘 토글 핸들러 (localStorage에도 저장)
@@ -340,6 +363,10 @@ const Home = () => {
       localStorage.setItem('videoSelectionCollapsed', String(!prev));
       return !prev;
     });
+  }, []);
+
+  const handleToggleCategoryCard = useCallback(() => {
+    setCategoryInputCollapsed(prev => !prev);
   }, []);
 
   return (
@@ -398,6 +425,10 @@ const Home = () => {
           handleAvatarError={handleAvatarError}
           formatViewCount={formatViewCount}
           handleChannelEdit={handleChannelEdit}
+          selectedCategories={selectedCategories}
+          onCategoriesChange={handleCategoriesChange}
+          categoryInputCollapsed={categoryInputCollapsed}
+          handleToggleCategoryCard={handleToggleCategoryCard}
           handleToggleCard={handleToggleCard}
         />
         <VideoSelectionStep

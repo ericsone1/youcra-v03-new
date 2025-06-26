@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { FaYoutube } from 'react-icons/fa';
 import { FiSettings } from 'react-icons/fi';
+import { CategoryInputBox } from './Home/components/CategoryInputBox';
 
 const ChannelConnectionStep = ({
   channelConnected,
@@ -14,6 +15,11 @@ const ChannelConnectionStep = ({
   handleAvatarError,
   formatViewCount,
   handleChannelEdit,
+  selectedCategories,
+  onCategoriesChange,
+  categoryInputCollapsed,
+  handleToggleCategoryCard,
+  handleToggleCard,
 }) => {
   const [editMode, setEditMode] = useState(false);
   const [showManage, setShowManage] = useState(false);
@@ -49,6 +55,11 @@ const ChannelConnectionStep = ({
               placeholder="유튜브 채널 URL 또는 핸들 입력 (예: @채널명, https://youtube.com/@채널명)"
               className="w-full px-4 py-3 border-2 border-blue-400 rounded-xl focus:border-blue-500 focus:outline-none"
               disabled={channelLoading}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && channelUrl.trim() && !channelLoading) {
+                  handleChannelConnect();
+                }
+              }}
             />
             {channelError && (
               <div className="text-red-500 text-sm bg-red-50 p-3 rounded-lg">
@@ -116,7 +127,7 @@ const ChannelConnectionStep = ({
                 <p className="text-gray-500">구독자 {channelInfo?.subscribers}명</p>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="grid grid-cols-2 gap-4 text-sm mb-4">
               <div className="bg-white rounded-lg p-3">
                 <div className="text-gray-500">업로드 영상</div>
                 <div className="font-bold text-lg">{channelInfo?.videoCount?.toLocaleString() || 0}개</div>
@@ -126,6 +137,23 @@ const ChannelConnectionStep = ({
                 <div className="font-bold text-lg">{formatViewCount(channelInfo?.viewCount)}</div>
               </div>
             </div>
+            {/* 카테고리 입력 UI */}
+            {!categoryInputCollapsed && (
+              <CategoryInputBox
+                selectedCategories={selectedCategories}
+                onCategoriesChange={onCategoriesChange}
+                onComplete={handleToggleCategoryCard}
+              />
+            )}
+            {categoryInputCollapsed && (
+              <button
+                type="button"
+                onClick={handleToggleCategoryCard}
+                className="mt-4 w-full py-3 rounded-lg font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors text-base"
+              >
+                카테고리 변경
+              </button>
+            )}
           </motion.div>
         )}
       </motion.div>
