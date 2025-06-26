@@ -255,7 +255,7 @@ const WatchQueueTab = ({ filter, onFilterChange, handleImageError, handleWatchVi
                         <span className="px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-600 font-bold">상호시청</span>
                       ) : (
                         <>
-                          <span className="px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-600 font-bold">나를 구독하지 않았습니다</span>
+                          <span className="px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-600 font-bold">내채널 미구독자</span>
                           <button
                             className="ml-2 px-2 py-1 rounded bg-yellow-400 text-white text-xs font-bold hover:bg-yellow-500 transition"
                             onClick={() => handleSubscribeRequest(video.registeredBy)}
@@ -333,7 +333,7 @@ const WatchQueueTab = ({ filter, onFilterChange, handleImageError, handleWatchVi
                         <span className="px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-600 font-bold">내 구독자 영상</span>
                       ) : (
                         <>
-                          <span className="px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-600 font-bold">나를 구독하지 않았습니다</span>
+                          <span className="px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-600 font-bold">내채널 미구독자</span>
                           <button
                             className="ml-2 px-2 py-1 rounded bg-yellow-400 text-white text-xs font-bold hover:bg-yellow-500 transition"
                             onClick={() => handleSubscribeRequest(video.registeredBy)}
