@@ -146,13 +146,15 @@ const ChannelConnectionStep = ({
               />
             )}
             {categoryInputCollapsed && (
-              <button
-                type="button"
-                onClick={handleToggleCategoryCard}
-                className="mt-4 w-full py-3 rounded-lg font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors text-base"
-              >
-                카테고리 변경
-              </button>
+              <div className="mt-4 text-center">
+                <button
+                  type="button"
+                  onClick={handleToggleCategoryCard}
+                  className="inline-block px-4 py-2 rounded-md font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition-colors text-sm"
+                >
+                  카테고리 변경
+                </button>
+              </div>
             )}
           </motion.div>
         )}

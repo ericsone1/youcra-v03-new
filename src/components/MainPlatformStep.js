@@ -42,7 +42,7 @@ const MainPlatformStep = ({
           <div className="flex bg-gray-100 rounded-2xl p-1 mx-4">
             <button
               onClick={() => handleTabChange('watch')}
-              className={`flex-1 py-3 rounded-xl font-medium transition-colors duration-150 ${
+              className={`flex-1 py-3 rounded-xl font-medium transition-colors duration-150 whitespace-nowrap text-sm md:text-base ${
                 activeTab === 'watch'
                   ? 'bg-white text-blue-600'
                   : 'text-gray-600 hover:text-gray-800'
@@ -53,14 +53,14 @@ const MainPlatformStep = ({
             </button>
             <button
               onClick={() => handleTabChange('myVideos')}
-              className={`flex-1 py-3 rounded-xl font-medium transition-colors duration-150 ${
+              className={`flex-1 py-3 rounded-xl font-medium transition-colors duration-150 whitespace-nowrap text-sm md:text-base ${
                 activeTab === 'myVideos'
                   ? 'bg-white text-blue-600'
                   : 'text-gray-600 hover:text-gray-800'
               }`}
             >
               <FaUsers className="inline mr-2" />
-              내 영상 현황
+              내영상 시청현황
             </button>
           </div>
 

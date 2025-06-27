@@ -232,42 +232,42 @@ const WatchQueueTab = ({ filter, onFilterChange, handleImageError, handleWatchVi
             {rewatchList.map((video, index) => (
               <motion.div
                 key={video.id}
-                className="bg-white rounded-2xl p-4 shadow-sm border-2 border-blue-300"
+                className="bg-white rounded-2xl p-3 sm:p-4 shadow-sm border border-blue-300 sm:border-2"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 * index }}
               >
-                <div className="flex gap-3">
+                <div className="grid grid-cols-[80px_1fr] gap-x-2 sm:gap-x-3">
                   <img
                     src={video.thumbnailUrl}
                     alt={video.title}
                     className="w-20 h-14 rounded-lg object-cover"
                     onError={handleImageError}
                   />
-                  <div className="flex-1">
+                  <div>
                     <h4 className="font-medium text-sm mb-1">{video.title}</h4>
-                    <p className="text-xs text-gray-500 mb-2">{video.channelName}</p>
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
-                      <span>{typeof video.duration === 'number' ? `${Math.floor(video.duration/60)}:${(video.duration%60).toString().padStart(2,'0')}` : video.duration}</span>
-                      <span>•</span>
-                      <span>조회수 {video.views?.toLocaleString?.() || 0}</span>
-                      {video.isMutual ? (
-                        <span className="px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-600 font-bold">상호시청</span>
-                      ) : (
-                        <>
-                          <span className="px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-600 font-bold">내채널 미구독자</span>
-                          <button
-                            className="ml-2 px-2 py-1 rounded bg-yellow-400 text-white text-xs font-bold hover:bg-yellow-500 transition"
-                            onClick={() => handleSubscribeRequest(video.registeredBy)}
-                          >구독요청</button>
-                        </>
-                      )}
-                      <span className={`px-2 py-1 rounded-full text-xs ${
-                        video.type === 'short' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'
-                      }`}>
-                        {video.type === 'short' ? '숏폼' : '롱폼'}
-                      </span>
-                    </div>
+                    <p className="text-xs text-gray-500">{video.channelName}</p>
+                  </div>
+                  <div className="col-span-2 flex flex-wrap items-center gap-1 sm:gap-2 text-[11px] text-gray-500 mt-1">
+                    <span>{typeof video.duration === 'number' ? `${Math.floor(video.duration/60)}:${(video.duration%60).toString().padStart(2,'0')}` : video.duration}</span>
+                    <span>•</span>
+                    <span>조회수 {video.views?.toLocaleString?.() || 0}</span>
+                    {video.isMutual ? (
+                      <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-blue-100 text-blue-600 font-bold">상호시청</span>
+                    ) : (
+                      <>
+                        <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-gray-100 text-gray-600 font-bold whitespace-nowrap">내채널 미구독자</span>
+                        <button
+                          className="ml-1 px-2 py-0.5 rounded bg-yellow-400 text-white text-[11px] font-bold hover:bg-yellow-500 transition whitespace-nowrap"
+                          onClick={() => handleSubscribeRequest(video.registeredBy)}
+                        >구독요청</button>
+                      </>
+                    )}
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                      video.type === 'short' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'
+                    }`}>
+                      {video.type === 'short' ? '숏폼' : '롱폼'}
+                    </span>
                   </div>
                 </div>
                 <div className="flex gap-2 mt-3">
@@ -310,42 +310,42 @@ const WatchQueueTab = ({ filter, onFilterChange, handleImageError, handleWatchVi
             {unwatchedPriority.map((video, index) => (
               <motion.div
                 key={video.id}
-                className="bg-white rounded-2xl p-4 shadow-sm border-2 border-blue-300"
+                className="bg-white rounded-2xl p-3 sm:p-4 shadow-sm border border-blue-300 sm:border-2"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 * index }}
               >
-                <div className="flex gap-3">
+                <div className="grid grid-cols-[80px_1fr] gap-x-2 sm:gap-x-3">
                   <img
                     src={video.thumbnailUrl}
                     alt={video.title}
                     className="w-20 h-14 rounded-lg object-cover"
                     onError={handleImageError}
                   />
-                  <div className="flex-1">
+                  <div>
                     <h4 className="font-medium text-sm mb-1">{video.title}</h4>
-                    <p className="text-xs text-gray-500 mb-2">{video.channelName}</p>
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
-                      <span>{typeof video.duration === 'number' ? `${Math.floor(video.duration/60)}:${(video.duration%60).toString().padStart(2,'0')}` : video.duration}</span>
-                      <span>•</span>
-                      <span>조회수 {video.views?.toLocaleString?.() || 0}</span>
-                      {video.isSubscribed ? (
-                        <span className="px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-600 font-bold">내 구독자 영상</span>
-                      ) : (
-                        <>
-                          <span className="px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-600 font-bold">내채널 미구독자</span>
-                          <button
-                            className="ml-2 px-2 py-1 rounded bg-yellow-400 text-white text-xs font-bold hover:bg-yellow-500 transition"
-                            onClick={() => handleSubscribeRequest(video.registeredBy)}
-                          >구독요청</button>
-                        </>
-                      )}
-                      <span className={`px-2 py-1 rounded-full text-xs ${
-                        video.type === 'short' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'
-                      }`}>
-                        {video.type === 'short' ? '숏폼' : '롱폼'}
-                      </span>
-                    </div>
+                    <p className="text-xs text-gray-500">{video.channelName}</p>
+                  </div>
+                  <div className="col-span-2 flex flex-wrap items-center gap-1 sm:gap-2 text-[11px] text-gray-500 mt-1">
+                    <span>{typeof video.duration === 'number' ? `${Math.floor(video.duration/60)}:${(video.duration%60).toString().padStart(2,'0')}` : video.duration}</span>
+                    <span>•</span>
+                    <span>조회수 {video.views?.toLocaleString?.() || 0}</span>
+                    {video.isSubscribed ? (
+                      <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-blue-100 text-blue-600 font-bold whitespace-nowrap">구독자</span>
+                    ) : (
+                      <>
+                        <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-gray-100 text-gray-600 font-bold whitespace-nowrap">내채널 미구독자</span>
+                        <button
+                          className="ml-1 px-2 py-0.5 rounded bg-yellow-400 text-white text-[11px] font-bold hover:bg-yellow-500 transition whitespace-nowrap"
+                          onClick={() => handleSubscribeRequest(video.registeredBy)}
+                        >구독요청</button>
+                      </>
+                    )}
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                      video.type === 'short' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'
+                    }`}>
+                      {video.type === 'short' ? '숏폼' : '롱폼'}
+                    </span>
                   </div>
                 </div>
                 <div className="flex gap-2 mt-3">
@@ -377,31 +377,31 @@ const WatchQueueTab = ({ filter, onFilterChange, handleImageError, handleWatchVi
             {displayedUnwatchedOthers.map((video, index) => (
               <motion.div
                 key={video.id}
-                className="bg-white rounded-2xl p-4 shadow-sm"
+                className="bg-white rounded-2xl p-3 sm:p-4 shadow-sm"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 * (index + unwatchedPriority.length) }}
               >
-                <div className="flex gap-3">
+                <div className="grid grid-cols-[80px_1fr] gap-x-2 sm:gap-x-3">
                   <img
                     src={video.thumbnailUrl}
                     alt={video.title}
                     className="w-20 h-14 rounded-lg object-cover"
                     onError={handleImageError}
                   />
-                  <div className="flex-1">
+                  <div>
                     <h4 className="font-medium text-sm mb-1">{video.title}</h4>
-                    <p className="text-xs text-gray-500 mb-2">{video.channelName}</p>
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
-                      <span>{typeof video.duration === 'number' ? `${Math.floor(video.duration/60)}:${(video.duration%60).toString().padStart(2,'0')}` : video.duration}</span>
-                      <span>•</span>
-                      <span>조회수 {video.views?.toLocaleString?.() || 0}</span>
-                      <span className={`px-2 py-1 rounded-full text-xs ${
-                        video.type === 'short' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'
-                      }`}>
-                        {video.type === 'short' ? '숏폼' : '롱폼'}
-                      </span>
-                    </div>
+                    <p className="text-xs text-gray-500">{video.channelName}</p>
+                  </div>
+                  <div className="col-span-2 flex flex-wrap items-center gap-1 sm:gap-2 text-[11px] text-gray-500 mt-1">
+                    <span>{typeof video.duration === 'number' ? `${Math.floor(video.duration/60)}:${(video.duration%60).toString().padStart(2,'0')}` : video.duration}</span>
+                    <span>•</span>
+                    <span>조회수 {video.views?.toLocaleString?.() || 0}</span>
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                      video.type === 'short' ? 'bg-green-100 text-green-600' : 'bg-orange-100 text-orange-600'
+                    }`}>
+                      {video.type === 'short' ? '숏폼' : '롱폼'}
+                    </span>
                   </div>
                 </div>
                 <div className="flex gap-2 mt-3">
