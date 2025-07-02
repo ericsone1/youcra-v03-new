@@ -281,6 +281,31 @@ export const WatchVideoList = ({
     watchVideosCount: watchVideos.length,
     videoFilter: videoFilter
   });
+  
+  // 첫 번째 영상의 상세 정보 로깅
+  if (watchVideos.length > 0) {
+    console.log('🔍 WatchVideoList - 첫 번째 영상 상세 정보:', {
+      video: watchVideos[0],
+      fields: {
+        id: watchVideos[0].id,
+        videoId: watchVideos[0].videoId,
+        title: watchVideos[0].title,
+        channelTitle: watchVideos[0].channelTitle,
+        channel: watchVideos[0].channel,
+        thumbnail: watchVideos[0].thumbnail,
+        thumbnailUrl: watchVideos[0].thumbnailUrl,
+        duration: watchVideos[0].duration,
+        durationSeconds: watchVideos[0].durationSeconds,
+        durationDisplay: watchVideos[0].durationDisplay,
+        views: watchVideos[0].views,
+        viewCount: watchVideos[0].viewCount,
+        likeCount: watchVideos[0].likeCount,
+        uploadedAt: watchVideos[0].uploadedAt,
+        publishedAt: watchVideos[0].publishedAt,
+        type: watchVideos[0].type
+      }
+    });
+  }
 
   // YouTube API 데이터가 있으면 우선 사용, 없으면 Firestore 데이터 사용
   let sourceVideos = watchVideos.length > 0 ? watchVideos : ucraVideos;

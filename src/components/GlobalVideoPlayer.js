@@ -16,11 +16,22 @@ function GlobalVideoPlayer() {
     resetPlayerState
   } = useVideoPlayer();
 
-  console.log('🎮 GlobalVideoPlayer 렌더링:', { selectedVideoId, playerLoading });
+  console.log('🎮 GlobalVideoPlayer 렌더링:', { 
+    selectedVideoId, 
+    playerLoading,
+    isPlaying,
+    videoDuration,
+    timestamp: new Date().toLocaleTimeString()
+  });
   
   // selectedVideoId 변경 감지
   useEffect(() => {
-    console.log('🔄 GlobalVideoPlayer - selectedVideoId 변경됨:', selectedVideoId);
+    console.log('🔄 GlobalVideoPlayer - selectedVideoId 변경됨:', {
+      selectedVideoId,
+      playerLoading,
+      isPlaying,
+      timestamp: new Date().toLocaleTimeString()
+    });
   }, [selectedVideoId]);
 
   // =====================

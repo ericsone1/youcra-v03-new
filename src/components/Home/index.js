@@ -167,6 +167,17 @@ function Home() {
       // 상호시청용 데이터 구조로 변환
       const formattedVideos = videos.map((video, index) => {
         console.log(`🔍 [${index}] 원본 비디오 데이터:`, video);
+        console.log(`🔍 [${index}] 세부 정보:`, {
+          id: video.id,
+          title: video.title,
+          channelTitle: video.channelTitle,
+          thumbnailUrl: video.thumbnailUrl,
+          duration: video.duration,
+          durationSeconds: video.durationSeconds,
+          viewCount: video.viewCount,
+          likeCount: video.likeCount,
+          publishedAt: video.publishedAt
+        });
         
         // 안전한 숫자 변환 함수
         const safeNumber = (value) => {
@@ -184,8 +195,11 @@ function Home() {
           videoId: video.id,
           title: video.title || '제목 없음',
           channelTitle: video.channelTitle || channelInfo?.channelTitle || '채널명 없음',
+          channel: video.channelTitle || channelInfo?.channelTitle || '채널명 없음', // WatchVideoList 호환성
+          thumbnail: video.thumbnailUrl || `https://img.youtube.com/vi/${video.id}/mqdefault.jpg`,
           thumbnailUrl: video.thumbnailUrl || `https://img.youtube.com/vi/${video.id}/mqdefault.jpg`,
           duration: safeNumber(video.durationSeconds), // 초 단위 (숫자)
+          durationSeconds: safeNumber(video.durationSeconds), // WatchVideoList에서 사용
           durationDisplay: video.duration || '시간 미확인', // 표시용 (문자열)
           views: safeNumber(video.viewCount),
           viewCount: safeNumber(video.viewCount), // 호환성
@@ -193,7 +207,11 @@ function Home() {
           uploadedAt: formatUploadDate(video.publishedAt),
           publishedAt: video.publishedAt, // 원본 데이터
           progress: 0,
-          type: video.type || (video.durationSeconds <= 180 ? 'short' : 'long') // 타입 결정 (3분 기준)
+          type: video.type || (safeNumber(video.durationSeconds) <= 180 ? 'short' : 'long'), // 타입 결정 (3분 기준)
+          // 추가 필드들 (WatchVideoList와 완전 호환성 확보)
+          youtubeId: video.id,
+          description: video.description || '',
+          tags: video.tags || []
         };
         
         console.log(`✅ [${index}] 변환된 비디오 데이터:`, formatted);
