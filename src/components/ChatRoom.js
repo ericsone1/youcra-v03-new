@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useRef, useLayoutEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { auth, db } from "../firebase";
+import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { auth, db, storage } from "../firebase";
 import {
   collection,
   addDoc,
@@ -12,13 +12,18 @@ import {
   setDoc,
   deleteDoc,
   getDoc,
-  getDocs
+  getDocs,
+  where,
+  runTransaction,
 } from "firebase/firestore";
-import YouTube from 'react-youtube';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
+// import Picker from '@emoji-mart/react';
+// import data from '@emoji-mart/data';
 import Modal from "react-modal";
 import LoadingSpinner from "./common/LoadingSpinner";
 import ErrorMessage from "./common/ErrorMessage";
 import { useVideoPlayer } from "../contexts/VideoPlayerContext";
+// import { MessageList } from './chat/MessageList'; // 임시 비활성화
 import { useChat } from '../hooks/useChat';
 
 const MAX_LENGTH = 200;
@@ -28,17 +33,39 @@ function formatTime(timestamp) {
   const date = timestamp.seconds
     ? new Date(timestamp.seconds * 1000)
     : new Date(timestamp);
-  return (
-    date.getFullYear() +
+  
+  // 날짜 부분
+  const dateStr = date.getFullYear() +
     "-" +
     String(date.getMonth() + 1).padStart(2, "0") +
     "-" +
-    String(date.getDate()).padStart(2, "0") +
-    " " +
-    String(date.getHours()).padStart(2, "0") +
-    ":" +
-    String(date.getMinutes()).padStart(2, "0")
-  );
+    String(date.getDate()).padStart(2, "0");
+  
+  // 시간 부분 (12시간 형식 + 오전/오후)
+  let hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const ampm = hours >= 12 ? "오후" : "오전";
+  hours = hours % 12;
+  hours = hours ? hours : 12; // 0시는 12시로 표시
+  const timeStr = ampm + " " + String(hours).padStart(2, "0") + ":" + minutes;
+  
+  return dateStr + " " + timeStr;
+}
+
+// 시간만 반환하는 함수 추가
+function formatTimeOnly(timestamp) {
+  if (!timestamp) return "";
+  const date = timestamp.seconds
+    ? new Date(timestamp.seconds * 1000)
+    : new Date(timestamp);
+  
+  let hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const ampm = hours >= 12 ? "오후" : "오전";
+  hours = hours % 12;
+  hours = hours ? hours : 12; // 0시는 12시로 표시
+  
+  return ampm + " " + String(hours).padStart(2, "0") + ":" + minutes;
 }
 
 function renderMessageWithPreview(text) {
@@ -119,11 +146,13 @@ async function fetchYoutubeMeta(videoId) {
     const snippet = data.items[0].snippet;
     const duration = data.items[0].contentDetails.duration;
     let seconds = 0;
-    const match = duration.match(/PT(?:(\d+)M)?(?:(\d+)S)?/);
+    // ISO 8601: PT#H#M#S (시간-분-초) 모두 포착
+    const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
     if (match) {
-      const min = parseInt(match[1] || "0", 10);
-      const sec = parseInt(match[2] || "0", 10);
-      seconds = min * 60 + sec;
+      const hour = parseInt(match[1] || "0", 10);
+      const min = parseInt(match[2] || "0", 10);
+      const sec = parseInt(match[3] || "0", 10);
+      seconds = hour * 3600 + min * 60 + sec;
     }
     return {
       title: snippet.title,
@@ -140,24 +169,15 @@ function getYoutubeUrl(videoId) {
   return `https://www.youtube.com/watch?v=${videoId}`;
 }
 
-// 시간 HH:MM 반환 함수 (backup에서 누락되어 오류 발생)  
-function formatTimeOnly(timestamp) {
-  if (!timestamp) return "";
-  const date = timestamp.seconds ? new Date(timestamp.seconds * 1000) : new Date(timestamp);
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${hours}:${minutes}`;
-}
-
 function ChatRoom() {
   const { roomId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   
   // VideoPlayerContext 사용
   const {
     initializePlayer,
-    updateVideoList,
-    handleVideoSelect
+    updateVideoList
   } = useVideoPlayer();
   
   // useChat hook 사용
@@ -197,16 +217,6 @@ function ChatRoom() {
   
   // 로컬 영상 리스트 (영상 등록 확인용)
   const [localVideoList, setLocalVideoList] = useState([]);
-  
-  // === 백업에서 가져온 YouTube 플레이어 관련 State ===
-  const [selectedVideoIdx, setSelectedVideoIdx] = useState(null);
-  const [isCertified, setIsCertified] = useState(false);
-  const [certLoading, setCertLoading] = useState(false);
-  const [watchSeconds, setWatchSeconds] = useState(0);
-  const [videoEnded, setVideoEnded] = useState(false);
-  const [countdown, setCountdown] = useState(5);
-  const playerRef = useRef(null);
-  const autoNextTimer = useRef(null);
   
   // === 영상 인증 관련 State ===
   const [certifiedVideoIds, setCertifiedVideoIds] = useState([]);
@@ -1066,14 +1076,6 @@ function ChatRoom() {
         clearTimeout(longPressTimer.current);
         longPressTimer.current = null;
       }
-      if (autoNextTimer.current) {
-        clearInterval(autoNextTimer.current);
-        autoNextTimer.current = null;
-      }
-      if (playerRef.current && playerRef.current._interval) {
-        clearInterval(playerRef.current._interval);
-        playerRef.current._interval = null;
-      }
     };
   }, []);
 
@@ -1255,93 +1257,6 @@ function ChatRoom() {
   // 채팅방 공유하기 기능
   const [showShareToast, setShowShareToast] = useState(false);
   
-  // === 백업에서 가져온 YouTube 플레이어 핸들러들 ===
-  
-  // 유튜브 플레이어 핸들러
-  const handleYoutubeReady = (event) => {
-    playerRef.current = event.target;
-    setWatchSeconds(0);
-    setVideoEnded(false);
-  };
-
-  const handleYoutubeStateChange = (event) => {
-    if (event.data === 1) { // 재생 중
-      if (!playerRef.current._interval) {
-        playerRef.current._interval = setInterval(() => {
-          setWatchSeconds((prev) => prev + 1);
-        }, 1000);
-      }
-    } else {
-      if (playerRef.current && playerRef.current._interval) {
-        clearInterval(playerRef.current._interval);
-        playerRef.current._interval = null;
-      }
-    }
-  };
-
-  const handleYoutubeEnd = () => {
-    setVideoEnded(true);
-  };
-
-  // 인증 핸들러
-  const handleCertify = async () => {
-    setCertLoading(true);
-    const video = localVideoList[selectedVideoIdx];
-    try {
-      await addDoc(
-        collection(db, "chatRooms", roomId, "videos", video.id, "certifications"),
-        {
-          uid: auth.currentUser.uid,
-          email: auth.currentUser.email,
-          certifiedAt: serverTimestamp(),
-        }
-      );
-      setIsCertified(true);
-    } catch (error) {
-      console.error("인증 오류:", error);
-    }
-    setCertLoading(false);
-  };
-
-  // certAvailable 계산
-  let certAvailable = false;
-  if (
-    selectedVideoIdx !== null &&
-    localVideoList[selectedVideoIdx] &&
-    typeof localVideoList[selectedVideoIdx].duration === "number"
-  ) {
-    certAvailable =
-      localVideoList[selectedVideoIdx].duration >= 180
-        ? watchSeconds >= 180
-        : videoEnded;
-  }
-
-  // 카운트다운 자동 이동 useEffect
-  useEffect(() => {
-    if (certAvailable && !isCertified && !certLoading) {
-      setCountdown(5);
-      autoNextTimer.current = setInterval(() => {
-        setCountdown((prev) => {
-          if (prev <= 1) {
-            clearInterval(autoNextTimer.current);
-            if (selectedVideoIdx < localVideoList.length - 1) {
-              setSelectedVideoIdx(selectedVideoIdx + 1);
-              setIsCertified(false);
-              setWatchSeconds(0);
-              setVideoEnded(false);
-            }
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    } else {
-      clearInterval(autoNextTimer.current);
-      setCountdown(5);
-    }
-    return () => clearInterval(autoNextTimer.current);
-  }, [certAvailable, isCertified, certLoading, selectedVideoIdx, localVideoList.length]);
-
   const handleShareRoom = async () => {
     const shareUrl = `${window.location.origin}/chat/${roomId}`;
     try {
@@ -1504,7 +1419,7 @@ function ChatRoom() {
           </div>
         </div>
         
-                {/* 우측 버튼 그룹 */}
+        {/* 우측 버튼 그룹 */}
         <div className="flex items-center gap-2">
           {/* 공유하기 버튼 */}
           <button 
@@ -1522,123 +1437,6 @@ function ChatRoom() {
           <button onClick={() => navigate(`/chat/${roomId}/info`)} className="text-4xl text-gray-600 hover:text-blue-600 p-2" aria-label="메뉴">≡</button>
         </div>
       </header>
-
-      {/* HomeVideoPlayer 스타일 적용 - 상단 고정 */}
-      {selectedVideoIdx !== null && localVideoList[selectedVideoIdx] && (
-        <div className="w-full bg-white shadow-2xl z-20 sticky top-0 left-0">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-auto relative flex flex-col">
-            {/* 상단 컨트롤 바 */}
-            <div className="flex justify-between items-center p-3 bg-gray-50 rounded-t-2xl border-b">
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-gray-700">🎬 YouTube 플레이어</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <button
-                  className="w-8 h-8 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center text-white transition-colors"
-                  onClick={() => {
-                    setSelectedVideoIdx(null);
-                    setIsCertified(false);
-                    setWatchSeconds(0);
-                    setVideoEnded(false);
-                    if (autoNextTimer.current) {
-                      clearInterval(autoNextTimer.current);
-                    }
-                  }}
-                  title="닫기"
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-
-            {/* YouTube 플레이어 */}
-            <div className="w-full aspect-video rounded-lg bg-black overflow-hidden flex items-center justify-center">
-              <YouTube
-                videoId={localVideoList[selectedVideoIdx].videoId || localVideoList[selectedVideoIdx].id}
-                opts={{
-                  width: "100%",
-                  height: "216",
-                  playerVars: { autoplay: 1, controls: 1, rel: 0, fs: 1 },
-                }}
-                onReady={handleYoutubeReady}
-                onStateChange={handleYoutubeStateChange}
-                onEnd={handleYoutubeEnd}
-                className="w-full h-full"
-              />
-            </div>
-
-            {/* 제목/채널명 통합 영역 */}
-            <div className="w-full mt-3 mb-3 px-4">
-              <div className="flex items-start gap-2">
-                <span className="text-lg mt-0.5">🔥</span>
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-bold text-base leading-tight mb-1" title={localVideoList[selectedVideoIdx].title}>
-                    {localVideoList[selectedVideoIdx].title}
-                  </h3>
-                  <p className="text-xs text-gray-500 font-medium">
-                    {localVideoList[selectedVideoIdx].channel || '채널명 미표시'}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* 시청 정보 카드 */}
-            <div className="w-full mb-3 px-4">
-              <div className="bg-gray-50 rounded-lg p-3 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="text-center">
-                    <div className="text-blue-600 font-bold text-sm">
-                      {Math.floor(watchSeconds / 60)}:{(watchSeconds % 60).toString().padStart(2, '0')}
-                    </div>
-                    <div className="text-xs text-gray-500">시청시간</div>
-                  </div>
-                  <div className="w-px h-8 bg-gray-300"></div>
-                  <div className="text-center">
-                    <div className="text-gray-600 font-medium text-sm">
-                      {Math.floor((localVideoList[selectedVideoIdx]?.duration || 0) / 60)}:{((localVideoList[selectedVideoIdx]?.duration || 0) % 60).toString().padStart(2, '0')}
-                    </div>
-                    <div className="text-xs text-gray-500">전체시간</div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 text-yellow-600 font-bold text-sm bg-yellow-50 px-2 py-1 rounded-full">
-                  ⚡ 
-                  <span>풀시청</span>
-                </div>
-              </div>
-            </div>
-
-            {/* 인증 안내 카드 */}
-            <div className="w-full bg-blue-100 rounded-xl p-3 flex flex-col items-center mb-2 mx-4">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-2xl">📺</span>
-                <span className="font-bold text-blue-700 text-base">
-                  {isCertified ? '인증 완료' : '1번째 시청 중...'}
-                </span>
-              </div>
-              <div className="text-blue-700 text-sm font-semibold">
-                {isCertified
-                  ? (countdown < 5 ? `${countdown}초 후 다음 영상으로 이동합니다.` : '인증이 완료되었습니다!')
-                  : (localVideoList[selectedVideoIdx]?.duration >= 180 
-                     ? '3분 시청하면 자동 인증됩니다' 
-                     : '끝까지 시청하면 자동 인증됩니다')}
-              </div>
-            </div>
-
-            {/* 유튜브 이동/구독/좋아요 */}
-            <div className="flex items-center gap-2 mt-2 mb-4 w-full justify-center px-4">
-              <a
-                href={getYoutubeUrl(localVideoList[selectedVideoIdx].videoId || localVideoList[selectedVideoIdx].id)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1 bg-gradient-to-r from-pink-500 via-red-500 to-yellow-500 hover:from-pink-600 hover:to-yellow-600 text-white font-bold rounded-full px-5 py-2 text-sm shadow transition-all duration-200"
-                title="유튜브에서 구독/좋아요 바로가기"
-              >
-                🔗 구독/좋아요 바로가기
-              </a>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* 참여자 목록 드롭다운 */}
       {showParticipants && (
@@ -1996,11 +1794,6 @@ function ChatRoom() {
         <button className="flex flex-col items-center text-gray-500 hover:text-blue-500 text-sm font-bold focus:outline-none" onClick={() => navigate('/board')}>📋<span>게시판</span></button>
         <button className="flex flex-col items-center text-gray-500 hover:text-blue-500 text-sm font-bold focus:outline-none" onClick={() => navigate('/my')}>👤<span>마이채널</span></button>
       </nav>
-
-
-
-      {/* 글로벌 비디오 플레이어 */}
-      {/* <GlobalVideoPlayer /> */}
     </div>
   );
 }
