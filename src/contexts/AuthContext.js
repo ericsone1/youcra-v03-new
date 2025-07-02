@@ -119,7 +119,14 @@ export function AuthProvider({ children }) {
       // 로그아웃 상태 저장 및 임시 사용자 정보 제거
       localStorage.setItem('isLoggedOut', 'true');
       localStorage.removeItem('tempUser');
-      
+
+      // 홈탭 관련 localStorage(ucra_*) 모두 초기화
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith('ucra_')) {
+          localStorage.removeItem(key);
+        }
+      });
+
       // 상태 업데이트
       setCurrentUser(null);
       setAuthMethod(null);

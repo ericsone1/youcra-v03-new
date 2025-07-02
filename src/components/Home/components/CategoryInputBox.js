@@ -31,7 +31,13 @@ function matchCategory(keyword) {
   return '기타';
 }
 
-export const CategoryInputBox = ({ selectedCategories, onCategoriesChange, onComplete }) => {
+// 카테고리별 이모지 매핑
+const CATEGORY_EMOJI = {
+  '게임': '🎮', '음악': '🎵', '요리': '🍔', '여행': '✈️', '뷰티': '��', '일상': '📅',
+  '교육': '📚', '스포츠': '🏀', '리뷰': '📝', '엔터테인먼트': '🎬', '책/독서': '📖', '기타': '🔖'
+};
+
+export const CategoryInputBox = ({ selectedCategories, onCategoriesChange, onComplete = () => {}, completed, collapsed, onExpand }) => {
   const [inputValue, setInputValue] = useState('');
   const [keywords, setKeywords] = useState(
     (selectedCategories || [])
@@ -58,7 +64,7 @@ export const CategoryInputBox = ({ selectedCategories, onCategoriesChange, onCom
 
   const addKeyword = (word) => {
     if (!word) return;
-    if (keywords.length >= 3) return;
+    if (keywords.length >= 5) return;
     if (keywords.includes(word)) return;
     setKeywords([...keywords.filter(Boolean), word]);
     setInputValue('');
@@ -69,7 +75,7 @@ export const CategoryInputBox = ({ selectedCategories, onCategoriesChange, onCom
   };
 
   const handleSuggestionClick = (word) => {
-    if (keywords.length >= 3) return;
+    if (keywords.length >= 5) return;
     if (keywords.includes(word)) return;
     setKeywords([...keywords, word]);
     setInputValue('');
@@ -79,12 +85,12 @@ export const CategoryInputBox = ({ selectedCategories, onCategoriesChange, onCom
     let combined = [...keywords];
     const trimmed = inputValue.trim();
     if (trimmed) {
-      if (!combined.includes(trimmed) && combined.length < 3) {
+      if (!combined.includes(trimmed) && combined.length < 5) {
         combined.push(trimmed);
       }
     }
-    // 최대 3개 제한 및 빈 값 제거
-    const validKeywords = combined.filter(Boolean).slice(0, 3);
+    // 최대 5개 제한 및 빈 값 제거
+    const validKeywords = combined.filter(Boolean).slice(0, 5);
     if (validKeywords.length === 0) return;
     // 내부 사전 기반 자동 매칭
     const mapped = validKeywords.map(word => ({
@@ -98,6 +104,50 @@ export const CategoryInputBox = ({ selectedCategories, onCategoriesChange, onCom
     setInputValue('');
   };
 
+  if (collapsed) {
+    // 상위 카테고리명 추출 (중복 제거)
+    const categoryNames = Array.from(new Set(selectedCategories.map(cat => typeof cat === 'string' ? '기타' : cat.category)));
+    return (
+      <motion.div 
+        className="bg-white rounded-xl shadow p-3"
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.3 }}
+      >
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-sm font-bold text-gray-900">
+            🏷️ 카테고리 선택
+            {categoryNames.length > 0 && (
+              <span className="text-xs text-gray-500 font-normal ml-1">({categoryNames.join(', ')})</span>
+            )}
+          </span>
+          <motion.button 
+            onClick={onExpand} 
+            className="px-2 py-0.5 text-blue-600 hover:underline text-xs font-medium"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            수정
+          </motion.button>
+        </div>
+        <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar">
+          {selectedCategories.map((cat, i) => (
+            <motion.span 
+              key={i} 
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: i * 0.1, duration: 0.3 }}
+              className="flex items-center gap-1 bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap min-w-[56px]"
+            >
+              <span>{CATEGORY_EMOJI[(typeof cat === 'string' ? '기타' : cat.category)] || '🔖'}</span>
+              <span>{typeof cat === 'string' ? cat : cat.keyword}</span>
+            </motion.span>
+          ))}
+        </div>
+      </motion.div>
+    );
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -108,7 +158,7 @@ export const CategoryInputBox = ({ selectedCategories, onCategoriesChange, onCom
         🏷️ 채널 카테고리(키워드) 입력
       </h2>
       <p className="text-sm text-gray-500 mb-4">
-        채널을 대표하는 키워드(최대 3개)를 입력하세요. 예: 게임, 롤, e스포츠
+        채널을 대표하는 키워드(최대 5개)를 입력하세요. 예: 게임, 롤, e스포츠
       </p>
 
       {/* 입력된 키워드 */}
@@ -140,11 +190,11 @@ export const CategoryInputBox = ({ selectedCategories, onCategoriesChange, onCom
           onKeyDown={handleInputKeyDown}
           placeholder="카테고리 또는 키워드 입력 후 Enter/쉼표"
           className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          disabled={keywords.length >= 3}
+          disabled={keywords.length >= 5}
         />
-        {keywords.length >= 3 && (
+        {keywords.length >= 5 && (
           <p className="text-sm text-orange-500 mt-2">
-            ⚠️ 최대 3개까지 입력할 수 있습니다
+            ⚠️ 최대 5개까지 입력할 수 있습니다
           </p>
         )}
       </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, GoogleAuthProvider, signInWithRedirect } from "firebase/auth";
 import { auth, db } from "../firebase";
 import { setDoc, doc, serverTimestamp, getDoc } from "firebase/firestore";
 
@@ -31,6 +31,14 @@ function AuthForm() {
     return () => unsubscribe();
   }, []);
 
+  // 구글 로그인 자동 실행 (user가 없을 때만)
+  useEffect(() => {
+    if (!user) {
+      handleGoogleLogin();
+    }
+    // eslint-disable-next-line
+  }, [user]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -56,6 +64,18 @@ function AuthForm() {
     alert("로그아웃 되었습니다!");
   };
 
+  // 구글 로그인 핸들러 (리디렉션 방식)
+  const handleGoogleLogin = async () => {
+    setError("");
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithRedirect(auth, provider);
+      // 리디렉션 후에는 자동으로 Firebase가 인증 상태를 관리합니다.
+    } catch (err) {
+      setError("구글 로그인 실패: " + err.message);
+    }
+  };
+
   if (user) {
     return (
       <div className="max-w-xs mx-auto mt-10 p-4 border rounded bg-white">
@@ -76,39 +96,8 @@ function AuthForm() {
     );
   }
 
-  return (
-    <div className="max-w-xs mx-auto mt-10 p-4 border rounded bg-white">
-      <h2 className="text-xl font-bold mb-4">{isLogin ? "로그인" : "회원가입"}</h2>
-      <form onSubmit={handleSubmit}>
-        <input
-          className="w-full mb-2 p-2 border rounded"
-          type="email"
-          placeholder="이메일"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
-        <input
-          className="w-full mb-2 p-2 border rounded"
-          type="password"
-          placeholder="비밀번호"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
-        <button className="w-full bg-blue-500 text-white p-2 rounded" type="submit">
-          {isLogin ? "로그인" : "회원가입"}
-        </button>
-      </form>
-      <button
-        className="mt-2 text-blue-500 underline"
-        onClick={() => setIsLogin(!isLogin)}
-      >
-        {isLogin ? "회원가입 하기" : "로그인 하기"}
-      </button>
-      {error && <p className="text-red-500 mt-2">{error}</p>}
-    </div>
-  );
+  // user가 없으면 아무 UI도 렌더링하지 않음(자동 구글 로그인만)
+  return null;
 }
 
 export default AuthForm;

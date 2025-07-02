@@ -75,4 +75,32 @@ export const processRoomData = async (room) => {
     console.error(`Error processing room ${room.id}:`, error);
     return null;
   }
-}; 
+};
+
+// 연관 카테고리 테이블
+export const RELATED_CATEGORIES = {
+  '일상': ['여행', '브이로그', '자연'],
+  '여행': ['일상', '브이로그', '자연'],
+  '브이로그': ['일상', '여행'],
+  '자연': ['여행', '일상'],
+  // 필요에 따라 추가
+};
+
+// 사용자가 선택한 카테고리와 연관 카테고리까지 모두 반환
+export function getRecommendedCategories(selectedCategories) {
+  const all = new Set(selectedCategories);
+  selectedCategories.forEach(cat => {
+    (RELATED_CATEGORIES[cat] || []).forEach(related => all.add(related));
+  });
+  return Array.from(all);
+}
+
+// 영상 리스트에서 추천 카테고리에 해당하는 영상만 필터링
+export function filterVideosByRecommendedCategories(videos, recommendedCategories) {
+  return videos.filter(video =>
+    recommendedCategories.some(cat =>
+      (video.category && video.category === cat) ||
+      (video.keywords && video.keywords.includes(cat))
+    )
+  );
+} 

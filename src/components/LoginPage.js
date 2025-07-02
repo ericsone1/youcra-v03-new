@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth, db } from '../firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { Link, useNavigate } from 'react-router-dom';
@@ -34,7 +34,7 @@ function LoginPage() {
         // 로그인
         const userCredential = await signInWithEmailAndPassword(auth, email, password);
         console.log('✅ 이메일 로그인 성공:', userCredential.user.email);
-        navigate('/my');
+        navigate(-1);
       } else {
         // 회원가입
         if (password !== confirmPassword) {
@@ -68,7 +68,7 @@ function LoginPage() {
         });
 
         console.log('✅ 이메일 회원가입 성공:', user.email);
-        navigate('/my');
+        navigate(-1);
       }
     } catch (error) {
       console.error('❌ 인증 오류:', error);
@@ -95,6 +95,30 @@ function LoginPage() {
         default:
           setError('로그인 중 오류가 발생했습니다. 다시 시도해 주세요.');
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 구글 로그인 핸들러
+  const handleGoogleLogin = async () => {
+    setError('');
+    setLoading(true);
+    const provider = new GoogleAuthProvider();
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      // Firestore에 사용자 정보 저장/업데이트
+      await setDoc(doc(db, 'users', user.uid), {
+        email: user.email,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
+        provider: 'google',
+        createdAt: new Date(),
+      }, { merge: true });
+      navigate(-1);
+    } catch (err) {
+      setError('구글 로그인 실패: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -201,6 +225,17 @@ function LoginPage() {
             )}
           </button>
         </form>
+
+        {/* 구글 로그인 버튼 */}
+        <button
+          className="w-full mt-4 bg-red-500 hover:bg-red-600 text-white py-3 rounded-lg flex items-center justify-center gap-2 font-bold text-base"
+          onClick={handleGoogleLogin}
+          type="button"
+          disabled={loading}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="w-5 h-5"><path fill="#4285F4" d="M24 9.5c3.54 0 6.7 1.22 9.19 3.23l6.85-6.85C36.68 2.36 30.77 0 24 0 14.82 0 6.71 5.1 2.69 12.44l7.98 6.2C12.13 13.13 17.62 9.5 24 9.5z"/><path fill="#34A853" d="M46.1 24.55c0-1.64-.15-3.22-.43-4.74H24v9.01h12.42c-.54 2.9-2.18 5.36-4.65 7.03l7.18 5.59C43.98 37.13 46.1 31.3 46.1 24.55z"/><path fill="#FBBC05" d="M10.67 28.65c-1.13-3.36-1.13-6.99 0-10.35l-7.98-6.2C.99 16.1 0 19.94 0 24c0 4.06.99 7.9 2.69 11.9l7.98-6.2z"/><path fill="#EA4335" d="M24 48c6.48 0 11.93-2.15 15.9-5.85l-7.18-5.59c-2.01 1.35-4.59 2.15-8.72 2.15-6.38 0-11.87-3.63-14.33-8.89l-7.98 6.2C6.71 42.9 14.82 48 24 48z"/></svg>
+          <span>Google로 로그인</span>
+        </button>
 
         {/* 로그인/회원가입 전환 */}
         <div className="mt-6 text-center">

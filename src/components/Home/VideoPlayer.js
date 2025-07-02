@@ -4,6 +4,18 @@ import YouTube from 'react-youtube';
 import { useNavigate } from 'react-router-dom';
 import formatTime from '../../utils/formatTime';
 
+function parseDuration(duration) {
+  if (typeof duration === 'number') return duration;
+  if (!duration) return 0;
+  const parts = duration.split(':').map(Number);
+  if (parts.length === 2) {
+    return parts[0] * 60 + parts[1];
+  } else if (parts.length === 3) {
+    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  }
+  return 0;
+}
+
 function VideoPlayer({ 
   video,
   watchSeconds,
@@ -19,6 +31,10 @@ function VideoPlayer({
   onFanCertification
 }) {
   const navigate = useNavigate();
+
+  // duration 파싱
+  const totalSeconds = parseDuration(video.duration);
+  const progress = (watchSeconds / totalSeconds) * 100;
 
   return (
     <motion.div
@@ -59,7 +75,7 @@ function VideoPlayer({
             시청 시간: {formatTime(watchSeconds)}
           </span>
           <span className="text-gray-500">
-            전체: {formatTime(videoDuration)}
+            전체: {typeof video.duration === 'string' ? video.duration : formatTime(video.duration)}
           </span>
         </div>
         
@@ -67,13 +83,13 @@ function VideoPlayer({
         <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
           <div
             className="h-full bg-gradient-to-r from-blue-500 to-purple-500 rounded-full transition-all duration-300 ease-out"
-            style={{ width: `${Math.min((watchSeconds / videoDuration) * 100, 100)}%` }}
+            style={{ width: `${Math.min(progress, 100)}%` }}
           />
         </div>
         
         {/* 안내 문구 */}
         <div className="text-xs text-gray-500 text-center">
-          {videoDuration > 1800
+          {totalSeconds > 1800
             ? `30분 시청 시 인증 가능`
             : `영상 끝까지 시청 시 인증 가능`}
         </div>

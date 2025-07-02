@@ -29,7 +29,6 @@ import ToastContainer from "./common/ToastContainer";
 import { AnimatePresence } from 'framer-motion';
 import PageWrapper from './common/PageWrapper';
 import { VideoPlayerProvider, useVideoPlayer } from "../contexts/VideoPlayerContext";
-import GlobalVideoPlayer from "./GlobalVideoPlayer";
 import MyPointsPage from "./MyPointsPage";
 import MyFeedViewersPage from "./MyFeedViewersPage";
 import { db, auth } from "../firebase";
@@ -288,16 +287,14 @@ function App() {
 
 function AppWrapperContent() {
   const { selectedVideoIdx } = useVideoPlayer();
-  
+  const [tokenCount, setTokenCount] = useState(0);
 
-  
+  // 시청 완료 시 토큰 증가 콜백
+  const handleTokenEarned = () => setTokenCount(prev => prev + 1);
+
   return (
     <Router>
-      <App />
-      {/* 전역 비디오 플레이어 - selectedVideoIdx가 있을 때만 렌더링 */}
-      {selectedVideoIdx !== null && (
-        <GlobalVideoPlayer />
-      )}
+      <App tokenCount={tokenCount} />
     </Router>
   );
 }

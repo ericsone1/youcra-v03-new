@@ -30,6 +30,8 @@ async function fetchYoutubeMeta(videoId) {
       title: snippet.title,
       thumbnail: snippet.thumbnails.medium.url,
       channel: snippet.channelTitle,
+      channelId: snippet.channelId,
+      channelThumbnail: snippet.thumbnails.default?.url || snippet.thumbnails.medium?.url,
       videoId,
       duration: seconds,
     };
@@ -67,11 +69,24 @@ function AddVideoPage() {
 
   // 영상 등록
   const handleVideoRegister = async () => {
+    alert("영상 등록 함수 실행됨!");
+    console.log("영상 등록 함수 실행됨!");
     if (!videoMeta) return;
     setVideoLoading(true);
-    await addDoc(collection(db, "chatRooms", roomId, "videos"), {
+    if (roomId) {
+      // 채팅방에서 등록 시
+      await addDoc(collection(db, "chatRooms", roomId, "videos"), {
+        ...videoMeta,
+        registeredBy: auth.currentUser?.uid || "anonymous",
+        registeredAt: serverTimestamp(),
+      });
+    }
+    // 홈탭/전체 영상 등록 (roomId와 무관하게 항상 저장)
+    await addDoc(collection(db, "videos"), {
       ...videoMeta,
-      registeredBy: auth.currentUser?.uid || "anonymous",
+      uploaderUid: auth.currentUser?.uid || "anonymous",
+      uploaderName: auth.currentUser?.displayName || "익명",
+      uploaderEmail: auth.currentUser?.email || "",
       registeredAt: serverTimestamp(),
     });
     setVideoMsg("영상이 등록되었습니다!");

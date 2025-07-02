@@ -18,6 +18,7 @@ export const convertVideoData = (videoData, roomData, roomId) => {
     snippet: {
       title: videoData.title || '제목 없음',
       channelTitle: videoData.channelTitle || '알 수 없는 채널',
+      channelId: videoData.channelId,
       thumbnails: {
         medium: {
           url: videoData.thumbnail || `https://img.youtube.com/vi/${videoData.videoId || videoData.id}/mqdefault.jpg`

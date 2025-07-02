@@ -33,6 +33,16 @@ export const FilterButtons = ({ videoFilter, onFilterChange }) => {
       >
         롱폼
       </button>
+      <button
+        onClick={() => onFilterChange('rewatch')}
+        className={`px-3 py-1.5 rounded-full text-sm transition-colors
+          ${videoFilter === 'rewatch'
+            ? 'bg-green-500 text-white'
+            : 'bg-white text-gray-500 hover:bg-gray-100'
+          }`}
+      >
+        재시청
+      </button>
     </div>
   );
 }; 

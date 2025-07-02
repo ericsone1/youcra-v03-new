@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import VideoPlayer from './VideoPlayer';
+import ChannelNameWithBadge from '../ChannelNameWithBadge';
 
 function VideoCard({ 
   video, 
@@ -23,6 +24,12 @@ function VideoCard({
   const viewCountDisplay = Number(video.statistics.viewCount || 0).toLocaleString();
   const watchingCount = video.watchCount || 0;
   const certificationCount = video.certificationCount || 0;
+
+  // 디버깅: 채널ID 위치 확인
+  console.log('video:', video);
+  console.log('video.snippet:', video.snippet);
+  console.log('video.snippet.channelId:', video.snippet && video.snippet.channelId);
+  console.log('video.channelId:', video.channelId);
 
   return (
     <motion.div
@@ -73,7 +80,9 @@ function VideoCard({
           <h4 className="font-semibold text-gray-900 line-clamp-2 mb-1 leading-tight text-sm">
             {video.snippet.title}
           </h4>
-          <p className="text-xs text-gray-500 mb-1.5 truncate font-medium">{video.snippet.channelTitle}</p>
+          <div className="text-xs text-gray-500 mb-1.5 truncate font-medium">
+            <ChannelNameWithBadge channelId={video.snippet.channelId} channelName={video.snippet.channelTitle} />
+          </div>
           
           {/* 채팅방 정보 */}
           {video.roomName && (

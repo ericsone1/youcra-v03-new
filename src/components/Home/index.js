@@ -13,6 +13,7 @@ import { LoadingSpinner, ErrorDisplay } from './components/LoadingError';
 import { useHomeChannelState } from './hooks/useHomeChannelState';
 import { useHomeCategoryState } from './hooks/useHomeCategoryState';
 import { useHomeVideoSelectionState } from './hooks/useHomeVideoSelectionState';
+import { useVideoWatchCount } from './hooks/useVideoWatchCount';
 
 import { useHomeTabState } from './hooks/useHomeTabState';
 import { useToast } from '../common/Toast';
@@ -49,6 +50,9 @@ function Home() {
   // Toast 시스템
   const { showToast, ToastContainer } = useToast();
   
+  // 시청 횟수 관리
+  const { incrementWatchCount, getWatchCount } = useVideoWatchCount();
+  
   // 채널 등록 상태 (custom hook)
   const {
     channelRegistered,
@@ -71,6 +75,9 @@ function Home() {
     selectedVideos,
     setSelectedVideos,
     handleVideoSelection,
+    handleVideoSelectionComplete: hookHandleVideoSelectionComplete,
+    isVideoSelectionCompleted,
+    resetVideoSelectionState,
   } = useHomeVideoSelectionState();
   
   // 토큰 기능 제거됨
@@ -261,26 +268,16 @@ function Home() {
     }
   }, [channelRegistered, selectedCategories]);
 
-  // 영상 선택 상태 초기화 처리 (카테고리 설정 완료 후에만)
-  useEffect(() => {
-    // 카테고리 설정이 완료된 후에만 영상 선택 상태 체크
-    if (categoryStepDone && selectedVideos && selectedVideos.length > 0) {
-      console.log('🎬 이미 선택된 영상이 있음, 카드 접기:', selectedVideos.length);
-      setVideoSelectionDone(true);
-      setVideoSelectionCollapsed(true);
-    }
-  }, [categoryStepDone, selectedVideos]);
-
   // 컴포넌트 마운트 후 상태 점검 (데이터 로드 완료 시)
   const hasCheckedInitialState = useRef(false);
   
+  // 초기 로드 시에만 상태 점검 (selectedVideos 제외)
   useEffect(() => {
-    // 아직 점검하지 않았고, 모든 상태가 로드되었을 때만 실행
-    if (!hasCheckedInitialState.current && channelRegistered !== undefined && selectedCategories !== undefined && selectedVideos !== undefined) {
+    // 아직 점검하지 않았고, 기본 상태가 로드되었을 때만 실행
+    if (!hasCheckedInitialState.current && channelRegistered !== undefined && selectedCategories !== undefined) {
       console.log('🔍 초기 상태 점검 시작:', {
         channelRegistered,
         categoriesCount: selectedCategories?.length || 0,
-        videosCount: selectedVideos?.length || 0,
         categoryStepDone,
         videoSelectionDone
       });
@@ -295,14 +292,6 @@ function Home() {
         hasUpdates = true;
       }
       
-      // 2. 영상이 선택되어 있는데 videoSelectionDone이 false인 경우
-      if (selectedVideos?.length > 0 && !videoSelectionDone) {
-        console.log('🔧 영상 선택 단계 상태 수정 - 카드 접기');
-        setVideoSelectionDone(true);
-        setVideoSelectionCollapsed(true);
-        hasUpdates = true;
-      }
-      
       hasCheckedInitialState.current = true;
       
       if (hasUpdates) {
@@ -311,7 +300,16 @@ function Home() {
         console.log('👍 모든 초기 상태가 올바름');
       }
     }
-  }, [channelRegistered, selectedCategories, selectedVideos, categoryStepDone, videoSelectionDone]);
+  }, [channelRegistered, selectedCategories, categoryStepDone, videoSelectionDone]);
+
+  // Firestore에서 불러온 완료 상태로 UI 상태 동기화
+  useEffect(() => {
+    if (isVideoSelectionCompleted && selectedVideos && selectedVideos.length > 0 && !videoSelectionDone) {
+      console.log('🔧 Firestore에서 영상 선택 완료 상태 복원:', selectedVideos.length);
+      setVideoSelectionDone(true);
+      setVideoSelectionCollapsed(true);
+    }
+  }, [isVideoSelectionCompleted, selectedVideos, videoSelectionDone]);
 
   // 채널 삭제 시 모든 상태 초기화
   const handleChannelDeleteWithReset = async () => {
@@ -327,9 +325,11 @@ function Home() {
       setCategoryCollapsed(false);
       
       // 3. 영상 선택 상태 초기화  
-      setSelectedVideos([]);
       setVideoSelectionDone(false);
       setVideoSelectionCollapsed(false);
+      
+      // hook의 초기화 함수로 Firestore도 함께 초기화
+      await resetVideoSelectionState();
       
       // 4. 로그인 관련 상태 초기화
       setLoginStepDone(false);
@@ -361,6 +361,7 @@ function Home() {
         localStorage.removeItem('home_selectedCategories');
         localStorage.removeItem('home_selectedVideos');
         localStorage.removeItem('home_stepProgress');
+        localStorage.removeItem('video_selection_completed');
         console.log('📱 localStorage 데이터 정리 완료');
       } catch (e) {
         console.warn('⚠️ localStorage 정리 중 경고:', e);
@@ -393,22 +394,22 @@ function Home() {
       return;
     }
     
-    // 로그인된 상태라면 바로 Firestore 저장
+    // 로그인된 상태라면 hook의 완료 함수로 Firestore 저장
     console.log('💾 로그인된 상태 - Firestore 저장 로직 실행');
-    // ... (실제 저장 로직은 필요시 추가) ...
+    hookHandleVideoSelectionComplete(selectedVideos);
   };
 
   // 로그인 성공 후 Firestore 저장 및 다음 단계
   useEffect(() => {
-    if (showLoginStep && currentUser && pendingVideoSave) {
-      // Firestore 저장 로직 (selectedVideos 저장)
-      // ... (실제 저장 로직은 필요시 추가) ...
+    if (showLoginStep && currentUser && pendingVideoSave && selectedVideos.length > 0) {
+      // Firestore 저장 로직 (완료 상태로 저장)
+      hookHandleVideoSelectionComplete(selectedVideos);
       setVideoSelectionDone(true);
       setVideoSelectionCollapsed(true);
       setShowLoginStep(false);
       setPendingVideoSave(false);
     }
-  }, [showLoginStep, currentUser, pendingVideoSave]);
+  }, [showLoginStep, currentUser, pendingVideoSave, selectedVideos, hookHandleVideoSelectionComplete]);
 
   // 영상 클릭 시 YouTube 새창 열기
   const handleVideoClick = (video) => {
@@ -680,6 +681,7 @@ function Home() {
           onVideoClick={handleVideoClick}
           onWatchClick={handleWatchClick}
           onMessageClick={handleMessageClick}
+          getWatchCount={getWatchCount}
         />
                   )}
               </div>

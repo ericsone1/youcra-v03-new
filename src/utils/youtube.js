@@ -7,7 +7,7 @@ export function getYoutubeId(url) {
 export async function fetchYoutubeMeta(videoId) {
   const API_KEY = process.env.REACT_APP_YOUTUBE_API_KEY;
   const res = await fetch(
-    `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}&key=${API_KEY}`
+    `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id=${videoId}&key=${API_KEY}`
   );
   const data = await res.json();
   if (data.items && data.items.length > 0) {
@@ -20,12 +20,14 @@ export async function fetchYoutubeMeta(videoId) {
       const sec = parseInt(match[2] || "0", 10);
       seconds = min * 60 + sec;
     }
+    const statistics = data.items[0].statistics;
     return {
       title: snippet.title,
       thumbnail: snippet.thumbnails.medium.url,
       channel: snippet.channelTitle,
       videoId,
       duration: seconds,
+      statistics,
     };
   }
   return null;

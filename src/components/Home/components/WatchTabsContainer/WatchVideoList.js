@@ -1,47 +1,316 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
+import { useUcraVideos } from '../../hooks/useUcraVideos';
+import { useAuth } from '../../../../contexts/AuthContext';
+import { useVideoPlayer } from '../../../../contexts/VideoPlayerContext';
+import { computeUniqueVideos } from '../../utils/videoUtils';
+import { FaChevronLeft, FaChevronRight } from 'react-icons/fa';
+import ChannelNameWithBadge from '../../../ChannelNameWithBadge';
+import { getRecommendedCategories, filterVideosByRecommendedCategories } from '../../utils/dataProcessing';
+import { useNavigate } from 'react-router-dom';
 
-// 샘플 시청할 영상 데이터
-const SAMPLE_WATCH_VIDEOS = [
-  {
-    id: 'watch1',
-    title: '크리에이터를 위한 최고의 마케팅 전략',
-    thumbnail: 'https://i.ytimg.com/vi/sample6/maxresdefault.jpg',
-    duration: '15:30',
-    type: 'long',
-    progress: 0,
-    creator: {
-      name: '디지털 마케터',
-      avatar: 'https://i.pravatar.cc/150?img=1'
-    }
-  },
-  {
-    id: 'watch2',
-    title: '[쇼츠] 1분 만에 보는 채널 성장 비결',
-    thumbnail: 'https://i.ytimg.com/vi/sample7/maxresdefault.jpg',
-    duration: '0:58',
-    type: 'short',
-    progress: 30,
-    creator: {
-      name: '쇼츠 마스터',
-      avatar: 'https://i.pravatar.cc/150?img=2'
-    }
-  },
-  {
-    id: 'watch3',
-    title: '유튜브 알고리즘 완벽 분석',
-    thumbnail: 'https://i.ytimg.com/vi/sample8/maxresdefault.jpg',
-    duration: '8:45',
-    type: 'long',
-    progress: 60,
-    creator: {
-      name: '알고리즘 연구소',
-      avatar: 'https://i.pravatar.cc/150?img=3'
+// 영상 길이(초)를 시:분:초 또는 분:초로 변환
+function formatDuration(seconds) {
+  if (!seconds || isNaN(seconds) || seconds <= 0) return '시간 미확인';
+  
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  
+  if (h > 0) {
+    return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  }
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function formatDate(date) {
+  if (!date) return '날짜 미확인';
+  
+  // 이미 포맷된 문자열인 경우 (Home에서 변환된 경우)
+  if (typeof date === 'string' && date.includes('년')) {
+    return date;
+  }
+  
+  // ISO 날짜 문자열인 경우
+  if (typeof date === 'string') {
+    try {
+      const d = new Date(date);
+      return d.toLocaleDateString('ko-KR', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+      });
+    } catch (e) {
+      return '날짜 미확인';
     }
   }
-];
+  
+  // Firestore timestamp 객체인 경우
+  if (date.seconds) {
+    const d = new Date(date.seconds * 1000);
+    return d.toLocaleDateString('ko-KR', { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric' 
+    });
+  }
+  
+  return '날짜 미확인';
+}
 
-export const WatchVideoList = ({ videoFilter, onTokenEarned }) => {
+// 영상 리스트 렌더러 (공통, 페이지네이션 추가)
+const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos = [], getWatchCount = () => 0 }) => {
+  const PAGE_SIZE = 7;
+  const [page, setPage] = useState(1);
+  const totalPages = Math.ceil((videos?.length || 0) / PAGE_SIZE);
+  const pagedVideos = videos.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  if (!videos || videos.length === 0) {
+    return (
+      <div className="text-center text-gray-400 py-8">
+        아직 등록된 영상이 없습니다.<br />상단의 '내 영상 등록하기' 버튼을 눌러 첫 영상을 등록해보세요!
+        {recommendedVideos && recommendedVideos.length > 0 && (
+          <div className="mt-8">
+            <div className="text-blue-600 font-bold mb-3 text-center">💡 연관 추천 영상</div>
+            <ul className="space-y-2">
+              {recommendedVideos.map((video, idx) => (
+                <li
+                  key={video.id}
+                  className="flex gap-3 items-center p-3 bg-blue-50 rounded-lg shadow-sm hover:shadow-md hover:bg-blue-100 transition-all cursor-pointer border border-blue-200"
+                  onClick={() => onWatchClick(video, idx, videos)}
+                >
+                  {/* 썸네일 */}
+                  <div className="relative flex-shrink-0">
+                    <img
+                      src={video.thumbnailUrl || video.thumbnail}
+                      alt={video.title}
+                      className="w-24 h-14 object-cover rounded border border-gray-200"
+                      onError={e => { e.target.src = 'https://img.youtube.com/vi/' + (video.videoId || video.id) + '/mqdefault.jpg'; }}
+                    />
+                    <div className="absolute bottom-1 right-1 bg-black bg-opacity-75 text-white text-xs px-1 py-0.5 rounded text-center min-w-[32px]">
+                      {video.durationDisplay || formatDuration(video.duration) || '?:??'}
+                    </div>
+                  </div>
+                  
+                  {/* 영상 정보 */}
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <h3 className="font-semibold text-sm text-gray-900 truncate leading-tight">
+                      {video.title}
+                    </h3>
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-gray-600 truncate max-w-[120px]">
+                        {video.channelTitle || video.channel}
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded text-xs font-medium flex-shrink-0 bg-green-100 text-green-600">
+                        추천
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-gray-500">
+                      <span className="flex items-center gap-1">
+                        <span>👁️</span>
+                        <span>{Number(video.viewCount || video.statistics?.viewCount || 0).toLocaleString()}</span>
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span>👍</span>
+                        <span>{Number(video.likeCount || video.statistics?.likeCount || 0).toLocaleString()}</span>
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {/* 시청하기 버튼 */}
+                  <div className="flex-shrink-0">
+                    {(() => {
+                      const watchCount = getWatchCount(video.id || video.videoId);
+                      const isRewatch = watchCount > 0;
+                      const nextWatchCount = watchCount + 1;
+                      
+                      return (
+                        <button
+                          className={`px-3 py-1.5 text-white text-xs rounded-full font-medium transition-colors shadow-sm whitespace-nowrap ${
+                            isRewatch 
+                              ? 'bg-green-500 hover:bg-green-600 active:bg-green-700' 
+                              : 'bg-blue-500 hover:bg-blue-600 active:bg-blue-700'
+                          }`}
+                          onClick={e => { e.stopPropagation(); onWatchClick(video, idx, videos); }}
+                        >
+                          {isRewatch ? `${nextWatchCount}번째 시청` : '시청하기'}
+                        </button>
+                      );
+                    })()}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    );
+  }
+  return (
+    <ul className="space-y-2">
+      {videos.map((video, idx) => (
+        <li
+          key={video.id}
+          className="flex gap-3 items-center p-3 bg-white rounded-lg shadow-sm hover:shadow-md hover:bg-blue-50 transition-all cursor-pointer border border-gray-100"
+          onClick={() => onWatchClick(video, idx, videos)}
+        >
+          {/* 썸네일 */}
+          <div className="relative flex-shrink-0">
+            <img
+              src={video.thumbnailUrl || video.thumbnail}
+              alt={video.title}
+              className="w-24 h-14 object-cover rounded border border-gray-200"
+              onError={e => { e.target.src = 'https://img.youtube.com/vi/' + (video.videoId || video.id) + '/mqdefault.jpg'; }}
+            />
+            {/* 영상 길이 오버레이 */}
+            <div className="absolute bottom-1 right-1 bg-black bg-opacity-75 text-white text-xs px-1 py-0.5 rounded text-center min-w-[32px]">
+              {video.durationDisplay || formatDuration(video.duration) || '?:??'}
+            </div>
+          </div>
+          
+          {/* 영상 정보 */}
+          <div className="flex-1 min-w-0 space-y-1">
+            {/* 제목 */}
+            <h3 className="font-semibold text-sm text-gray-900 truncate leading-tight">
+              {video.title}
+            </h3>
+            
+            {/* 채널명과 타입을 한 줄에 */}
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-gray-600 truncate max-w-[120px]">
+                {video.channelTitle || video.channel || '채널명 없음'}
+              </span>
+              <span className={`px-1.5 py-0.5 rounded text-xs font-medium flex-shrink-0 ${
+                video.type === 'short' ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'
+              }`}>
+                {video.type === 'short' ? '숏폼' : '롱폼'}
+              </span>
+            </div>
+            
+            {/* 통계 정보를 한 줄에 */}
+            <div className="flex items-center gap-3 text-xs text-gray-500">
+              <span className="flex items-center gap-1">
+                <span>👁️</span>
+                <span>{(video.views || video.viewCount || 0).toLocaleString()}</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <span>👍</span>
+                <span>{(video.likeCount || 0).toLocaleString()}</span>
+              </span>
+              <span className="flex items-center gap-1">
+                <span>📅</span>
+                <span className="truncate">{formatDate(video.uploadedAt || video.publishedAt)}</span>
+              </span>
+            </div>
+          </div>
+          
+          {/* 시청하기 버튼 */}
+          <div className="flex-shrink-0">
+            {(() => {
+              const watchCount = getWatchCount(video.id || video.videoId);
+              const isRewatch = watchCount > 0;
+              const nextWatchCount = watchCount + 1;
+              
+              return (
+                <button
+                  className={`px-3 py-1.5 text-white text-xs rounded-full font-medium transition-colors shadow-sm whitespace-nowrap ${
+                    isRewatch 
+                      ? 'bg-green-500 hover:bg-green-600 active:bg-green-700' 
+                      : 'bg-blue-500 hover:bg-blue-600 active:bg-blue-700'
+                  }`}
+                  onClick={e => { 
+                    e.stopPropagation(); 
+                console.log('🔥 WatchVideoList - 버튼 클릭됨!', video, typeof onWatchClick);
+                if (typeof onWatchClick === 'function') {
+                  onWatchClick(video, idx, videos);
+                } else {
+                  console.error('❌ onWatchClick이 함수가 아닙니다:', onWatchClick);
+                }
+                  }}
+                >
+                  {isRewatch ? `${nextWatchCount}번째 시청` : '시청하기'}
+                </button>
+              );
+            })()}
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+};
+
+export const WatchVideoList = ({ 
+  videoFilter, 
+  onTokenEarned, 
+  onWatchClick, 
+  selectedCategories = [], 
+  watchVideos = [], // Home에서 전달받은 YouTube API 데이터
+  getWatchCount = () => 0 // 시청 횟수 조회 함수
+}) => {
+  const { currentUser } = useAuth();
+  const { ucraVideos, loadingUcraVideos } = useUcraVideos();
+  const [sortKey, setSortKey] = useState('duration'); // 기본값: 영상 길이순
+  const [showPlayer, setShowPlayer] = useState(false);
+  const navigate = useNavigate();
+
+  if (!currentUser) {
+    return null; // 로그인 안내/버튼을 렌더링하지 않음
+  }
+
+  console.log('🎬 WatchVideoList에서 받은 데이터:', {
+    watchVideos: watchVideos,
+    watchVideosCount: watchVideos.length,
+    videoFilter: videoFilter
+  });
+
+  // YouTube API 데이터가 있으면 우선 사용, 없으면 Firestore 데이터 사용
+  let sourceVideos = watchVideos.length > 0 ? watchVideos : ucraVideos;
+  
+  // 내 영상 제외 (Firestore 데이터인 경우에만)
+  if (watchVideos.length === 0) {
+    sourceVideos = ucraVideos.filter(
+      v => v.registeredBy !== currentUser?.uid && v.registeredBy !== currentUser?.email
+    );
+  }
+
+  // 중복 영상 제거 (videoId 기준) - YouTube API 데이터는 이미 중복 제거됨
+  const uniqueVideos = watchVideos.length > 0 ? sourceVideos : computeUniqueVideos(sourceVideos);
+
+  // 숏폼/롱폼 조건 필터링 (duration 기준, 정보 없는 영상은 모두 제외)
+  let displayVideos = uniqueVideos;
+  if (videoFilter === 'short') {
+    displayVideos = uniqueVideos.filter(
+      v => typeof v.duration === 'number' && v.duration > 0 && v.duration <= 180
+    );
+  } else if (videoFilter === 'long') {
+    displayVideos = uniqueVideos.filter(
+      v => typeof v.duration === 'number' && v.duration > 180
+    );
+  }
+
+  // 정렬 적용
+  displayVideos = [...displayVideos].sort((a, b) => {
+    if (sortKey === 'duration') {
+      return (a.duration || 0) - (b.duration || 0); // 영상 길이 오름차순(짧은 영상이 위)
+    } else if (sortKey === 'views') {
+      return (b.viewCount || 0) - (a.viewCount || 0); // 조회수 내림차순
+    } else {
+      // 최신순(등록일 내림차순)
+      const aTime = a.registeredAt?.seconds || 0;
+      const bTime = b.registeredAt?.seconds || 0;
+      return bTime - aTime;
+    }
+  });
+
+  // 연관 추천 영상 계산 (시청할 영상이 없을 때만)
+  let recommendedVideos = [];
+  if (displayVideos.length === 0 && selectedCategories && selectedCategories.length > 0) {
+    const recommendedCategories = getRecommendedCategories(selectedCategories.map(cat => typeof cat === 'string' ? cat : cat.category));
+    recommendedVideos = filterVideosByRecommendedCategories(uniqueVideos, recommendedCategories);
+  }
+
+  // <GlobalVideoPlayer />는 Home/index.js 등 상위에서 항상 렌더링되어 있어야 함
+
   return (
     <motion.div
       initial={{ opacity: 0, x: -20 }}
@@ -49,69 +318,30 @@ export const WatchVideoList = ({ videoFilter, onTokenEarned }) => {
       exit={{ opacity: 0, x: 20 }}
       className="space-y-4"
     >
-      {SAMPLE_WATCH_VIDEOS
-        .filter(video => 
-          videoFilter === 'all' || video.type === videoFilter
-        )
-        .map(video => (
-          <div
-            key={video.id}
-            className="flex gap-3 bg-gray-50 rounded-xl p-3"
-          >
-            {/* 썸네일 */}
-            <div className="relative flex-shrink-0">
-              <img
-                src={video.thumbnail}
-                alt={video.title}
-                className="w-32 h-18 object-cover rounded-lg"
-              />
-              <span className="absolute bottom-1 right-1 bg-black bg-opacity-70 text-white text-xs px-1 rounded">
-                {video.duration}
-              </span>
-              {video.type === 'short' && (
-                <span className="absolute top-1 left-1 bg-red-500 text-white text-xs px-1.5 rounded-full">
-                  쇼츠
-                </span>
-              )}
-            </div>
-
-            {/* 영상 정보 */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <img
-                  src={video.creator.avatar}
-                  alt={video.creator.name}
-                  className="w-5 h-5 rounded-full"
-                />
-                <span className="text-sm text-gray-600">
-                  {video.creator.name}
-                </span>
-              </div>
-              <h3 className="text-sm font-medium text-gray-900 line-clamp-2 mb-2">
-                {video.title}
-              </h3>
-              
-              {/* 진행률 바 */}
-              <div className="relative h-1 bg-gray-200 rounded-full overflow-hidden">
-                <div
-                  className="absolute top-0 left-0 h-full bg-blue-500"
-                  style={{ width: `${video.progress}%` }}
-                />
-              </div>
-              
-              {/* 시청 버튼 */}
-              <button
-                onClick={() => {
-                  // TODO: 실제 시청 로직
-                  onTokenEarned();
-                }}
-                className="mt-2 px-3 py-1 bg-blue-500 text-white text-sm rounded-full hover:bg-blue-600 transition-colors"
-              >
-                시청하기
-              </button>
-            </div>
-          </div>
-        ))}
+      {/* 정렬 옵션 드롭다운 */}
+      <div className="flex justify-end mb-2">
+        <select
+          value={sortKey}
+          onChange={e => setSortKey(e.target.value)}
+          className="px-3 py-1 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+        >
+          <option value="duration">영상 길이순</option>
+          <option value="latest">최신순</option>
+          <option value="views">조회수순</option>
+        </select>
+      </div>
+      {loadingUcraVideos ? (
+        <div className="text-center text-gray-500 py-8">영상 불러오는 중...</div>
+      ) : (
+        <VideoListRenderer
+          videos={displayVideos}
+          onWatchClick={onWatchClick}
+          recommendedVideos={recommendedVideos}
+          getWatchCount={getWatchCount}
+        />
+      )}
     </motion.div>
   );
-}; 
+};
+
+export { VideoListRenderer }; 

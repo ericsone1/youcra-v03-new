@@ -1,52 +1,48 @@
 import { useState, useEffect } from 'react';
+import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from '../../../firebase';
-import { collection, query, orderBy, getDocs } from 'firebase/firestore';
-import { CATEGORY_KEYWORDS } from '../utils/constants';
+import { CATEGORY_KEYWORDS, API_KEY } from '../utils/constants';
 
-export const useUcraVideos = (userCategory) => {
+export const useUcraVideos = (userCategory = null) => {
   const [ucraVideos, setUcraVideos] = useState([]);
   const [loadingUcraVideos, setLoadingUcraVideos] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    const fetchUcraVideos = async () => {
-      setLoadingUcraVideos(true);
+    const fetchVideos = async () => {
       try {
-        const roomsQuery = query(collection(db, "chatRooms"));
-        const roomsSnapshot = await getDocs(roomsQuery);
-        
-        let allVideos = [];
-        
-        for (const roomDoc of roomsSnapshot.docs) {
-          const roomData = roomDoc.data();
-          const videosQuery = query(
-            collection(db, "chatRooms", roomDoc.id, "videos"),
-            orderBy("registeredAt", "desc")
-          );
-          const videosSnapshot = await getDocs(videosQuery);
-          
-          videosSnapshot.forEach(videoDoc => {
-            const videoData = videoDoc.data();
-            allVideos.push({
-              ...videoData,
-              id: videoDoc.id,
-              roomId: roomDoc.id,
-              roomName: roomData.name || '제목 없음',
-              // 유크라 내 조회수 (시뮬레이션 - 실제로는 조회 기록을 저장해야 함)
-              ucraViewCount: Math.floor(Math.random() * 1000) + 50,
-              ucraLikes: Math.floor(Math.random() * 100) + 10
-            });
-          });
-        }
-        
+        setLoadingUcraVideos(true);
+        setError(null);
+
+        // Firestore에서 videos 컬렉션 조회 (실제 필드명에 맞게 수정)
+        const videosRef = collection(db, 'videos');
+        const videosQuery = query(
+          videosRef,
+          orderBy('registeredAt', 'desc'),
+          limit(20)
+        );
+
+        const querySnapshot = await getDocs(videosQuery);
+        const videos = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          videoId: doc.data().id, // 실제 DB 필드명
+          title: doc.data().title,
+          thumbnail: doc.data().thumbnail,
+          channel: doc.data().channel,
+          channelId: doc.data().channelId,
+          duration: doc.data().duration, // 문자열로 들어올 수 있음
+          views: doc.data().views, // 문자열로 들어올 수 있음
+          registeredAt: doc.data().registeredAt,
+        }));
+
         // 카테고리 필터링
-        let filteredVideos = allVideos;
+        let filteredVideos = videos;
         if (userCategory && userCategory.id !== 'other') {
           const categoryKeywords = CATEGORY_KEYWORDS[userCategory.id] || [];
-          filteredVideos = allVideos.filter(video => {
+          filteredVideos = videos.filter(video => {
             const title = video.title?.toLowerCase() || '';
             const description = video.description?.toLowerCase() || '';
-            const channelTitle = video.channelTitle?.toLowerCase() || '';
-            
+            const channelTitle = video.channel?.toLowerCase() || '';
             return categoryKeywords.some(keyword => 
               title.includes(keyword.toLowerCase()) ||
               description.includes(keyword.toLowerCase()) ||
@@ -54,20 +50,27 @@ export const useUcraVideos = (userCategory) => {
             );
           });
         }
-        
-        // UCRA 내 조회수 기준으로 정렬
-        filteredVideos.sort((a, b) => b.ucraViewCount - a.ucraViewCount);
-        
-        setUcraVideos(filteredVideos.slice(0, 20)); // 상위 20개만
-      } catch (error) {
-        console.error('UCRA 영상 로드 오류:', error);
+        // 조회수 기준 정렬 (문자열일 경우 숫자 변환 시도)
+        filteredVideos.sort((a, b) => {
+          const va = typeof a.views === 'string' ? parseInt(a.views.replace(/[^\d]/g, '')) : (a.views || 0);
+          const vb = typeof b.views === 'string' ? parseInt(b.views.replace(/[^\d]/g, '')) : (b.views || 0);
+          return vb - va;
+        });
+        setUcraVideos(filteredVideos);
+      } catch (err) {
+        console.error('Error fetching videos:', err);
+        setError('영상을 불러오는 중 오류가 발생했습니다.');
       } finally {
         setLoadingUcraVideos(false);
       }
     };
 
-    fetchUcraVideos();
+    fetchVideos();
   }, [userCategory]);
 
-  return { ucraVideos, loadingUcraVideos };
+  return {
+    ucraVideos,
+    loadingUcraVideos,
+    error
+  };
 }; 

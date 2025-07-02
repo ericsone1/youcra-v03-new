@@ -330,198 +330,6 @@ function createMockChannelData(channelData) {
   };
 }
 
-// 채널의 영상 목록을 가져오는 함수
-export async function fetchChannelVideos(channelId, maxResults = 20) {
-  try {
-    const apiKey = process.env.REACT_APP_YOUTUBE_API_KEY;
-    
-    if (!apiKey) {
-      console.warn('⚠️ [YouTube] API 키가 없어 Mock 데이터 반환');
-      return createMockVideoData();
-    }
-
-    console.log('🔍 [YouTube] 채널 영상 조회 시작:', channelId);
-
-    // 채널의 업로드 플레이리스트 ID 가져오기 (채널 ID의 'UC'를 'UU'로 변경)
-    const uploadsPlaylistId = channelId.replace('UC', 'UU');
-    
-    // 플레이리스트 아이템 조회 (최신 영상들)
-    const playlistUrl = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&playlistId=${uploadsPlaylistId}&maxResults=${maxResults}&order=date&key=${apiKey}`;
-    
-    const response = await fetch(playlistUrl);
-    const data = await response.json();
-
-    if (data.error) {
-      console.error('❌ [YouTube] 플레이리스트 조회 오류:', data.error);
-      // 플레이리스트 방식 실패 시 Search API로 대체
-      return await fetchChannelVideosBySearch(channelId, maxResults);
-    }
-
-    if (data.items && data.items.length > 0) {
-      console.log(`✅ [YouTube] 영상 ${data.items.length}개 조회 성공`);
-      
-      // 영상 ID들 추출
-      const videoIds = data.items.map(item => item.snippet.resourceId.videoId).join(',');
-      
-      // 영상 상세 정보 조회 (재생시간, 조회수 등)
-      const videosUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id=${videoIds}&key=${apiKey}`;
-      
-      const videosResponse = await fetch(videosUrl);
-      const videosData = await videosResponse.json();
-      
-      if (videosData.items) {
-        const videos = videosData.items.map(video => {
-          const duration = parseYouTubeDuration(video.contentDetails.duration);
-          const isShort = duration <= 60; // 60초 이하는 숏폼으로 간주
-          
-          return {
-            id: video.id,
-            title: video.snippet.title,
-            description: video.snippet.description,
-            thumbnailUrl: video.snippet.thumbnails.medium?.url || video.snippet.thumbnails.default?.url,
-            duration: formatDuration(duration),
-            durationSeconds: duration,
-            type: isShort ? 'short' : 'long',
-            publishedAt: video.snippet.publishedAt,
-            viewCount: parseInt(video.statistics.viewCount || 0),
-            likeCount: parseInt(video.statistics.likeCount || 0),
-            channelTitle: video.snippet.channelTitle,
-            // 상호시청용 추가 데이터
-            watchProgress: 0,
-            totalViewers: 0,
-            currentViewers: 0
-          };
-        });
-
-        console.log(`✅ [YouTube] 영상 상세 정보 처리 완료: ${videos.length}개`);
-        console.log('📊 [YouTube] 숏폼/롱폼 분포:', {
-          shorts: videos.filter(v => v.type === 'short').length,
-          longs: videos.filter(v => v.type === 'long').length
-        });
-
-        return videos;
-      }
-    }
-
-    console.warn('⚠️ [YouTube] 영상 목록이 비어있음');
-    return createMockVideoData();
-
-  } catch (error) {
-    console.error('❌ [YouTube] 영상 조회 오류:', error);
-    return createMockVideoData();
-  }
-}
-
-// Search API를 사용한 대체 방법
-async function fetchChannelVideosBySearch(channelId, maxResults) {
-  try {
-    const apiKey = process.env.REACT_APP_YOUTUBE_API_KEY;
-    
-    const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&type=video&order=date&maxResults=${maxResults}&key=${apiKey}`;
-    
-    const response = await fetch(searchUrl);
-    const data = await response.json();
-
-    if (data.items && data.items.length > 0) {
-      const videoIds = data.items.map(item => item.id.videoId).join(',');
-      
-      const videosUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id=${videoIds}&key=${apiKey}`;
-      
-      const videosResponse = await fetch(videosUrl);
-      const videosData = await videosResponse.json();
-      
-      if (videosData.items) {
-        return videosData.items.map(video => {
-          const duration = parseYouTubeDuration(video.contentDetails.duration);
-          const isShort = duration <= 60;
-          
-          return {
-            id: video.id,
-            title: video.snippet.title,
-            description: video.snippet.description,
-            thumbnailUrl: video.snippet.thumbnails.medium?.url || video.snippet.thumbnails.default?.url,
-            duration: formatDuration(duration),
-            durationSeconds: duration,
-            type: isShort ? 'short' : 'long',
-            publishedAt: video.snippet.publishedAt,
-            viewCount: parseInt(video.statistics.viewCount || 0),
-            likeCount: parseInt(video.statistics.likeCount || 0),
-            channelTitle: video.snippet.channelTitle,
-            watchProgress: 0,
-            totalViewers: 0,
-            currentViewers: 0
-          };
-        });
-      }
-    }
-
-    return createMockVideoData();
-  } catch (error) {
-    console.error('❌ [YouTube] Search API 영상 조회 오류:', error);
-    return createMockVideoData();
-  }
-}
-
-// YouTube 재생시간 파싱 (PT4M13S -> 253초)
-function parseYouTubeDuration(duration) {
-  const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
-  const hours = parseInt(match[1] || 0);
-  const minutes = parseInt(match[2] || 0);
-  const seconds = parseInt(match[3] || 0);
-  return hours * 3600 + minutes * 60 + seconds;
-}
-
-// 초를 시간 형식으로 변환 (253 -> "4:13")
-function formatDuration(seconds) {
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-  
-  if (hours > 0) {
-    return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  } else {
-    return `${minutes}:${secs.toString().padStart(2, '0')}`;
-  }
-}
-
-// Mock 영상 데이터 생성
-function createMockVideoData() {
-  return [
-    {
-      id: 'mock1',
-      title: 'Mock 영상 1',
-      description: 'API 키가 없어 표시되는 샘플 영상입니다.',
-      thumbnailUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIwIiBoZWlnaHQ9IjE4MCIgdmlld0JveD0iMCAwIDMyMCAxODAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMjAiIGhlaWdodD0iMTgwIiBmaWxsPSIjRjNGNEY2Ii8+CjxjaXJjbGUgY3g9IjE2MCIgY3k9IjkwIiByPSIzMCIgZmlsbD0iI0VGNDQ0NCIvPgo8cGF0aCBkPSJNMTUwIDc1TDE3NSA5MEwxNTAgMTA1Vjc1WiIgZmlsbD0iI0ZGRkZGRiIvPgo8L3N2Zz4K',
-      duration: '2:30',
-      durationSeconds: 150,
-      type: 'short',
-      publishedAt: new Date().toISOString(),
-      viewCount: 1200,
-      likeCount: 45,
-      channelTitle: 'Mock Channel',
-      watchProgress: 0,
-      totalViewers: 0,
-      currentViewers: 0
-    },
-    {
-      id: 'mock2',
-      title: 'Mock 영상 2',
-      description: 'API 키가 없어 표시되는 샘플 영상입니다.',
-      thumbnailUrl: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzIwIiBoZWlnaHQ9IjE4MCIgdmlld0JveD0iMCAwIDMyMCAxODAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIzMjAiIGhlaWdodD0iMTgwIiBmaWxsPSIjRjNGNEY2Ii8+CjxjaXJjbGUgY3g9IjE2MCIgY3k9IjkwIiByPSIzMCIgZmlsbD0iI0VGNDQ0NCIvPgo8cGF0aCBkPSJNMTUwIDc1TDE3NSA5MEwxNTAgMTA1Vjc1WiIgZmlsbD0iI0ZGRkZGRiIvPgo8L3N2Zz4K',
-      duration: '8:45',
-      durationSeconds: 525,
-      type: 'long',
-      publishedAt: new Date().toISOString(),
-      viewCount: 3500,
-      likeCount: 120,
-      channelTitle: 'Mock Channel',
-      watchProgress: 0,
-      totalViewers: 0,
-      currentViewers: 0
-    }
-  ];
-}
-
 const normalizeYouTubeUrl = (url) => {
   if (!url) return '';
   
@@ -599,4 +407,153 @@ export const getYouTubeChannelInfo = async (channelUrl) => {
       profileImageUrl: null
     };
   }
-}; 
+};
+
+// 채널 영상 목록 조회 함수
+export async function fetchChannelVideos(channelId, maxResults = 20) {
+  try {
+    const apiKey = process.env.REACT_APP_YOUTUBE_API_KEY;
+    
+    console.log('🔍 [YouTube] fetchChannelVideos 시작');
+    console.log('🔑 [YouTube] API 키 존재:', !!apiKey);
+    console.log('📺 [YouTube] 채널 ID:', channelId);
+    console.log('📊 [YouTube] 최대 결과수:', maxResults);
+    
+    if (!apiKey) {
+      console.warn('⚠️ [YouTube] API 키가 없어 Mock 데이터 반환');
+      return createMockVideoData();
+    }
+
+    console.log('🔍 [YouTube] 채널 영상 조회 시작:', channelId);
+    
+    // 채널의 업로드 플레이리스트 ID 조회
+    const channelApiUrl = `https://www.googleapis.com/youtube/v3/channels?part=contentDetails&id=${channelId}&key=${apiKey}`;
+    
+    const channelResponse = await fetch(channelApiUrl);
+    const channelData = await channelResponse.json();
+    
+    if (!channelData.items || channelData.items.length === 0) {
+      console.warn('⚠️ [YouTube] 채널 정보를 찾을 수 없음:', channelId);
+      return createMockVideoData();
+    }
+    
+    const uploadsPlaylistId = channelData.items[0].contentDetails?.relatedPlaylists?.uploads;
+    if (!uploadsPlaylistId) {
+      console.warn('⚠️ [YouTube] 업로드 플레이리스트 ID를 찾을 수 없음');
+      return createMockVideoData();
+    }
+    
+    console.log('📝 [YouTube] 업로드 플레이리스트 ID:', uploadsPlaylistId);
+    
+    // 플레이리스트 항목 조회
+    const playlistApiUrl = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet,contentDetails&playlistId=${uploadsPlaylistId}&maxResults=${maxResults}&order=date&key=${apiKey}`;
+    
+    const playlistResponse = await fetch(playlistApiUrl);
+    const playlistData = await playlistResponse.json();
+    
+    if (!playlistData.items || playlistData.items.length === 0) {
+      console.warn('⚠️ [YouTube] 플레이리스트 항목이 없음');
+      return createMockVideoData();
+    }
+    
+    console.log(`📹 [YouTube] 플레이리스트에서 ${playlistData.items.length}개 영상 발견`);
+    
+    // 각 영상의 상세 정보 조회 (통계, 시간 등)
+    const videoIds = playlistData.items.map(item => item.contentDetails.videoId).join(',');
+    const videosApiUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${videoIds}&key=${apiKey}`;
+    
+    const videosResponse = await fetch(videosApiUrl);
+    const videosData = await videosResponse.json();
+    
+    if (!videosData.items) {
+      console.warn('⚠️ [YouTube] 영상 상세 정보 조회 실패');
+      return createMockVideoData();
+    }
+    
+    console.log(`✅ [YouTube] ${videosData.items.length}개 영상 상세 정보 조회 성공`);
+    
+    // 데이터 변환
+    const videos = videosData.items.map(video => {
+      // YouTube 시간 형식을 초 단위로 변환 (PT4M13S → 253초)
+      const parseYouTubeDuration = (duration) => {
+        if (!duration) return 0;
+        const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+        if (!match) return 0;
+        
+        const hours = parseInt(match[1]) || 0;
+        const minutes = parseInt(match[2]) || 0;
+        const seconds = parseInt(match[3]) || 0;
+        
+        return hours * 3600 + minutes * 60 + seconds;
+      };
+      
+      // 초를 표시용 시간 형식으로 변환
+      const formatDuration = (durationSeconds) => {
+        if (!durationSeconds || durationSeconds === 0) return '0:00';
+        
+        const hours = Math.floor(durationSeconds / 3600);
+        const minutes = Math.floor((durationSeconds % 3600) / 60);
+        const seconds = durationSeconds % 60;
+        
+        if (hours > 0) {
+          return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        } else {
+          return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+      };
+      
+      const durationSeconds = parseYouTubeDuration(video.contentDetails.duration);
+      
+      return {
+        id: video.id,
+        title: video.snippet.title,
+        channelTitle: video.snippet.channelTitle,
+        thumbnailUrl: video.snippet.thumbnails.medium?.url || video.snippet.thumbnails.default?.url,
+        duration: formatDuration(durationSeconds), // 표시용 (예: "4:13")
+        durationSeconds: durationSeconds, // 초 단위 숫자
+        viewCount: parseInt(video.statistics.viewCount || 0),
+        likeCount: parseInt(video.statistics.likeCount || 0),
+        publishedAt: video.snippet.publishedAt,
+        type: durationSeconds <= 180 ? 'short' : 'long' // 180초(3분) 이하는 숏폼
+      };
+    });
+    
+    console.log(`✅ [YouTube] 채널 영상 ${videos.length}개 조회 완료`);
+    return videos;
+    
+  } catch (error) {
+    console.error('❌ [YouTube] 채널 영상 조회 실패:', error);
+    return createMockVideoData();
+  }
+}
+
+// Mock 영상 데이터 생성
+function createMockVideoData() {
+  console.log('🎭 [YouTube] Mock 영상 데이터 생성');
+  return [
+    {
+      id: 'mock1',
+      title: 'Mock 영상 1 - API 키를 설정해주세요',
+      channelTitle: 'Mock 채널',
+      thumbnailUrl: 'https://img.youtube.com/vi/mock1/mqdefault.jpg',
+      duration: '3:45',
+      durationSeconds: 225,
+      viewCount: 1000,
+      likeCount: 50,
+      publishedAt: new Date().toISOString(),
+      type: 'long'
+    },
+    {
+      id: 'mock2',
+      title: 'Mock 영상 2 - YouTube API 연동 필요',
+      channelTitle: 'Mock 채널',
+      thumbnailUrl: 'https://img.youtube.com/vi/mock2/mqdefault.jpg',
+      duration: '0:45',
+      durationSeconds: 45,
+      viewCount: 500,
+      likeCount: 25,
+      publishedAt: new Date().toISOString(),
+      type: 'short'
+    }
+  ];
+} 
