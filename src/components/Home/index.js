@@ -174,20 +174,9 @@ function Home() {
           return isNaN(num) ? 0 : num;
         };
         
-        // 날짜 포맷팅
+        // 날짜는 원본 그대로 전달 (WatchVideoList에서 상대 시간으로 변환)
         const formatUploadDate = (dateStr) => {
-          if (!dateStr) return '날짜 미확인';
-          try {
-            const date = new Date(dateStr);
-            return date.toLocaleDateString('ko-KR', { 
-              year: 'numeric', 
-              month: 'short', 
-              day: 'numeric' 
-            });
-          } catch (e) {
-            console.warn('날짜 포맷팅 실패:', e);
-            return '날짜 미확인';
-          }
+          return dateStr; // 원본 ISO 문자열 그대로 전달
         };
         
         const formatted = {

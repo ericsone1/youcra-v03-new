@@ -10,7 +10,14 @@ import { getRecommendedCategories, filterVideosByRecommendedCategories } from '.
 import { useNavigate } from 'react-router-dom';
 
 // 영상 길이(초)를 시:분:초 또는 분:초로 변환
-function formatDuration(seconds) {
+function formatDuration(duration) {
+  // 이미 문자열 형태로 포맷된 경우 (예: "4:13") 그대로 반환
+  if (typeof duration === 'string' && duration.includes(':')) {
+    return duration;
+  }
+  
+  // 숫자로 변환
+  const seconds = parseInt(duration);
   if (!seconds || isNaN(seconds) || seconds <= 0) return '시간 미확인';
   
   const h = Math.floor(seconds / 3600);
@@ -26,36 +33,38 @@ function formatDuration(seconds) {
 function formatDate(date) {
   if (!date) return '날짜 미확인';
   
-  // 이미 포맷된 문자열인 경우 (Home에서 변환된 경우)
-  if (typeof date === 'string' && date.includes('년')) {
-    return date;
-  }
-  
-  // ISO 날짜 문자열인 경우
+  // ISO 문자열 또는 Timestamp 객체를 Date로 변환
+  let d;
   if (typeof date === 'string') {
-    try {
-      const d = new Date(date);
-      return d.toLocaleDateString('ko-KR', { 
-        year: 'numeric', 
-        month: 'short', 
-        day: 'numeric' 
-      });
-    } catch (e) {
-      return '날짜 미확인';
-    }
+    // 이미 "전" 등이 포함된 경우 그대로 반환
+    if (date.includes('전')) return date;
+    // 한국어 날짜 형식이면 그대로 반환 (예: "2024. 1. 15.")
+    if (date.match(/\d{4}\.\s*\d{1,2}\.\s*\d{1,2}\./)) return date;
+    
+    d = new Date(date);
+    if (isNaN(d)) return date; // 파싱 실패시 원본 반환
+  } else if (date.seconds) {
+    d = new Date(date.seconds * 1000);
+  } else if (date instanceof Date) {
+    d = date;
   }
+  if (!d || isNaN(d)) return '날짜 미확인';
   
-  // Firestore timestamp 객체인 경우
-  if (date.seconds) {
-    const d = new Date(date.seconds * 1000);
-    return d.toLocaleDateString('ko-KR', { 
-      year: 'numeric', 
-      month: 'short', 
-      day: 'numeric' 
-    });
-  }
-  
-  return '날짜 미확인';
+  const now = new Date();
+  const diffSec = Math.floor((now - d) / 1000);
+  if (diffSec < 60) return '방금 전';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}분 전`;
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) return `${diffHour}시간 전`;
+  const diffDay = Math.floor(diffHour / 24);
+  if (diffDay < 7) return `${diffDay}일 전`;
+  const diffWeek = Math.floor(diffDay / 7);
+  if (diffWeek < 4) return `${diffWeek}주 전`;
+  const diffMonth = Math.floor(diffDay / 30);
+  if (diffMonth < 12) return `${diffMonth}개월 전`;
+  const diffYear = Math.floor(diffMonth / 12);
+  return `${diffYear}년 전`;
 }
 
 // 영상 리스트 렌더러 (공통, 페이지네이션 추가)
@@ -88,7 +97,10 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
                       onError={e => { e.target.src = 'https://img.youtube.com/vi/' + (video.videoId || video.id) + '/mqdefault.jpg'; }}
                     />
                     <div className="absolute bottom-1 right-1 bg-black bg-opacity-75 text-white text-xs px-1 py-0.5 rounded text-center min-w-[32px]">
-                      {video.durationDisplay || formatDuration(video.duration) || '?:??'}
+                      {video.durationDisplay || 
+                       formatDuration(video.durationSeconds) || 
+                       formatDuration(video.duration) || 
+                       '?:??'}
                     </div>
                   </div>
                   
@@ -99,7 +111,7 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
                     </h3>
                     <div className="flex items-center gap-2 text-xs">
                       <span className="text-gray-600 truncate max-w-[120px]">
-                        {video.channelTitle || video.channel}
+                        {video.channelTitle || video.channel || '채널명 없음'}
                       </span>
                       <span className="px-1.5 py-0.5 rounded text-xs font-medium flex-shrink-0 bg-green-100 text-green-600">
                         추천
@@ -108,11 +120,15 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
                     <div className="flex items-center gap-3 text-xs text-gray-500">
                       <span className="flex items-center gap-1">
                         <span>👁️</span>
-                        <span>{Number(video.viewCount || video.statistics?.viewCount || 0).toLocaleString()}</span>
+                        <span>{Number(video.viewCount || video.views || video.statistics?.viewCount || 0).toLocaleString()}</span>
                       </span>
                       <span className="flex items-center gap-1">
                         <span>👍</span>
                         <span>{Number(video.likeCount || video.statistics?.likeCount || 0).toLocaleString()}</span>
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span>📅</span>
+                        <span className="truncate">{formatDate(video.uploadedAt || video.publishedAt || video.registeredAt)}</span>
                       </span>
                     </div>
                   </div>
@@ -164,7 +180,10 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
             />
             {/* 영상 길이 오버레이 */}
             <div className="absolute bottom-1 right-1 bg-black bg-opacity-75 text-white text-xs px-1 py-0.5 rounded text-center min-w-[32px]">
-              {video.durationDisplay || formatDuration(video.duration) || '?:??'}
+              {video.durationDisplay || 
+               formatDuration(video.durationSeconds) || 
+               formatDuration(video.duration) || 
+               '?:??'}
             </div>
           </div>
           
@@ -276,24 +295,37 @@ export const WatchVideoList = ({
   // 중복 영상 제거 (videoId 기준) - YouTube API 데이터는 이미 중복 제거됨
   const uniqueVideos = watchVideos.length > 0 ? sourceVideos : computeUniqueVideos(sourceVideos);
 
-  // 숏폼/롱폼 조건 필터링 (duration 기준, 정보 없는 영상은 모두 제외)
+  // 숏폼/롱폼 조건 필터링 (durationSeconds 우선, duration 보조 사용)
   let displayVideos = uniqueVideos;
   if (videoFilter === 'short') {
-    displayVideos = uniqueVideos.filter(
-      v => typeof v.duration === 'number' && v.duration > 0 && v.duration <= 180
-    );
+    displayVideos = uniqueVideos.filter(v => {
+      // durationSeconds가 있으면 우선 사용 (YouTube API 데이터)
+      if (typeof v.durationSeconds === 'number' && v.durationSeconds > 0) {
+        return v.durationSeconds <= 180;
+      }
+      // 없으면 duration 사용 (Firestore 데이터)
+      return typeof v.duration === 'number' && v.duration > 0 && v.duration <= 180;
+    });
   } else if (videoFilter === 'long') {
-    displayVideos = uniqueVideos.filter(
-      v => typeof v.duration === 'number' && v.duration > 180
-    );
+    displayVideos = uniqueVideos.filter(v => {
+      // durationSeconds가 있으면 우선 사용 (YouTube API 데이터)
+      if (typeof v.durationSeconds === 'number' && v.durationSeconds > 0) {
+        return v.durationSeconds > 180;
+      }
+      // 없으면 duration 사용 (Firestore 데이터)
+      return typeof v.duration === 'number' && v.duration > 180;
+    });
   }
 
   // 정렬 적용
   displayVideos = [...displayVideos].sort((a, b) => {
     if (sortKey === 'duration') {
-      return (a.duration || 0) - (b.duration || 0); // 영상 길이 오름차순(짧은 영상이 위)
+      // durationSeconds 우선 사용, 없으면 duration 사용
+      const aDuration = (typeof a.durationSeconds === 'number' ? a.durationSeconds : a.duration) || 0;
+      const bDuration = (typeof b.durationSeconds === 'number' ? b.durationSeconds : b.duration) || 0;
+      return aDuration - bDuration; // 영상 길이 오름차순(짧은 영상이 위)
     } else if (sortKey === 'views') {
-      return (b.viewCount || 0) - (a.viewCount || 0); // 조회수 내림차순
+      return (b.viewCount || b.views || 0) - (a.viewCount || a.views || 0); // 조회수 내림차순
     } else {
       // 최신순(등록일 내림차순)
       const aTime = a.registeredAt?.seconds || 0;
@@ -306,7 +338,10 @@ export const WatchVideoList = ({
   let recommendedVideos = [];
   if (displayVideos.length === 0 && selectedCategories && selectedCategories.length > 0) {
     const recommendedCategories = getRecommendedCategories(selectedCategories.map(cat => typeof cat === 'string' ? cat : cat.category));
-    recommendedVideos = filterVideosByRecommendedCategories(uniqueVideos, recommendedCategories);
+    
+    // YouTube API 데이터가 있으면 우선 사용, 없으면 Firestore 데이터 사용
+    const sourceForRecommended = watchVideos.length > 0 ? watchVideos : uniqueVideos;
+    recommendedVideos = filterVideosByRecommendedCategories(sourceForRecommended, recommendedCategories);
   }
 
   // <GlobalVideoPlayer />는 Home/index.js 등 상위에서 항상 렌더링되어 있어야 함
