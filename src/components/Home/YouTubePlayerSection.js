@@ -16,7 +16,14 @@ export default function YouTubePlayerSection({
       opts={{
         width: minimized ? '80' : '100%',
         height: minimized ? '80' : '100%',
-        playerVars: { autoplay: 1, controls: 1, rel: 0, fs: 1 }
+        playerVars: { 
+          autoplay: 1, 
+          controls: 1, 
+          rel: 0, 
+          fs: 1,
+          modestbranding: 1,
+          iv_load_policy: 3
+        }
       }}
       onReady={onReady}
       onStateChange={onStateChange}

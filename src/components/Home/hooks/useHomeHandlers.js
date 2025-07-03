@@ -21,9 +21,7 @@ export const useHomeHandlers = ({
   videoDuration,
   watchSeconds,
   videoEnded,
-  fanCertified,
-  getFanCertificationStatus,
-  saveFanCertificationStatus
+  fanCertified
 }) => {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
@@ -124,9 +122,8 @@ export const useHomeHandlers = ({
       setWatchSeconds(0);
       setVideoEnded(false);
       setLiked(false);
-      // 시청인증 상태는 localStorage에서 불러오기
-      const isCertified = getFanCertificationStatus ? getFanCertificationStatus(videoId) : false;
-      setFanCertified(isCertified);
+      // 시청인증 상태 초기화 (새로운 WatchedVideosContext에서 관리)
+      setFanCertified(false);
       setIsPlaying(false);
       setVideoDuration(0);
       setVideoCompleted(false);
@@ -182,10 +179,7 @@ export const useHomeHandlers = ({
 
     if (canCertify && !fanCertified) {
       setFanCertified(true);
-      if (saveFanCertificationStatus) {
-        saveFanCertificationStatus(selectedVideoId, true);
-      }
-      console.log('🎉 영상 종료로 인한 자동 시청 인증 완료!');
+      console.log('🎉 영상 종료로 인한 자동 시청 인증 완료! (새로운 시스템에서 처리)');
     }
     
     // 다음 영상 자동 재생
@@ -212,10 +206,7 @@ export const useHomeHandlers = ({
     // 1) 아직 인증 전이고 조건을 충족한 경우 → 인증 처리
     if (canCertify && !fanCertified) {
       setFanCertified(true);
-      if (saveFanCertificationStatus) {
-        saveFanCertificationStatus(selectedVideoId, true);
-      }
-      alert('🎉 시청 인증이 완료되었습니다!');
+      alert('🎉 시청 인증이 완료되었습니다! (새로운 시스템에서 처리)');
       return; // 여기서 종료(다음 영상은 두 번째 클릭에서 처리)
     }
 

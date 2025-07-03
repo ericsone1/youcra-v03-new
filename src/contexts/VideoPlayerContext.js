@@ -17,6 +17,9 @@ export const VideoPlayerProvider = ({ children }) => {
   const [videoDuration, setVideoDuration] = useState(0);
   const [videoList, setVideoList] = useState([]);
   const [currentRoomId, setCurrentRoomId] = useState(null);
+  const [fanCertified, setFanCertified] = useState(false);
+  const [videoEnded, setVideoEnded] = useState(false);
+  const [currentIndex, setCurrentIndex] = useState(0);
   
   const playerRef = useRef(null);
 
@@ -79,6 +82,8 @@ export const VideoPlayerProvider = ({ children }) => {
     setIsPlaying(false);
     setVideoDuration(0);
     setPlayerLoading(false);
+    setFanCertified(false);
+    setVideoEnded(false);
   };
 
   // 영상 리스트 업데이트
@@ -88,15 +93,21 @@ export const VideoPlayerProvider = ({ children }) => {
 
   // 플레이어 초기화 및 영상 선택
   const initializePlayer = (roomId, videos, selectedIndex = 0) => {
+    console.log('🎬 initializePlayer 호출:', { roomId, videosLength: videos?.length, selectedIndex });
     setCurrentRoomId(roomId);
     setVideoList(videos);
+    setCurrentIndex(selectedIndex);
     if (videos && videos.length > 0 && selectedIndex >= 0 && selectedIndex < videos.length) {
       const selectedVideo = videos[selectedIndex];
-      setSelectedVideoId(selectedVideo.id);
+      const ytId = selectedVideo.videoId || selectedVideo.id; // prefer video.videoId
+      console.log('✅ 영상 선택됨:', { selectedVideo: selectedVideo.title, ytId, selectedIndex });
+      setSelectedVideoId(ytId);
       resetPlayerState();
       setPlayerLoading(true);
     }
   };
+
+  // 기존 localStorage 시스템 제거됨 - WatchedVideosContext 사용
 
   const value = {
     selectedVideoId,
@@ -109,11 +120,17 @@ export const VideoPlayerProvider = ({ children }) => {
     setVideoDuration,
     videoList,
     currentRoomId,
+    currentIndex,
+    setCurrentIndex,
     playerRef,
     handleVideoSelect,
     resetPlayerState,
     updateVideoList,
-    initializePlayer
+    initializePlayer,
+    fanCertified,
+    setFanCertified,
+    videoEnded,
+    setVideoEnded
   };
 
   return (

@@ -23,8 +23,10 @@ import Modal from "react-modal";
 import LoadingSpinner from "./common/LoadingSpinner";
 import ErrorMessage from "./common/ErrorMessage";
 import { useVideoPlayer } from "../contexts/VideoPlayerContext";
+import { useWatchedVideos } from "../contexts/WatchedVideosContext";
 // import { MessageList } from './chat/MessageList'; // 임시 비활성화
 import { useChat } from '../hooks/useChat';
+import HomeVideoPlayer from './Home/HomeVideoPlayer';
 
 const MAX_LENGTH = 200;
 
@@ -176,9 +178,16 @@ function ChatRoom() {
   
   // VideoPlayerContext 사용
   const {
+    selectedVideoId,
+    videoList,
+    currentIndex,
     initializePlayer,
-    updateVideoList
+    updateVideoList,
+    handleVideoSelect
   } = useVideoPlayer();
+  
+  // WatchedVideosContext 사용 (단일 인증 시스템)
+  const { getWatchInfo } = useWatchedVideos();
   
   // useChat hook 사용
   const {
@@ -218,8 +227,7 @@ function ChatRoom() {
   // 로컬 영상 리스트 (영상 등록 확인용)
   const [localVideoList, setLocalVideoList] = useState([]);
   
-  // === 영상 인증 관련 State ===
-  const [certifiedVideoIds, setCertifiedVideoIds] = useState([]);
+  // === 영상 인증 관련 State === (WatchedVideosContext로 대체됨)
   const [watchSettings, setWatchSettings] = useState({
     enabled: true,
     watchMode: 'partial'
@@ -243,6 +251,7 @@ function ChatRoom() {
   
   // === UI 관련 State ===
   const [showUserProfile, setShowUserProfile] = useState(null);
+  const [isPlayerMinimized, setIsPlayerMinimized] = useState(false);
   const [showDelete, setShowDelete] = useState(null);
   const [showImageModal, setShowImageModal] = useState(null); // 이미지 모달
   const [watching, setWatching] = useState(0); // 시청자 수
@@ -510,31 +519,7 @@ function ChatRoom() {
 
 
   // 내가 인증한 영상 id 리스트 구독
-  useEffect(() => {
-    if (!roomId || !auth.currentUser) return;
-    if (localVideoList.length === 0) {
-      setCertifiedVideoIds([]);
-      return;
-    }
-    const unsubscribes = localVideoList.map((video) => {
-      const q = collection(db, "chatRooms", roomId, "videos", video.id, "certifications");
-      return onSnapshot(q, (snapshot) => {
-        const found = snapshot.docs.find(
-          (doc) => doc.data().uid === auth.currentUser.uid
-        );
-        setCertifiedVideoIds((prev) => {
-          if (found && !prev.includes(video.id)) {
-            return [...prev, video.id];
-          }
-          if (!found && prev.includes(video.id)) {
-            return prev.filter((id) => id !== video.id);
-          }
-          return prev;
-        });
-      });
-    });
-    return () => unsubscribes.forEach((unsub) => unsub());
-  }, [roomId, localVideoList, auth.currentUser]);
+  // 기존 chatRooms 기반 인증 시스템 제거됨 - WatchedVideosContext 사용
 
 
 
@@ -1794,6 +1779,37 @@ function ChatRoom() {
         <button className="flex flex-col items-center text-gray-500 hover:text-blue-500 text-sm font-bold focus:outline-none" onClick={() => navigate('/board')}>📋<span>게시판</span></button>
         <button className="flex flex-col items-center text-gray-500 hover:text-blue-500 text-sm font-bold focus:outline-none" onClick={() => navigate('/my')}>👤<span>마이채널</span></button>
       </nav>
+
+      {/* ChatRoom 전용 Home 스타일 플레이어 */}
+      {selectedVideoId && videoList && videoList.length > 0 && currentIndex >= 0 && currentIndex < videoList.length && (
+        <HomeVideoPlayer
+          video={videoList[currentIndex]}
+          videoQueue={videoList}
+          currentIndex={currentIndex}
+          minimized={isPlayerMinimized}
+          onClose={() => {
+            handleVideoSelect(null);
+            setIsPlayerMinimized(false);
+          }}
+          onNext={(nextIdx) => {
+            console.log('🎬 다음 영상으로 이동:', { currentIndex, nextIdx });
+            initializePlayer(roomId, videoList, nextIdx);
+          }}
+          onPrev={(prevIdx) => {
+            console.log('🎬 이전 영상으로 이동:', { currentIndex, prevIdx });
+            initializePlayer(roomId, videoList, prevIdx);
+          }}
+          onMinimize={(minimized) => {
+            console.log('🔽 플레이어 최소화 상태 변경:', minimized);
+            setIsPlayerMinimized(minimized);
+          }}
+          onRestore={() => {
+            console.log('🔼 플레이어 복원');
+            setIsPlayerMinimized(false);
+          }}
+          onDrag={() => {}}
+        />
+      )}
     </div>
   );
 }

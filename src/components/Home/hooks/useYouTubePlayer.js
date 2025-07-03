@@ -16,36 +16,6 @@ export const useYouTubePlayer = () => {
   const playerRef = useRef(null);
   const currentVideoRef = useRef(null);
 
-  // 시청인증 상태를 localStorage에서 불러오기
-  const getFanCertificationStatus = (videoId) => {
-    if (!videoId) return false;
-    const certifiedVideos = JSON.parse(localStorage.getItem('fanCertifiedVideos') || '{}');
-    return certifiedVideos[videoId] || false;
-  };
-
-  // 시청인증 상태를 localStorage에 저장하기
-  const saveFanCertificationStatus = (videoId, status) => {
-    if (!videoId) return;
-    const certifiedVideos = JSON.parse(localStorage.getItem('fanCertifiedVideos') || '{}');
-    certifiedVideos[videoId] = status;
-    localStorage.setItem('fanCertifiedVideos', JSON.stringify(certifiedVideos));
-  };
-
-  // 선택된 비디오가 변경될 때 시청인증 상태 확인
-  useEffect(() => {
-    if (selectedVideoId) {
-      const isCertified = getFanCertificationStatus(selectedVideoId);
-      setFanCertified(isCertified);
-    }
-  }, [selectedVideoId]);
-
-  // 시청인증 상태가 변경될 때 localStorage에 저장
-  useEffect(() => {
-    if (selectedVideoId && fanCertified) {
-      saveFanCertificationStatus(selectedVideoId, true);
-    }
-  }, [selectedVideoId, fanCertified]);
-
   // 시청시간 타이머 관리
   useEffect(() => {
     if (isPlaying && selectedVideoId && !watchTimer) {
@@ -87,8 +57,6 @@ export const useYouTubePlayer = () => {
     playerLoading,
     setPlayerLoading,
     playerRef,
-    currentVideoRef,
-    getFanCertificationStatus,
-    saveFanCertificationStatus
+    currentVideoRef
   };
 }; 

@@ -9,6 +9,10 @@ import UserProfile from "./components/UserProfile";
 import DMChatRoom from "./components/DMChatRoom"; // 1:1 채팅방 컴포넌트 import
 import VideoListPage from "./components/VideoListPage"; // 새로 만들 파일
 import AddVideoPage from "./components/AddVideoPage"; // 새 파일
+import { AuthProvider } from "./contexts/AuthContext";
+import { VideoPlayerProvider } from "./contexts/VideoPlayerContext";
+import { ToastProvider, ToastContainer } from "./contexts/ToastContext";
+import { WatchedVideosProvider } from "./contexts/WatchedVideosContext";
 
 function App() {
   const location = useLocation();
@@ -51,8 +55,17 @@ function App() {
 
 export default function AppWrapper() {
   return (
-    <Router>
-      <App />
-    </Router>
+    <AuthProvider>
+      <WatchedVideosProvider>
+        <VideoPlayerProvider>
+          <ToastProvider>
+            <Router>
+              <ToastContainer />
+              <App />
+            </Router>
+          </ToastProvider>
+        </VideoPlayerProvider>
+      </WatchedVideosProvider>
+    </AuthProvider>
   );
 }

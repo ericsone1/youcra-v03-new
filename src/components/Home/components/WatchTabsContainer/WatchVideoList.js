@@ -8,6 +8,7 @@ import { FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import ChannelNameWithBadge from '../../../ChannelNameWithBadge';
 import { getRecommendedCategories, filterVideosByRecommendedCategories } from '../../utils/dataProcessing';
 import { useNavigate } from 'react-router-dom';
+import { useWatchedVideos } from '../../../../contexts/WatchedVideosContext';
 
 // 영상 길이(초)를 시:분:초 또는 분:초로 변환
 function formatDuration(duration) {
@@ -136,7 +137,8 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
                   {/* 시청하기 버튼 */}
                   <div className="flex-shrink-0">
                     {(() => {
-                      const watchCount = getWatchCount(video.id || video.videoId);
+                      const info = getWatchCount(video.id || video.videoId);
+                      const watchCount = info.watchCount || 0;
                       const isRewatch = watchCount > 0;
                       const nextWatchCount = watchCount + 1;
                       
@@ -226,7 +228,8 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
           {/* 시청하기 버튼 */}
           <div className="flex-shrink-0">
             {(() => {
-              const watchCount = getWatchCount(video.id || video.videoId);
+              const info = getWatchCount(video.id || video.videoId);
+              const watchCount = info.watchCount || 0;
               const isRewatch = watchCount > 0;
               const nextWatchCount = watchCount + 1;
               
@@ -271,6 +274,7 @@ export const WatchVideoList = ({
   const [sortKey, setSortKey] = useState('duration'); // 기본값: 영상 길이순
   const [showPlayer, setShowPlayer] = useState(false);
   const navigate = useNavigate();
+  const { getWatchInfo } = useWatchedVideos();
 
   if (!currentUser) {
     return null; // 로그인 안내/버튼을 렌더링하지 않음
@@ -397,7 +401,7 @@ export const WatchVideoList = ({
           videos={displayVideos}
           onWatchClick={onWatchClick}
           recommendedVideos={recommendedVideos}
-          getWatchCount={getWatchCount}
+          getWatchCount={getWatchInfo}
         />
       )}
     </motion.div>

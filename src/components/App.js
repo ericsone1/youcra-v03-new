@@ -34,6 +34,7 @@ import MyFeedViewersPage from "./MyFeedViewersPage";
 import { db, auth } from "../firebase";
 import { collection, query, where, onSnapshot, orderBy, updateDoc } from "firebase/firestore";
 import useNotification from "../hooks/useNotification";
+import { WatchedVideosProvider } from '../contexts/WatchedVideosContext';
 
 function App() {
   const location = useLocation();
@@ -207,80 +208,84 @@ function App() {
 
   return (
     <AuthProvider>
-      <ToastProvider>
-      <div 
-        className="bg-blue-100 min-h-screen pb-20"
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        style={{ 
-          touchAction: 'pan-y', // 세로 스크롤만 허용
-          userSelect: 'none', // 텍스트 선택 방지
-          WebkitUserSelect: 'none',
-          MozUserSelect: 'none',
-          msUserSelect: 'none'
-        }}
-      >
-          <AnimatePresence mode="wait" initial={false}>
-            <Routes location={location} key={location.pathname}>
-              <Route path="/" element={<PageWrapper><Home /></PageWrapper>} />
-              <Route path="/chat" element={<PageWrapper><ChatList /></PageWrapper>} />
-              <Route path="/board" element={<PageWrapper><Board /></PageWrapper>} />
-              <Route path="/my" element={<PageWrapper><MyChannel /></PageWrapper>} />
-          <Route path="/chats" element={<AllChatRooms />} />
-          <Route path="/Chats" element={<AllChatRooms />} />
-          <Route path="/chat/create" element={<ChatRoomCreate />} />
-          <Route path="/chat/:roomId" element={<ChatRoom />} />
-          <Route path="/chat/:roomId/info" element={<ChatRoomInfo />} />
-          <Route path="/chat/:roomId/profile" element={<ChatRoomProfile />} />
-          <Route path="/chat/:roomId/manage" element={<ChatRoomHost />} />
-          <Route path="/chat/:roomId/videos" element={<VideoListPage />} />
-          <Route path="/chat/:roomId/certification-settings" element={<CertificationSettings />} />
-          <Route path="/chat/:roomId/menu" element={<ChatRoomMenu />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/profile/:roomId/:uid" element={<UserProfile />} />
-          <Route path="/dm/:uid" element={<DMChatRoom />} />
-          <Route path="/videos" element={<VideoListPage />} />
-          <Route path="/add-video" element={<AddVideoPage />} />
-          <Route path="/search" element={<SearchResult />} />
-          <Route path="/product/:id" element={<ProductDetail />} />
-          <Route path="/admin" element={<AdminPage />} />
-          <Route path="/my/videos" element={<MyVideosPage />} />
-              <Route path="/my/settings" element={<SettingsPage />} />
-          <Route path="/my/points" element={<MyPointsPage />} />
-          <Route path="/my/viewers" element={<MyFeedViewersPage />} />
-          <Route path="/my/feed-viewers" element={<MyFeedViewersPage />} />
-        </Routes>
-          </AnimatePresence>
-        
-        {/* 스와이프 피드백 */}
-        {swipeDirection && (
-          <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black bg-opacity-70 text-white px-4 py-2 rounded-lg z-[9999] pointer-events-none">
-            {swipeDirection === 'left' ? '➡️ 다음 탭' : '⬅️ 이전 탭'}
-          </div>
-        )}
-        {/* 하단 네비게이션 바 */}
-        <footer className="fixed bottom-0 inset-x-0 bg-white rounded-t-2xl shadow-lg border-t grid grid-cols-4 h-16 z-50">
-          <NavLink to="/" className={({isActive}) => `flex flex-col items-center justify-center touch-area ${isActive ? "text-blue-500 font-bold" : "text-gray-400"}`}>
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0h6" /></svg>
-            <span className="text-xs">홈</span>
-          </NavLink>
-          <NavLink to="/chat" className={({isActive}) => `flex flex-col items-center justify-center touch-area ${isActive ? "text-blue-500 font-bold" : "text-gray-400"}`}>
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2v-8a2 2 0 012-2h2m10 0V6a4 4 0 00-8 0v2" /></svg>
-            <span className="text-xs">채팅방</span>
-          </NavLink>
-          <NavLink to="/board" className={({isActive}) => `flex flex-col items-center justify-center touch-area ${isActive ? "text-blue-500 font-bold" : "text-gray-400"}`}>
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-            <span className="text-xs">게시판</span>
-          </NavLink>
-          <NavLink to="/my" className={({isActive}) => `flex flex-col items-center justify-center touch-area ${isActive ? "text-blue-500 font-bold" : "text-gray-400"}`}>
-            <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 15c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-            <span className="text-xs">마이채널</span>
-          </NavLink>
-        </footer>
-      </div>
-        <ToastContainer />
-      </ToastProvider>
+      <WatchedVideosProvider>
+        <VideoPlayerProvider>
+          <ToastProvider>
+            <div 
+              className="bg-blue-100 min-h-screen pb-20"
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              style={{ 
+                touchAction: 'pan-y', // 세로 스크롤만 허용
+                userSelect: 'none', // 텍스트 선택 방지
+                WebkitUserSelect: 'none',
+                MozUserSelect: 'none',
+                msUserSelect: 'none'
+              }}
+            >
+              <AnimatePresence mode="wait" initial={false}>
+                <Routes location={location} key={location.pathname}>
+                  <Route path="/" element={<PageWrapper><Home /></PageWrapper>} />
+                  <Route path="/chat" element={<PageWrapper><ChatList /></PageWrapper>} />
+                  <Route path="/board" element={<PageWrapper><Board /></PageWrapper>} />
+                  <Route path="/my" element={<PageWrapper><MyChannel /></PageWrapper>} />
+                  <Route path="/chats" element={<AllChatRooms />} />
+                  <Route path="/Chats" element={<AllChatRooms />} />
+                  <Route path="/chat/create" element={<ChatRoomCreate />} />
+                  <Route path="/chat/:roomId" element={<ChatRoom />} />
+                  <Route path="/chat/:roomId/info" element={<ChatRoomInfo />} />
+                  <Route path="/chat/:roomId/profile" element={<ChatRoomProfile />} />
+                  <Route path="/chat/:roomId/manage" element={<ChatRoomHost />} />
+                  <Route path="/chat/:roomId/videos" element={<VideoListPage />} />
+                  <Route path="/chat/:roomId/certification-settings" element={<CertificationSettings />} />
+                  <Route path="/chat/:roomId/menu" element={<ChatRoomMenu />} />
+                  <Route path="/login" element={<LoginPage />} />
+                  <Route path="/profile/:roomId/:uid" element={<UserProfile />} />
+                  <Route path="/dm/:uid" element={<DMChatRoom />} />
+                  <Route path="/videos" element={<VideoListPage />} />
+                  <Route path="/add-video" element={<AddVideoPage />} />
+                  <Route path="/search" element={<SearchResult />} />
+                  <Route path="/product/:id" element={<ProductDetail />} />
+                  <Route path="/admin" element={<AdminPage />} />
+                  <Route path="/my/videos" element={<MyVideosPage />} />
+                  <Route path="/my/settings" element={<SettingsPage />} />
+                  <Route path="/my/points" element={<MyPointsPage />} />
+                  <Route path="/my/viewers" element={<MyFeedViewersPage />} />
+                  <Route path="/my/feed-viewers" element={<MyFeedViewersPage />} />
+                </Routes>
+              </AnimatePresence>
+            
+              {/* 스와이프 피드백 */}
+              {swipeDirection && (
+                <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black bg-opacity-70 text-white px-4 py-2 rounded-lg z-[9999] pointer-events-none">
+                  {swipeDirection === 'left' ? '➡️ 다음 탭' : '⬅️ 이전 탭'}
+                </div>
+              )}
+              {/* 하단 네비게이션 바 */}
+              <footer className="fixed bottom-0 inset-x-0 bg-white rounded-t-2xl shadow-lg border-t grid grid-cols-4 h-16 z-50">
+                <NavLink to="/" className={({isActive}) => `flex flex-col items-center justify-center touch-area ${isActive ? "text-blue-500 font-bold" : "text-gray-400"}`}>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0h6" /></svg>
+                  <span className="text-xs">홈</span>
+                </NavLink>
+                <NavLink to="/chat" className={({isActive}) => `flex flex-col items-center justify-center touch-area ${isActive ? "text-blue-500 font-bold" : "text-gray-400"}`}>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 8h2a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2v-8a2 2 0 012-2h2m10 0V6a4 4 0 00-8 0v2" /></svg>
+                  <span className="text-xs">채팅방</span>
+                </NavLink>
+                <NavLink to="/board" className={({isActive}) => `flex flex-col items-center justify-center touch-area ${isActive ? "text-blue-500 font-bold" : "text-gray-400"}`}>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                  <span className="text-xs">게시판</span>
+                </NavLink>
+                <NavLink to="/my" className={({isActive}) => `flex flex-col items-center justify-center touch-area ${isActive ? "text-blue-500 font-bold" : "text-gray-400"}`}>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.121 17.804A13.937 13.937 0 0112 15c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                  <span className="text-xs">마이채널</span>
+                </NavLink>
+              </footer>
+            </div>
+            <ToastContainer />
+          </ToastProvider>
+        </VideoPlayerProvider>
+      </WatchedVideosProvider>
     </AuthProvider>
   );
 }
@@ -301,8 +306,17 @@ function AppWrapperContent() {
 
 export default function AppWrapper() {
   return (
-    <VideoPlayerProvider>
-      <AppWrapperContent />
-    </VideoPlayerProvider>
+    <AuthProvider>
+      <WatchedVideosProvider>
+        <VideoPlayerProvider>
+          <ToastProvider>
+            <Router>
+              <ToastContainer />
+              <App />
+            </Router>
+          </ToastProvider>
+        </VideoPlayerProvider>
+      </WatchedVideosProvider>
+    </AuthProvider>
   );
 }

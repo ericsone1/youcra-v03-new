@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import React, { useEffect, useState, useRef } from "react";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { db, auth } from "../firebase";
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, getDoc, deleteDoc, setDoc, getDocs, where } from "firebase/firestore";
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, getDoc, deleteDoc, setDoc, getDocs, where, updateDoc, arrayUnion, arrayRemove, runTransaction } from "firebase/firestore";
 import { useVideoPlayer } from "../contexts/VideoPlayerContext";
+import { useWatchedVideos } from '../contexts/WatchedVideosContext';
 
 // YouTube ID 추출 함수
 function getYoutubeId(url) {
@@ -42,9 +43,13 @@ async function fetchYoutubeMeta(videoId) {
 function VideoListPage() {
   const { roomId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   
   // VideoPlayer context 사용
   const { initializePlayer } = useVideoPlayer();
+  
+  // WatchedVideosContext 사용
+  const { getWatchInfo, incrementWatchCount } = useWatchedVideos();
   
   // 탭 관리
   const [activeTab, setActiveTab] = useState("watch"); // "watch" | "add"
@@ -52,7 +57,6 @@ function VideoListPage() {
   // 영상 리스트 관련
   const [videoList, setVideoList] = useState([]);
   const [videoListState, setVideoListState] = useState([]);
-  const [certifiedIds, setCertifiedIds] = useState([]);
   
   // 방장 권한 관련
   const [isOwner, setIsOwner] = useState(false);
@@ -126,8 +130,11 @@ function VideoListPage() {
     if (videoList.length === 0) return;
     
     const sortedVideos = [...videoList].sort((a, b) => {
-      const aWatched = certifiedIds.includes(a.id);
-      const bWatched = certifiedIds.includes(b.id);
+      // 새로운 시스템: WatchedVideosContext에서 직접 조회
+      const aWatchInfo = getWatchInfo(a.videoId);
+      const bWatchInfo = getWatchInfo(b.videoId);
+      const aWatched = aWatchInfo.certified || false;
+      const bWatched = bWatchInfo.certified || false;
       
       // 1차 정렬: 시청 안된 것을 상단으로
       if (!aWatched && bWatched) return -1;
@@ -138,33 +145,25 @@ function VideoListPage() {
     });
     
     setVideoListState(sortedVideos);
-  }, [videoList, certifiedIds]);
+  }, [videoList, getWatchInfo]);
 
-  // 내가 인증한 영상 id 리스트 불러오기
+  // 기존 시청 완료된 영상들의 시청 횟수 초기화 (마이그레이션) - 새로운 시스템 사용
   useEffect(() => {
-    if (!roomId || !auth.currentUser || videoList.length === 0) {
-      setCertifiedIds([]);
-      return;
-    }
-    const unsubscribes = videoList.map((video) => {
-      const q = collection(db, "chatRooms", roomId, "videos", video.id, "certifications");
-      return onSnapshot(q, (snapshot) => {
-        const found = snapshot.docs.find(
-          (doc) => doc.data().uid === auth.currentUser.uid
-        );
-        setCertifiedIds((prev) => {
-          if (found && !prev.includes(video.id)) {
-            return [...prev, video.id];
-          }
-          if (!found && prev.includes(video.id)) {
-            return prev.filter((id) => id !== video.id);
-          }
-          return prev;
-        });
-      });
-    });
-    return () => unsubscribes.forEach((unsub) => unsub());
-  }, [roomId, videoList]);
+    if (!auth.currentUser || videoListState.length === 0) return;
+    
+    const migrateCertifiedVideos = async () => {
+      for (const video of videoListState) {
+        const watchInfo = getWatchInfo(video.videoId);
+        // 인증되었지만 watchCount가 0인 경우 1로 설정 (기존 데이터 마이그레이션)
+        if (watchInfo.certified && watchInfo.watchCount === 0) {
+          await incrementWatchCount(video.videoId);
+          console.log(`🔄 기존 시청 완료 영상 마이그레이션: ${video.title} (YouTube ID: ${video.videoId})`);
+        }
+      }
+    };
+
+    migrateCertifiedVideos();
+  }, [videoListState, auth.currentUser, getWatchInfo, incrementWatchCount]);
 
   // 영상 확인
   const handleVideoCheck = async () => {
@@ -603,15 +602,44 @@ function VideoListPage() {
                             }} 
                             className="cursor-pointer"
                           >
-                          {certifiedIds.includes(video.id) ? (
-                              <div className="bg-green-500 text-white text-xs px-3 py-1.5 rounded-full font-medium text-center">
-                              ✅ 완료
-                            </div>
-                          ) : (
-                              <div className="bg-blue-500 text-white text-xs px-3 py-1.5 rounded-full font-medium text-center">
-                              시청하기
-                            </div>
-                            )}
+                          {(() => {
+                            // 새로운 시스템: WatchedVideosContext의 데이터만 사용
+                            const watchInfo = getWatchInfo(video.videoId); // YouTube ID로 조회
+                            const isCertified = watchInfo.certified || false;
+                            const watchCount = watchInfo.watchCount || 0;
+                            
+                            // 디버깅용 로그
+                            console.log(`🎯 [VideoListPage] 영상 "${video.title.substring(0, 20)}" 버튼 상태:`, {
+                              videoId: video.id,
+                              videoYtId: video.videoId,
+                              isCertified,
+                              watchCount,
+                              watchInfo,
+                              watchedVideosContext: '새 시스템 사용',
+                              watchInfoRaw: watchInfo,
+                              getWatchInfoCall: `getWatchInfo("${video.videoId}")`
+                            });
+                            
+                            if (isCertified && watchCount > 0) {
+                              return (
+                                <div className="bg-green-500 text-white text-xs px-3 py-1.5 rounded-full font-medium text-center hover:bg-green-600 transition-colors">
+                                  ({watchCount + 1})회 시청하기
+                                </div>
+                              );
+                            } else if (isCertified) {
+                              return (
+                                <div className="bg-green-500 text-white text-xs px-3 py-1.5 rounded-full font-medium text-center hover:bg-green-600 transition-colors">
+                                  (2)회 시청하기
+                                </div>
+                              );
+                            } else {
+                              return (
+                                <div className="bg-blue-500 text-white text-xs px-3 py-1.5 rounded-full font-medium text-center hover:bg-blue-600 transition-colors">
+                                  시청하기
+                                </div>
+                              );
+                            }
+                          })()}
                           </div>
                           
                           {/* 삭제 버튼 - 방장은 모든 영상, 일반 유저는 자신의 영상만 */}
