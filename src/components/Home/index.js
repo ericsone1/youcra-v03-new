@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../contexts/AuthContext';
 import { useVideoPlayer } from '../../contexts/VideoPlayerContext';
+import { useWatchedVideos } from '../../contexts/WatchedVideosContext';
 import { HomeHeader } from './components/HomeHeader';
 import { ChannelRegisterCard } from './components/ChannelRegisterCard';
 import { CategoryInputBox } from './components/CategoryInputBox';
@@ -13,7 +14,7 @@ import { LoadingSpinner, ErrorDisplay } from './components/LoadingError';
 import { useHomeChannelState } from './hooks/useHomeChannelState';
 import { useHomeCategoryState } from './hooks/useHomeCategoryState';
 import { useHomeVideoSelectionState } from './hooks/useHomeVideoSelectionState';
-import { useVideoWatchCount } from './hooks/useVideoWatchCount';
+// import { useVideoWatchCount } from './hooks/useVideoWatchCount'; // WatchedVideosContext로 통합
 
 import { useHomeTabState } from './hooks/useHomeTabState';
 import { useToast } from '../common/Toast';
@@ -50,8 +51,8 @@ function Home() {
   // Toast 시스템
   const { showToast, ToastContainer } = useToast();
   
-  // 시청 횟수 관리
-  const { incrementWatchCount, getWatchCount } = useVideoWatchCount();
+  // 시청된 영상 관리 (WatchedVideosContext에서 통합 관리)
+  const { getWatchInfo, incrementWatchCount } = useWatchedVideos();
   
   // 채널 등록 상태 (custom hook)
   const {
@@ -100,171 +101,23 @@ function Home() {
   const [showLoginStep, setShowLoginStep] = useState(false);
   const [pendingVideoSave, setPendingVideoSave] = useState(false);
 
-  // YouTube API 영상 데이터 상태 추가
-  const [watchVideos, setWatchVideos] = useState([]);
-  const [videosLoading, setVideosLoading] = useState(false);
+
   
 
 
-  // 로그인 상태 체크 및 영상 데이터 로딩
+  // 로그인 상태 체크
   useEffect(() => {
     if (currentUser) {
       setLoginStepDone(true);
-      loadWatchVideos();
     } else {
       setLoginStepDone(false);
     }
+    // 영상 로딩은 별도 useEffect에서 처리 (중복 호출 방지)
   }, [currentUser]);
 
-  // 영상 데이터 로딩 함수
-  const loadWatchVideos = async () => {
-    console.log('🔍 loadWatchVideos 호출됨');
-    console.log('🔍 currentUser 상태:', !!currentUser);
-    console.log('🔍 channelInfo 상태:', channelInfo);
-    
-    // 필수 조건 체크 - currentUser와 channelId 모두 있어야 함
-    if (!currentUser) {
-      console.log('👤 사용자가 로그인하지 않아 영상 로딩 건너뜀');
-      return;
-    }
-    
-    if (!channelInfo?.channelId && !channelInfo?.id) {
-      console.log('📺 채널 정보가 없어 영상 로딩 건너뜀');
-      console.log('📺 channelInfo 전체:', channelInfo);
-      return;
-    }
 
-    const actualChannelId = channelInfo.channelId || channelInfo.id;
-    console.log('📺 사용할 채널 ID:', actualChannelId);
 
-    // 이미 로딩 중이면 중복 요청 방지
-    if (videosLoading) {
-      console.log('⏳ 이미 영상 로딩 중이므로 요청 건너뜀');
-      return;
-    }
 
-    setVideosLoading(true);
-    setError(null); // 에러 상태 초기화
-    
-    try {
-      console.log('📺 YouTube API에서 영상 데이터 로딩 시작...');
-      const videos = await fetchChannelVideos(actualChannelId, 10);
-      console.log('🎥 fetchChannelVideos 결과:', videos);
-      
-      // API 결과 유효성 검사
-      if (!videos || !Array.isArray(videos)) {
-        console.error('❌ fetchChannelVideos에서 유효하지 않은 데이터 반환:', videos);
-        throw new Error('영상 데이터가 올바르지 않습니다.');
-      }
-      
-      if (videos.length === 0) {
-        console.warn('⚠️ 채널에 영상이 없습니다.');
-        setWatchVideos([]);
-        setVideosLoading(false);
-        return;
-      }
-      
-      // 상호시청용 데이터 구조로 변환
-      const formattedVideos = videos.map((video, index) => {
-        console.log(`🔍 [${index}] 원본 비디오 데이터:`, video);
-        console.log(`🔍 [${index}] 세부 정보:`, {
-          id: video.id,
-          title: video.title,
-          channelTitle: video.channelTitle,
-          thumbnailUrl: video.thumbnailUrl,
-          duration: video.duration,
-          durationSeconds: video.durationSeconds,
-          viewCount: video.viewCount,
-          likeCount: video.likeCount,
-          publishedAt: video.publishedAt
-        });
-        
-        // 안전한 숫자 변환 함수
-        const safeNumber = (value) => {
-          const num = parseInt(value) || 0;
-          return isNaN(num) ? 0 : num;
-        };
-        
-        // 날짜는 원본 그대로 전달 (WatchVideoList에서 상대 시간으로 변환)
-        const formatUploadDate = (dateStr) => {
-          return dateStr; // 원본 ISO 문자열 그대로 전달
-        };
-        
-        const formatted = {
-          id: video.id,
-          videoId: video.id,
-          title: video.title || '제목 없음',
-          channelTitle: video.channelTitle || channelInfo?.channelTitle || '채널명 없음',
-          channel: video.channelTitle || channelInfo?.channelTitle || '채널명 없음', // WatchVideoList 호환성
-          thumbnail: video.thumbnailUrl || `https://img.youtube.com/vi/${video.id}/mqdefault.jpg`,
-          thumbnailUrl: video.thumbnailUrl || `https://img.youtube.com/vi/${video.id}/mqdefault.jpg`,
-          duration: safeNumber(video.durationSeconds), // 초 단위 (숫자)
-          durationSeconds: safeNumber(video.durationSeconds), // WatchVideoList에서 사용
-          durationDisplay: video.duration || '시간 미확인', // 표시용 (문자열)
-          views: safeNumber(video.viewCount),
-          viewCount: safeNumber(video.viewCount), // 호환성
-          likeCount: safeNumber(video.likeCount),
-          uploadedAt: formatUploadDate(video.publishedAt),
-          publishedAt: video.publishedAt, // 원본 데이터
-          progress: 0,
-          type: video.type || (safeNumber(video.durationSeconds) <= 180 ? 'short' : 'long'), // 타입 결정 (3분 기준)
-          // 추가 필드들 (WatchVideoList와 완전 호환성 확보)
-          youtubeId: video.id,
-          description: video.description || '',
-          tags: video.tags || []
-        };
-        
-        console.log(`✅ [${index}] 변환된 비디오 데이터:`, formatted);
-        return formatted;
-      });
-
-      setWatchVideos(formattedVideos);
-      console.log(`✅ 영상 ${formattedVideos.length}개 로딩 완료:`, formattedVideos);
-      
-    } catch (error) {
-      console.error('❌ 영상 로딩 실패:', error);
-      console.error('❌ 에러 상세:', {
-        message: error.message,
-        stack: error.stack,
-        channelId: actualChannelId,
-        userLoggedIn: !!currentUser
-      });
-      
-      // 에러 상태 설정
-      setError(`영상을 불러오는데 실패했습니다: ${error.message}`);
-      
-      // 실패 시 기존 데이터는 유지하고 새로운 로딩만 방지
-      // setWatchVideos([]); // 이 줄을 제거하여 기존 데이터 보존
-      
-      // 3초 후 자동 재시도 (최대 1회)
-      if (!error.retryAttempted) {
-        console.log('🔄 3초 후 자동 재시도 예정...');
-        setTimeout(() => {
-          if (currentUser && channelInfo?.channelId) {
-            const retryError = new Error(error.message);
-            retryError.retryAttempted = true;
-            loadWatchVideos();
-          }
-        }, 3000);
-      }
-    } finally {
-      setVideosLoading(false);
-    }
-  };
-
-  // 채널 정보나 사용자 상태 변경 시 영상 다시 로딩
-  useEffect(() => {
-    console.log('🔄 useEffect 트리거 - 영상 로딩 조건 체크');
-    console.log('🔄 currentUser:', !!currentUser);
-    console.log('🔄 channelInfo?.channelId:', channelInfo?.channelId);
-    
-    if (currentUser && channelInfo?.channelId) {
-      console.log('✅ 조건 만족 - 영상 로딩 시작');
-      loadWatchVideos();
-    } else {
-      console.log('❌ 조건 불만족 - 영상 로딩 건너뜀');
-    }
-  }, [currentUser, channelInfo?.channelId]); // currentUser 의존성 추가
 
   // 기존 데이터가 있으면 단계별로 순차 완료 처리
   useEffect(() => {
@@ -378,7 +231,7 @@ function Home() {
       window.scrollTo({ top: 0, behavior: 'smooth' });
       
       console.log('✅ 전체 상태 초기화 완료');
-      showToast('success', '🔄 모든 설정이 초기화되었습니다.\n처음부터 다시 시작해주세요!');
+      showToast('🔄 모든 설정이 초기화되었습니다.\n처음부터 다시 시작해주세요!', 'success');
       
     } catch (error) {
       console.error('❌ 초기화 중 오류:', error);
@@ -642,58 +495,30 @@ function Home() {
       
         {/* 5단계: 영상 시청하기 - 제목 없이 */}
         <AnimatePresence mode="wait">
-          {currentUser && (
-            <motion.div
-              key="watch-step"
-              variants={stepVariants}
-              initial="hidden"
-              animate="visible"
-              exit="exit"
-              custom={4}
-            >
-              <div className="space-y-4">
-                {/* 시청할 영상 리스트 */}
-                  {videosLoading ? (
-                    <div className="bg-white rounded-lg p-6 shadow-sm text-center">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
-                      <p className="mt-2 text-gray-600">YouTube에서 영상 정보를 불러오는 중...</p>
-                    </div>
-                  ) : error ? (
-                    <div className="bg-white rounded-lg p-6 shadow-sm text-center border-l-4 border-red-500">
-                      <div className="text-red-500 mb-2">❌</div>
-                      <p className="text-gray-800 font-medium">영상 로딩 실패</p>
-                      <p className="text-gray-600 text-sm mt-1">{error}</p>
-                      <button 
-                        onClick={() => {
-                          setError(null);
-                          loadWatchVideos();
-                        }}
-                        className="mt-3 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm"
-                      >
-                        🔄 다시 시도
-                      </button>
-                      {watchVideos.length > 0 && (
-                        <p className="text-gray-500 text-xs mt-2">이전에 로드된 영상들을 계속 볼 수 있습니다.</p>
-                      )}
-                    </div>
-                  ) : (
-        <WatchTabsContainer
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          videoFilter={videoFilter}
-          onFilterChange={setVideoFilter}
-          selectedVideos={selectedVideos}
-          watchVideos={watchVideos}
-          viewers={MOCK_VIEWERS}
-          onVideoClick={handleVideoClick}
-          onWatchClick={handleWatchClick}
-          onMessageClick={handleMessageClick}
-          getWatchCount={getWatchCount}
-        />
-                  )}
+          <motion.div
+            key="watch-step"
+            variants={stepVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            custom={4}
+          >
+            <div className="space-y-4">
+              {/* 시청할 영상 리스트 */}
+              <WatchTabsContainer
+                  activeTab={activeTab}
+                  onTabChange={setActiveTab}
+                  videoFilter={videoFilter}
+                  onFilterChange={setVideoFilter}
+                  selectedVideos={selectedVideos}
+                  viewers={MOCK_VIEWERS}
+                  onVideoClick={handleVideoClick}
+                  onWatchClick={handleWatchClick}
+                  onMessageClick={handleMessageClick}
+                  getWatchCount={getWatchInfo}
+                />
               </div>
             </motion.div>
-          )}
         </AnimatePresence>
       </div>
       

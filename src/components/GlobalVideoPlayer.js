@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import YouTube from 'react-youtube';
+import { createPortal } from 'react-dom';
 import { useVideoPlayer } from '../contexts/VideoPlayerContext';
 
 function GlobalVideoPlayer() {
@@ -34,66 +35,158 @@ function GlobalVideoPlayer() {
     });
   }, [selectedVideoId]);
 
-  // =====================
-  // 위치 / 최소화 드래그 상태
-  // =====================
-  const [popupPos, setPopupPos] = useState(() => ({
-    x: (window.innerWidth - 400) / 2,
-    y: (window.innerHeight - 500) / 2,
-  }));
+  // 위치 / 최소화 드래그 상태 (HomeVideoPlayer 방식)
   const [minimized, setMinimized] = useState(false);
-  const [dragging, setDragging] = useState(false);
-  const dragOffset = useRef({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [position, setPosition] = useState(() => {
+    return minimized 
+      ? { x: window.innerWidth - 100, y: window.innerHeight - 100 }
+      : { x: (window.innerWidth - 400) / 2, y: 50 };
+  });
 
-  // minimized 변경 시 중앙으로 위치 재설정
+  const dragRef = useRef();
+
+  // 마우스 드래그 핸들러 (HomeVideoPlayer와 동일)
+  const handleMouseDown = (e) => {
+    // 버튼이나 YouTube 플레이어 영역 클릭 시 드래그 방지
+    if (e.target.closest('button') || e.target.closest('iframe') || e.target.closest('.youtube-player')) {
+      return;
+    }
+    
+    e.preventDefault();
+    setIsDragging(true);
+    
+    // 현재 마우스 위치에서 플레이어 위치를 뺀 오프셋을 저장
+    setDragStart({
+      x: e.clientX - position.x,
+      y: e.clientY - position.y
+    });
+    
+    // 드래그 중 선택 방지
+    document.body.style.userSelect = 'none';
+    document.body.style.webkitUserSelect = 'none';
+  };
+
+  const handleMouseMove = (e) => {
+    if (!isDragging) return;
+    
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // 새로운 위치 = 현재 마우스 위치 - 드래그 시작 오프셋
+    const newX = e.clientX - dragStart.x;
+    const newY = e.clientY - dragStart.y;
+    
+    // 화면 경계 체크
+    const playerWidth = minimized ? 80 : 400;
+    const playerHeight = minimized ? 80 : 350;
+    const maxX = window.innerWidth - playerWidth;
+    const maxY = window.innerHeight - playerHeight;
+    
+    const boundedX = Math.max(0, Math.min(newX, maxX));
+    const boundedY = Math.max(0, Math.min(newY, maxY));
+    
+    setPosition({
+      x: boundedX,
+      y: boundedY
+    });
+  };
+
+  const handleMouseUp = (e) => {
+    if (isDragging) {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
+      document.body.style.userSelect = '';
+      document.body.style.webkitUserSelect = '';
+    }
+  };
+
+  // 터치 이벤트 핸들러 (모바일)
+  const handleTouchStart = (e) => {
+    if (e.target.closest('button') || e.target.closest('iframe') || e.target.closest('.youtube-player')) {
+      return;
+    }
+    
+    // 최소화 상태에서는 드래그 시작하지 않음 (확장 우선)
+    if (minimized) {
+      return;
+    }
+    
+    const touch = e.touches[0];
+    setIsDragging(true);
+    setDragStart({
+      x: touch.clientX - position.x,
+      y: touch.clientY - position.y
+    });
+  };
+
+  const handleTouchMove = (e) => {
+    if (!isDragging) return;
+    
+    e.preventDefault();
+    e.stopPropagation();
+    const touch = e.touches[0];
+    
+    const newX = touch.clientX - dragStart.x;
+    const newY = touch.clientY - dragStart.y;
+    
+    const playerWidth = minimized ? 80 : 400;
+    const playerHeight = minimized ? 80 : 350;
+    const maxX = window.innerWidth - playerWidth;
+    const maxY = window.innerHeight - playerHeight;
+    
+    const boundedX = Math.max(0, Math.min(newX, maxX));
+    const boundedY = Math.max(0, Math.min(newY, maxY));
+    
+    setPosition({
+      x: boundedX,
+      y: boundedY
+    });
+  };
+
+  const handleTouchEnd = (e) => {
+    if (isDragging) {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
+    }
+  };
+
+  // 전역 이벤트 리스너 등록 (HomeVideoPlayer와 동일)
+  useEffect(() => {
+    if (isDragging) {
+      const options = { passive: false, capture: true };
+      
+      document.addEventListener('mousemove', handleMouseMove, options);
+      document.addEventListener('mouseup', handleMouseUp, options);
+      document.addEventListener('touchmove', handleTouchMove, options);
+      document.addEventListener('touchend', handleTouchEnd, options);
+      
+    return () => {
+        document.removeEventListener('mousemove', handleMouseMove, options);
+        document.removeEventListener('mouseup', handleMouseUp, options);
+        document.removeEventListener('touchmove', handleTouchMove, options);
+        document.removeEventListener('touchend', handleTouchEnd, options);
+      };
+    }
+  }, [isDragging, dragStart, position]);
+
+  // minimized 변경 시 위치 조정
   useEffect(() => {
     if (minimized) {
-      setPopupPos({
-        x: (window.innerWidth - 80) / 2,
-        y: (window.innerHeight - 80) / 2,
+      setPosition({
+        x: window.innerWidth - 100,
+        y: window.innerHeight - 100,
+      });
+    } else {
+      setPosition({
+        x: (window.innerWidth - 400) / 2,
+        y: 50,
       });
     }
   }, [minimized]);
-
-  // 드래그 핸들러
-  const handleDragStart = (e) => {
-    e.stopPropagation();
-    setDragging(true);
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    
-    dragOffset.current = {
-      x: clientX - popupPos.x,
-      y: clientY - popupPos.y,
-    };
-  };
-  
-  const handleDrag = (e) => {
-    e.stopPropagation();
-    if (!dragging) return;
-    
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    
-    const newX = clientX - dragOffset.current.x;
-    const newY = clientY - dragOffset.current.y;
-    
-    // 화면 경계 체크
-    const popupWidth = minimized ? 80 : 400;
-    const popupHeight = minimized ? 80 : 350; // 높이 줄임
-    const maxX = window.innerWidth - popupWidth;
-    const maxY = window.innerHeight - popupHeight;
-    const minY = 60;
-    
-    setPopupPos({
-      x: Math.max(0, Math.min(newX, maxX)),
-      y: Math.max(minY, Math.min(newY, maxY)),
-    });
-  };
-  
-  const handleDragEnd = () => {
-    setDragging(false);
-  };
 
   // 유튜브 플레이어 핸들러
   const handleYoutubeReady = (event) => {
@@ -109,17 +202,6 @@ function GlobalVideoPlayer() {
       setIsPlaying(false);
     }
   };
-
-  // 페이지 스크롤 잠금
-  useEffect(() => {
-    if (dragging) {
-      const originalOverflow = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-      return () => {
-        document.body.style.overflow = originalOverflow;
-      };
-    }
-  }, [dragging]);
 
   // 플레이어 닫기
   const closePlayer = () => {
@@ -143,24 +225,21 @@ function GlobalVideoPlayer() {
   
   console.log('✅ GlobalVideoPlayer: 플레이어 렌더링 시작!', selectedVideoId);
 
-  return (
+  // Portal을 사용하여 body에 직접 렌더링
+  return createPortal(
     <div
-      className={`fixed z-50 bg-white rounded-xl shadow-2xl transition-all duration-300 ${
+      ref={dragRef}
+      className={`fixed z-50 ${isDragging ? 'cursor-grabbing' : 'cursor-grab'} ${
         minimized ? 'w-20 h-20' : 'w-96 max-w-[90vw]'
-      }`}
+      } bg-white rounded-xl shadow-2xl transition-all duration-300`}
       style={{
-        top: popupPos.y,
-        left: popupPos.x,
-        cursor: dragging ? 'grabbing' : 'grab',
+        left: position.x,
+        top: position.y,
+        pointerEvents: 'auto',
         touchAction: 'none'
       }}
-      onMouseDown={handleDragStart}
-      onMouseMove={handleDrag}
-      onMouseUp={handleDragEnd}
-      onMouseLeave={handleDragEnd}
-      onTouchStart={handleDragStart}
-      onTouchMove={handleDrag}
-      onTouchEnd={handleDragEnd}
+      onMouseDown={handleMouseDown}
+      onTouchStart={handleTouchStart}
     >
       {minimized ? (
         // 최소화된 상태
@@ -171,6 +250,12 @@ function GlobalVideoPlayer() {
               e.stopPropagation();
               setMinimized(false);
             }}
+            onTouchEnd={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              setMinimized(false);
+            }}
+            style={{ touchAction: 'manipulation' }}
             title="영상 플레이어 열기"
           >
             ▶️
@@ -182,6 +267,12 @@ function GlobalVideoPlayer() {
               e.stopPropagation();
               closePlayer();
             }}
+            onTouchEnd={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              closePlayer();
+            }}
+            style={{ touchAction: 'manipulation' }}
             title="닫기"
           >
             ×
@@ -221,7 +312,7 @@ function GlobalVideoPlayer() {
 
           {/* YouTube 플레이어 */}
           <div 
-            className="relative bg-black"
+            className="relative bg-black youtube-player"
             onMouseDown={(e) => e.stopPropagation()}
             onTouchStart={(e) => e.stopPropagation()}
           >
@@ -261,7 +352,8 @@ function GlobalVideoPlayer() {
           </div>
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   );
 }
 

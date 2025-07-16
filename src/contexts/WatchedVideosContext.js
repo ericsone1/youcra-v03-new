@@ -13,7 +13,7 @@ export const useWatchedVideos = () => {
 
 export const WatchedVideosProvider = ({ children }) => {
   const { currentUser } = useAuth();
-  const [watchedMap, setWatchedMap] = useState({}); // { videoId: { watchCount, certified, lastWatchedAt } }
+  const [watchedMap, setWatchedMap] = useState({}); // { videoId: { watchCount, certified, lastWatchedAt, watchedAt } }
 
   // Firestore 실시간 리스너
   useEffect(() => {
@@ -91,13 +91,84 @@ export const WatchedVideosProvider = ({ children }) => {
 
   const setCertified = async (videoId, certified = true) => {
     console.log('✅ [WatchedVideosContext] 인증 상태 설정:', { videoId, certified });
-    await upsertWatched(videoId, { certified });
+    
+    // 시청 완료 시 현재 시간 저장
+    const updateData = { certified };
+    if (certified) {
+      updateData.watchedAt = Date.now(); // 시청 완료 시간 저장 (밀리초)
+      updateData.lastWatchedAt = serverTimestamp(); // Firebase 서버 시간도 저장
+      console.log('🕒 [WatchedVideosContext] 시청 완료 시간 저장:', updateData.watchedAt);
+    }
+    
+    await upsertWatched(videoId, updateData);
   };
 
   const getWatchInfo = (videoId) => {
-    const info = watchedMap[videoId] || { watchCount: 0, certified: false };
+    const info = watchedMap[videoId] || { watchCount: 0, certified: false, watchedAt: null };
     console.log('📖 [WatchedVideosContext] 시청 정보 조회:', { videoId, info });
     return info;
+  };
+
+  // 1시간 재시청 제한 체크
+  const canRewatch = (videoId) => {
+    const info = watchedMap[videoId];
+    if (!info || !info.certified || !info.watchedAt) {
+      return true; // 시청한 적 없으면 시청 가능
+    }
+    
+    const oneHourInMs = 60 * 60 * 1000; // 1시간 = 60분 * 60초 * 1000밀리초
+    const timePassed = Date.now() - info.watchedAt;
+    const canWatch = timePassed >= oneHourInMs;
+    
+    console.log('⏰ [WatchedVideosContext] 재시청 가능 여부 체크:', {
+      videoId,
+      watchedAt: info.watchedAt,
+      timePassed: Math.floor(timePassed / 1000 / 60), // 분 단위
+      canWatch
+    });
+    
+    return canWatch;
+  };
+
+  // 재시청 가능까지 남은 시간 (분 단위)
+  const getTimeUntilRewatch = (videoId) => {
+    const info = watchedMap[videoId];
+    if (!info || !info.certified || !info.watchedAt) {
+      return 0; // 시청한 적 없으면 0분
+    }
+    
+    const oneHourInMs = 60 * 60 * 1000;
+    const timePassed = Date.now() - info.watchedAt;
+    const remainingMs = oneHourInMs - timePassed;
+    
+    if (remainingMs <= 0) {
+      return 0; // 이미 재시청 가능
+    }
+    
+    const remainingMinutes = Math.ceil(remainingMs / 1000 / 60); // 분 단위로 올림
+    
+    console.log('⏱️ [WatchedVideosContext] 재시청까지 남은 시간:', {
+      videoId,
+      remainingMinutes,
+      remainingMs
+    });
+    
+    return remainingMinutes;
+  };
+
+  // 시청 완료된 영상 중 1시간이 지나지 않은 영상들 필터링
+  const getRecentlyWatchedVideos = () => {
+    const recentlyWatched = [];
+    Object.keys(watchedMap).forEach(videoId => {
+      const info = watchedMap[videoId];
+      if (info && info.certified && !canRewatch(videoId)) {
+        recentlyWatched.push({
+          videoId,
+          timeUntilRewatch: getTimeUntilRewatch(videoId)
+        });
+      }
+    });
+    return recentlyWatched;
   };
 
   const value = {
@@ -105,6 +176,9 @@ export const WatchedVideosProvider = ({ children }) => {
     getWatchInfo,
     incrementWatchCount,
     setCertified,
+    canRewatch,
+    getTimeUntilRewatch,
+    getRecentlyWatchedVideos,
   };
 
   return (

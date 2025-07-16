@@ -104,3 +104,16 @@ export function filterVideosByRecommendedCategories(videos, recommendedCategorie
     )
   );
 } 
+
+// 영상 목록에서 videoId(id) 기준으로 중복을 제거한 새 배열 반환
+export function computeUniqueVideos(videos = []) {
+  const uniqueMap = new Map();
+  videos.forEach(video => {
+    const key = video?.id || video?.videoId;
+    if (!key) return; // id가 없으면 건너뜀
+    if (!uniqueMap.has(key)) {
+      uniqueMap.set(key, video);
+    }
+  });
+  return Array.from(uniqueMap.values());
+} 

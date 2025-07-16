@@ -116,7 +116,7 @@ export const CategoryInputBox = ({ selectedCategories, onCategoriesChange, onCom
       >
         <div className="flex items-center justify-between mb-1">
           <span className="text-sm font-bold text-gray-900">
-            🏷️ 카테고리 선택
+            카테고리 선택
             {categoryNames.length > 0 && (
               <span className="text-xs text-gray-500 font-normal ml-1">({categoryNames.join(', ')})</span>
             )}
@@ -139,7 +139,6 @@ export const CategoryInputBox = ({ selectedCategories, onCategoriesChange, onCom
               transition={{ delay: i * 0.1, duration: 0.3 }}
               className="flex items-center gap-1 bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap min-w-[56px]"
             >
-              <span>{CATEGORY_EMOJI[(typeof cat === 'string' ? '기타' : cat.category)] || '🔖'}</span>
               <span>{typeof cat === 'string' ? cat : cat.keyword}</span>
             </motion.span>
           ))}
@@ -155,7 +154,7 @@ export const CategoryInputBox = ({ selectedCategories, onCategoriesChange, onCom
       className="bg-white rounded-2xl shadow-lg p-6"
     >
       <h2 className="text-xl font-bold text-gray-900 mb-2">
-        🏷️ 채널 카테고리(키워드) 입력
+        채널 카테고리(키워드) 입력
       </h2>
       <p className="text-sm text-gray-500 mb-4">
         채널을 대표하는 키워드(최대 5개)를 입력하세요. 예: 게임, 롤, e스포츠
