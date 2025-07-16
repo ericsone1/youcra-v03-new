@@ -162,7 +162,7 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
                         alt={video.title}
                         className="w-32 h-20 object-cover rounded-lg shadow-sm"
                         onError={(e) => {
-                          e.target.src = 'https://via.placeholder.com/128x80/f3f4f6/9ca3af?text=영상';
+                          e.target.src = 'https://via.placeholder.com/128x72?text=No+Image';
                         }}
                       />
                       {/* 재생 시간 */}
@@ -356,7 +356,7 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
   );
 };
 
-const YOUTUBE_API_KEY = process.env.REACT_APP_YOUTUBE_API_KEY;
+// YouTube 조회수 API 및 캐시 관련 코드 전체 제거
 
 export const WatchVideoList = ({ 
   videoFilter, 
@@ -382,38 +382,14 @@ export const WatchVideoList = ({
     displayVideos = filteredVideos.filter(v => v.type === 'long');
   }
 
-  // --- YouTube API 조회수 동기화 ---
-  const [ytViewCounts, setYtViewCounts] = useState({});
-  const [ytLoading, setYtLoading] = useState(false);
-  useEffect(() => {
-    if (!YOUTUBE_API_KEY || displayVideos.length === 0) return;
-    const ids = displayVideos.map(v => v.videoId).filter(Boolean).slice(0, 50); // 50개 제한
-    setYtLoading(true);
-    fetch(`https://www.googleapis.com/youtube/v3/videos?part=statistics&id=${ids.join(',')}&key=${YOUTUBE_API_KEY}`)
-      .then(res => res.json())
-      .then(data => {
-        const counts = {};
-        if (data.items) {
-          data.items.forEach(item => {
-            counts[item.id] = item.statistics?.viewCount || null;
-          });
-        }
-        setYtViewCounts(counts);
-      })
-      .catch(() => setYtViewCounts({}))
-      .finally(() => setYtLoading(false));
-  }, [displayVideos, YOUTUBE_API_KEY]);
-
-  // 정렬 적용 (YouTube 조회수 기준으로도 정렬)
+  // 정렬 적용 (조회수 정렬은 Firestore 값만 사용)
   displayVideos = [...displayVideos].sort((a, b) => {
     if (sortKey === 'duration') {
       const aDuration = (typeof a.durationSeconds === 'number' ? a.durationSeconds : a.duration) || 0;
       const bDuration = (typeof b.durationSeconds === 'number' ? b.durationSeconds : b.duration) || 0;
       return aDuration - bDuration;
     } else if (sortKey === 'views') {
-      const aViews = ytViewCounts[a.videoId] ? parseInt(ytViewCounts[a.videoId]) : (a.viewCount || a.views || 0);
-      const bViews = ytViewCounts[b.videoId] ? parseInt(ytViewCounts[b.videoId]) : (b.viewCount || b.views || 0);
-      return bViews - aViews;
+      return (b.viewCount || b.views || 0) - (a.viewCount || a.views || 0);
     } else {
       const aTime = a.registeredAt?.seconds || 0;
       const bTime = b.registeredAt?.seconds || 0;
@@ -451,13 +427,14 @@ export const WatchVideoList = ({
             key={video.id || video.videoId}
             className="flex items-center bg-white rounded-xl shadow hover:shadow-md transition p-2 sm:p-3 cursor-pointer gap-3"
           >
-            {/* 썸네일 */}
+            {/* 썸네일: 등록 이미지 우선, 없으면 No Image */}
             <div className="relative flex-shrink-0 w-32 h-20 rounded-lg overflow-hidden bg-gray-100">
               <img
-                src={video.thumbnailUrl || video.thumbnail}
+                src={video.thumbnailUrl || video.thumbnail || 'https://via.placeholder.com/128x72?text=No+Image'}
                 alt={video.title}
                 className="w-full h-full object-cover"
                 loading="lazy"
+                onError={e => { e.target.src = 'https://via.placeholder.com/128x72?text=No+Image'; }}
               />
               {video.type === 'short' && (
                 <span className="absolute top-1 right-1 bg-red-500 text-white text-[11px] font-bold px-2 py-0.5 rounded-full shadow">
@@ -471,9 +448,7 @@ export const WatchVideoList = ({
               <div className="text-xs text-gray-500 mt-0.5 truncate">{video.channelTitle}</div>
               <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
                 <span>
-                  조회수 {ytViewCounts[video.videoId] !== undefined
-                    ? ytViewCounts[video.videoId]?.toLocaleString()
-                    : '-'}
+                  조회수 {video.viewCount?.toLocaleString() || video.views?.toLocaleString() || '-'}
                 </span>
                 <span>· {video.uploadedAt}</span>
               </div>

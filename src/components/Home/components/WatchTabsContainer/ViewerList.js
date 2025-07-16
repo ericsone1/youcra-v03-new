@@ -14,26 +14,101 @@ const formatWatchTime = (seconds) => {
   return `${minutes}분`;
 };
 
+// 더미 시청자 데이터
+const mockViewers = [
+  {
+    user: {
+      uid: 'user1',
+      displayName: '홍길동',
+      email: 'hong@example.com',
+      photoURL: 'https://randomuser.me/api/portraits/men/32.jpg',
+      youtubeChannel: { title: '길동TV', verified: true },
+      uploadedVideos: [
+        {
+          videoId: 'abc123',
+          title: '홍길동의 맛집 브이로그',
+          channelTitle: '길동TV',
+          durationDisplay: '4:12',
+          thumbnail: 'https://img.youtube.com/vi/abc123/mqdefault.jpg'
+        },
+        {
+          videoId: 'def456',
+          title: '홍길동의 여행기',
+          channelTitle: '길동TV',
+          durationDisplay: '7:01',
+          thumbnail: 'https://img.youtube.com/vi/def456/mqdefault.jpg'
+        }
+      ]
+    },
+    watchedMyVideos: [
+      {
+        videoId: 'my1',
+        title: '내가 올린 첫 영상',
+        channelTitle: '내채널',
+        durationDisplay: '3:12',
+        thumbnail: 'https://via.placeholder.com/80x60?text=No+Image'
+      },
+      {
+        videoId: 'my2',
+        title: '두번째 영상',
+        channelTitle: '내채널',
+        durationDisplay: '2:01',
+        thumbnail: 'https://via.placeholder.com/80x60?text=No+Image'
+      }
+    ]
+  },
+  {
+    user: {
+      uid: 'user2',
+      displayName: '김유라',
+      email: 'yura@example.com',
+      photoURL: 'https://randomuser.me/api/portraits/women/44.jpg',
+      youtubeChannel: { title: '유라의 일상', verified: false },
+      uploadedVideos: [
+        {
+          videoId: 'ghi789',
+          title: '유라의 브이로그',
+          channelTitle: '유라의 일상',
+          durationDisplay: '5:20',
+          thumbnail: 'https://img.youtube.com/vi/ghi789/mqdefault.jpg'
+        }
+      ]
+    },
+    watchedMyVideos: [
+      {
+        videoId: 'my3',
+        title: '세번째 영상',
+        channelTitle: '내채널',
+        durationDisplay: '5:20',
+        thumbnail: 'https://via.placeholder.com/80x60?text=No+Image'
+      }
+    ]
+  }
+];
+
 export const ViewerList = ({ onMessageClick }) => {
-  const { currentUser } = useAuth();
-  const { loading, viewers } = useMyVideoViewers();
+  // const { currentUser } = useAuth();
+  // const { loading, viewers } = useMyVideoViewers();
+  const loading = false;
+  const viewers = mockViewers;
   const [selectedViewer, setSelectedViewer] = useState(null);
   const navigate = useNavigate();
+  const [playerVideoId, setPlayerVideoId] = useState(null);
 
-  // 로그인하지 않은 사용자를 위한 안내
-  if (!currentUser) {
-    return (
-      <div className="text-center py-12">
-        <div className="text-gray-500 mb-4">
-          <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-          </svg>
-          <h3 className="text-lg font-medium text-gray-700 mb-2">내 영상 시청자 정보</h3>
-          <p className="text-sm text-gray-500">로그인하면 내 영상을 시청한 사용자들을 확인할 수 있습니다.</p>
-        </div>
-      </div>
-    );
-  }
+  // 로그인하지 않은 사용자를 위한 안내 (임시로 비활성화)
+  // if (!currentUser) {
+  //   return (
+  //     <div className="text-center py-12">
+  //       <div className="text-gray-500 mb-4">
+  //         <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  //           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+  //         </svg>
+  //         <h3 className="text-lg font-medium text-gray-700 mb-2">내 영상 시청자 정보</h3>
+  //         <p className="text-sm text-gray-500">로그인하면 내 영상을 시청한 사용자들을 확인할 수 있습니다.</p>
+  //       </div>
+  //     </div>
+  //   );
+  // }
 
   // 채널 URL 생성 함수
   const getChannelUrl = (viewer) => {
@@ -176,21 +251,20 @@ export const ViewerList = ({ onMessageClick }) => {
                   className="mt-4 pt-4 border-t border-gray-100"
                 >
                   <h5 className="text-base font-semibold text-gray-800 mb-3">
-                    {viewer.user.displayName || '이 사용자'}님이 시청한 내 영상
+                    {viewer.user.displayName || '이 사용자'}님의 등록 영상
                   </h5>
-                  
-                  {viewer.watchedMyVideos.length === 0 ? (
-                    <p className="text-gray-500 text-center py-4">시청한 영상이 없습니다.</p>
+                  {(viewer.user.uploadedVideos?.length === 0 || !viewer.user.uploadedVideos) ? (
+                    <p className="text-gray-500 text-center py-4">등록한 영상이 없습니다.</p>
                   ) : (
                     <div className="space-y-3">
-                      {viewer.watchedMyVideos.map((video, idx) => (
+                      {viewer.user.uploadedVideos.map((video, idx) => (
                         <div key={video.videoId || video.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                           <img 
-                            src={video.thumbnail || video.thumbnailUrl || `https://img.youtube.com/vi/${video.videoId || video.id}/mqdefault.jpg`} 
+                            src={video.thumbnail || video.thumbnailUrl || 'https://via.placeholder.com/80x60?text=No+Image'} 
                             alt={video.title} 
                             className="w-20 h-12 object-cover rounded"
                             onError={(e) => {
-                              e.target.src = 'https://via.placeholder.com/80x60/f3f4f6/9ca3af?text=영상';
+                              e.target.src = 'https://via.placeholder.com/80x60?text=No+Image';
                             }}
                           />
                           <div className="flex-1 min-w-0">
@@ -203,7 +277,7 @@ export const ViewerList = ({ onMessageClick }) => {
                           </div>
                           <button
                             className="px-3 py-1 text-xs rounded-full bg-blue-500 text-white hover:bg-blue-600 transition-colors flex-shrink-0"
-                            onClick={() => window.open(`https://www.youtube.com/watch?v=${video.videoId || video.id}`, '_blank')}
+                            onClick={() => setPlayerVideoId(video.videoId || video.id)}
                           >
                             시청하기
                           </button>
@@ -215,6 +289,31 @@ export const ViewerList = ({ onMessageClick }) => {
               )}
             </motion.div>
           ))}
+        </div>
+      )}
+
+      {/* 유튜브 팝업 플레이어 모달 */}
+      {playerVideoId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60">
+          <div className="bg-white rounded-lg shadow-lg p-2 relative w-full max-w-xl mx-auto">
+            <button
+              className="absolute top-2 right-2 text-gray-500 hover:text-gray-800 text-2xl font-bold"
+              onClick={() => setPlayerVideoId(null)}
+            >
+              ×
+            </button>
+            <div className="aspect-w-16 aspect-h-9 w-full">
+              <iframe
+                width="100%"
+                height="360"
+                src={`https://www.youtube.com/embed/${playerVideoId}?autoplay=1&rel=0`}
+                title="YouTube video player"
+                frameBorder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              ></iframe>
+            </div>
+          </div>
         </div>
       )}
     </div>
