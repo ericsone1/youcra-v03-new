@@ -224,7 +224,7 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
                     {/* 시청하기 버튼 */}
                     <div className="flex-shrink-0">
                       <button
-                        className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white text-sm rounded-lg font-semibold transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 whitespace-nowrap"
+                        className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white text-sm rounded-lg font-semibold transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 whitespace-normal"
                         onClick={e => { e.stopPropagation(); onWatchClick(video, idx, recommendedVideos); }}
                       >
                         시청하기
@@ -302,7 +302,7 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
                 {/* 시청하기 버튼 */}
                 <div className="flex-shrink-0">
                   <button
-                    className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white text-sm rounded-lg font-semibold transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 whitespace-nowrap"
+                    className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white text-sm rounded-lg font-semibold transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 whitespace-normal"
                     onClick={e => { e.stopPropagation(); onWatchClick(video, idx, availableVideos); }}
                   >
                     {getWatchCount(videoId).watchCount > 0 ? `재시청하기 (${getWatchCount(videoId).watchCount + 1}번째)` : '시청하기'}
@@ -412,9 +412,23 @@ export const WatchVideoList = ({
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // 내 영상 제외
-  const filteredVideos = ucraVideos.filter(
+  let filteredVideos = ucraVideos.filter(
     v => v.registeredBy !== currentUser?.uid && v.registeredBy !== currentUser?.email
   );
+
+  // ✅ 카테고리 필터링: '유크라' 카테고리가 선택되어 있지 않은 경우에만 적용
+  if (selectedCategories.length > 0 && !selectedCategories.includes('유크라')) {
+    const recommended = getRecommendedCategories(selectedCategories);
+    filteredVideos = filterVideosByRecommendedCategories(filteredVideos, recommended);
+  }
+
+  // 📌 카테고리가 전혀 등록되지 않은 영상은 제외 (홈탭 노출 조건)
+  filteredVideos = filteredVideos.filter(v => {
+    return v.category && String(v.category).trim().length > 0;
+  });
+
+  // 🆕 중복 제거 (videoId 기준)
+  filteredVideos = computeUniqueVideos(filteredVideos);
 
   // 전체/숏폼/롱폼 필터
   let displayVideos = filteredVideos;
@@ -536,7 +550,7 @@ export const WatchVideoList = ({
                     
                     return (
                       <button
-                        className={`px-4 py-1.5 text-white text-xs font-semibold rounded-lg shadow-sm whitespace-nowrap transition-all duration-200 ${
+                        className={`px-4 py-1.5 text-white text-xs font-semibold rounded-lg shadow-sm whitespace-normal transition-all duration-200 ${
                           isRewatch 
                             ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700' 
                             : 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700'

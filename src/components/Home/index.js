@@ -510,33 +510,35 @@ function Home() {
           )}
         </AnimatePresence>
       
-        {/* 5단계: 영상 시청하기 - 제목 없이 */}
-        <AnimatePresence mode="wait">
-          <motion.div
-            key="watch-step"
-            variants={stepVariants}
-            initial="hidden"
-            animate="visible"
-            exit="exit"
-            custom={4}
-          >
-            <div className="space-y-4">
-              {/* 시청할 영상 리스트 */}
-              <WatchTabsContainer
-                  activeTab={activeTab}
-                  onTabChange={setActiveTab}
-                  videoFilter={videoFilter}
-                  onFilterChange={setVideoFilter}
-                  selectedVideos={selectedVideos}
-                  viewers={MOCK_VIEWERS}
-                  onVideoClick={handleVideoClick}
-                  onWatchClick={handleWatchClick}
-                  onMessageClick={handleMessageClick}
-                  getWatchCount={getWatchInfo}
-                />
-              </div>
-            </motion.div>
-        </AnimatePresence>
+        {/* 5단계: 영상 시청하기 - 제목 없이 (채널 연동 후에만 표시) */}
+        {channelRegistered && (
+          <AnimatePresence mode="wait">
+            <motion.div
+              key="watch-step"
+              variants={stepVariants}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              custom={4}
+            >
+              <div className="space-y-4">
+                {/* 시청할 영상 리스트 */}
+                <WatchTabsContainer
+                    activeTab={activeTab}
+                    onTabChange={setActiveTab}
+                    videoFilter={videoFilter}
+                    onFilterChange={setVideoFilter}
+                    selectedVideos={selectedVideos}
+                    viewers={MOCK_VIEWERS}
+                    onVideoClick={handleVideoClick}
+                    onWatchClick={handleWatchClick}
+                    onMessageClick={handleMessageClick}
+                    getWatchCount={getWatchInfo}
+                  />
+                </div>
+              </motion.div>
+          </AnimatePresence>
+        )}
       </div>
       
       {/* Toast 알림 컨테이너 */}

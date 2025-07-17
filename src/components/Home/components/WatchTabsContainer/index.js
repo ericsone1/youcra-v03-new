@@ -50,7 +50,7 @@ export const WatchTabsContainer = (props) => {
     onTabChange,
     videoFilter,
     onFilterChange,
-    selectedVideos,
+    selectedCategories,
     onTokenEarned,
     onWatchClick,
     getWatchCount
@@ -130,7 +130,7 @@ export const WatchTabsContainer = (props) => {
                 sortKey={sortKey}
                 onTokenEarned={onTokenEarned}
                 onWatchClick={onWatchClick}
-                selectedCategories={[]}
+                selectedCategories={selectedCategories}
                 getWatchCount={getWatchCount}
               />
             </motion.div>
