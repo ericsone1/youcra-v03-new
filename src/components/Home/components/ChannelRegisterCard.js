@@ -169,7 +169,7 @@ export const ChannelRegisterCard = ({ onRegister, channelInfo, onDelete = () => 
         />
         <div className="flex flex-col justify-center min-w-0">
           <div className="flex items-center gap-2 min-w-0">
-            <span className="text-base font-bold text-gray-900 truncate max-w-[120px]">{channelInfo.title || '동갑맞집'}</span>
+            <span className="text-base font-bold text-gray-900 truncate max-w-[120px]">{channelInfo.title || '동감맛집'}</span>
             <span className="flex items-center text-xs text-gray-500 font-medium ml-1"><span className="text-blue-500">👥</span>{channelInfo.subscriberCount || '15명'}</span>
           </div>
           <div className="flex items-center gap-3 mt-1">
@@ -239,7 +239,7 @@ export const ChannelRegisterCard = ({ onRegister, channelInfo, onDelete = () => 
             type="text"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            placeholder="예: @동갑맞집, https://youtube.com/@dongap, 동갑맞집"
+            placeholder="예: @동감맛집, https://youtube.com/@donggam, 동감맛집"
             className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-transparent text-center"
             disabled={loading}
           />

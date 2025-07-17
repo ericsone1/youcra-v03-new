@@ -305,7 +305,7 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
                     className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white text-sm rounded-lg font-semibold transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 whitespace-normal"
                     onClick={e => { e.stopPropagation(); onWatchClick(video, idx, availableVideos); }}
                   >
-                    {getWatchCount(videoId).watchCount > 0 ? `재시청하기 (${getWatchCount(videoId).watchCount + 1}번째)` : '시청하기'}
+                    {getWatchCount(videoId).watchCount > 0 ? '재시청' : '시청하기'}
                   </button>
                 </div>
               </div>
@@ -557,7 +557,7 @@ export const WatchVideoList = ({
                         }`}
                         onClick={e => { e.stopPropagation(); onWatchClick && onWatchClick(video, activeVideos.indexOf(video), activeVideos); }}
                       >
-                        {isRewatch ? `재시청하기 (${nextWatchCount}번째)` : '시청하기'}
+                        {isRewatch ? '재시청' : '시청하기'}
                       </button>
                     );
                   })()
