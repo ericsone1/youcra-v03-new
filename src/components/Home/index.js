@@ -18,8 +18,9 @@ import { useHomeVideoSelectionState } from './hooks/useHomeVideoSelectionState';
 
 import { useHomeTabState } from './hooks/useHomeTabState';
 import { useToast } from '../common/Toast';
-import { fetchChannelVideos } from '../../services/videoService';
+// import { fetchChannelVideos } from '../../services/videoService'; // ⚠️ 사용되지 않아 주석 처리
 import GlobalVideoPlayer from '../GlobalVideoPlayer';
+// import HomeVideoPlayer from './HomeVideoPlayer';
 
 const MOCK_VIEWERS = [
   {
@@ -36,15 +37,23 @@ const MOCK_VIEWERS = [
   }
 ];
 
-const MOCK_TOKEN_INFO = {
-  total: 100,
-  used: 35,
-  earned: 15
-};
+// const MOCK_TOKEN_INFO = {
+//   total: 100,
+//   used: 35,
+//   earned: 15
+// }; // 토큰 기능 제거됨으로 주석 처리
 
 function Home() {
   const { currentUser } = useAuth();
-  const { handleVideoSelect, resetPlayerState, setSelectedVideoId } = useVideoPlayer();
+  const {
+    handleVideoSelect,
+    resetPlayerState,
+    setSelectedVideoId,
+    selectedVideoId,
+    videoList,
+    currentIndex,
+    initializePlayer
+  } = useVideoPlayer();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   
@@ -199,8 +208,8 @@ function Home() {
       // 5. 토큰 기능 제거됨
       
       // 6. 영상 데이터 초기화
-      setWatchVideos([]);
-      setVideosLoading(false);
+      // setWatchVideos([]); // WatchedVideosContext에서 관리
+      // setVideosLoading(false); // WatchedVideosContext에서 관리
       
       // 7. 탭/필터 상태 초기화
       setActiveTab('watch');
@@ -235,7 +244,7 @@ function Home() {
       
     } catch (error) {
       console.error('❌ 초기화 중 오류:', error);
-      showToast('error', '❌ 초기화 중 오류가 발생했습니다.');
+      showToast('❌ 초기화 중 오류가 발생했습니다.', 'error');
     }
   };
 
@@ -290,9 +299,12 @@ function Home() {
     }
   };
 
-  // 시청하기 버튼 클릭 시 처리 (글로벌 플레이어 열기)
-  const handleWatchClick = (video) => {
+  // 시청하기 버튼 클릭 시 처리 (팝업 플레이어 열기)
+  const handleWatchClick = (video, idx, videos) => {
     console.log('🎬 시청하기 버튼 클릭됨!', video);
+    console.log('🔢 전달된 인덱스:', idx);
+    console.log('📋 전달된 videos 배열:', videos);
+    console.log('🎯 videos[idx] 객체:', videos[idx]);
     
     // 영상 ID 추출
     const videoId = video.videoId || video.id || video.youtubeId;
@@ -300,15 +312,23 @@ function Home() {
     
     if (!videoId) {
       console.error('영상 ID를 찾을 수 없습니다:', video);
-      showToast('error', '❌ 영상 정보가 올바르지 않습니다.');
+      showToast('❌ 영상 정보가 올바르지 않습니다.', 'error');
       return;
     }
     
-    // 글로벌 플레이어로 영상 선택 (팝업 플레이어 열기)
-    console.log('📺 handleVideoSelect 호출 중...', videoId);
-    handleVideoSelect(videoId);
+    // videos[idx]와 video가 같은 객체인지 확인
+    if (videos && videos[idx]) {
+      console.log('🔗 video와 videos[idx] 비교:', {
+        video_id: video.videoId || video.id,
+        videos_idx_id: videos[idx].videoId || videos[idx].id,
+        same: (video.videoId || video.id) === (videos[idx].videoId || videos[idx].id)
+      });
+    }
     
-    console.log('✅ GlobalVideoPlayer 호출 완료');
+    // 영상 큐와 인덱스 기반으로 팝업 플레이어 열기
+    console.log('🚀 initializePlayer 호출 직전:', { videoId, idx, videosLength: videos?.length });
+    initializePlayer('home', videos, idx);
+    console.log('✅ initializePlayer 호출 완료');
   };
 
 
@@ -321,60 +341,57 @@ function Home() {
     // TODO: 메시지 전송 처리
   };
 
-  // 현재 진행 단계 계산
-  const getCurrentStep = () => {
-    if (!channelRegistered) return 1;
-    if (!categoryStepDone) return 2;
-    if (!videoSelectionDone) return 3;
-    if (!currentUser) return 4;
-    return 5; // 영상 시청 단계 (바로 5단계로)
-  };
+  /* ------------------------------ 불필요/중복 로직 주석 처리 ------------------------------
+  // 현재 진행 단계 계산 및 헤더 컴포넌트
+  //  설명: 진행 단계 계산은 UI에 사용되지 않으며 디버깅 로그만 남겨 있습니다.
+  //  추후 필요 시 복구할 수 있도록 주석으로 남겨둡니다.
 
-  const currentStep = getCurrentStep();
-  const totalSteps = 5;
+  // const getCurrentStep = () => {
+  //   if (!channelRegistered) return 1;
+  //   if (!categoryStepDone) return 2;
+  //   if (!videoSelectionDone) return 3;
+  //   if (!currentUser) return 4;
+  //   return 5; // 영상 시청 단계 (바로 5단계로)
+  // };
 
-  // 디버깅: 현재 상태 확인
-  console.log('Home 컴포넌트 상태:', {
-    channelRegistered,
-    categoryStepDone,
-    videoSelectionDone,
-    currentUser: !!currentUser,
-    loginStepDone,
-    currentStep,
-    selectedVideos: selectedVideos?.length || 0
-  });
+  // const currentStep = getCurrentStep();
+  // const totalSteps = 5;
 
-  // 단계 헤더 컴포넌트
-  const StepHeader = ({ stepNumber, title, isActive, isCompleted }) => (
-    <motion.div
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.5, delay: stepNumber * 0.1 }}
-      className={`flex items-center gap-3 mb-4 ${isActive ? 'text-blue-600' : isCompleted ? 'text-green-600' : 'text-gray-400'}`}
-    >
-      <motion.div
-        className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
-          isActive 
-            ? 'bg-blue-500 text-white shadow-lg' 
-            : isCompleted 
-            ? 'bg-green-500 text-white' 
-            : 'bg-gray-200 text-gray-500'
-        }`}
-        animate={isActive ? { scale: [1, 1.1, 1] } : {}}
-        transition={{ duration: 1, repeat: isActive ? Infinity : 0 }}
-      >
-        {isCompleted ? '✓' : stepNumber}
-      </motion.div>
-      <span className="font-medium">{title}</span>
-      {isActive && (
-        <motion.div
-          className="w-2 h-2 bg-blue-500 rounded-full"
-          animate={{ scale: [1, 1.5, 1] }}
-          transition={{ duration: 1, repeat: Infinity }}
-        />
-      )}
-    </motion.div>
-  );
+  // console.log('Home 컴포넌트 상태:', {
+  //   channelRegistered,
+  //   categoryStepDone,
+  //   videoSelectionDone,
+  //   currentUser: !!currentUser,
+  //   loginStepDone,
+  //   currentStep,
+  //   selectedVideos: selectedVideos?.length || 0
+  // });
+
+  // const StepHeader = ({ stepNumber, title, isActive, isCompleted }) => (
+  //   <motion.div
+  //     initial={{ opacity: 0, x: -20 }}
+  //     animate={{ opacity: 1, x: 0 }}
+  //     transition={{ duration: 0.5, delay: stepNumber * 0.1 }}
+  //     className={`flex items-center gap-3 mb-4 ${isActive ? 'text-blue-600' : isCompleted ? 'text-green-600' : 'text-gray-400'}`}
+  //   >
+  //     <motion.div
+  //       className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${isActive ? 'bg-blue-500 text-white shadow-lg' : isCompleted ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'}`}
+  //       animate={isActive ? { scale: [1, 1.1, 1] } : {}}
+  //       transition={{ duration: 1, repeat: isActive ? Infinity : 0 }}
+  //     >
+  //       {isCompleted ? '✓' : stepNumber}
+  //     </motion.div>
+  //     <span className="font-medium">{title}</span>
+  //     {isActive && (
+  //       <motion.div
+  //         className="w-2 h-2 bg-blue-500 rounded-full"
+  //         animate={{ scale: [1, 1.5, 1] }}
+  //         transition={{ duration: 1, repeat: Infinity }}
+  //       />
+  //     )}
+  //   </motion.div>
+  // );
+  ------------------------------ 불필요/중복 로직 주석 처리 끝 ------------------------------ */
 
   // 애니메이션 설정
   const stepVariants = {

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import AdminDeleteAllChatRooms from './AdminDeleteAllChatRooms';
+import AdminVideoCleanup from './AdminVideoCleanup';
 import { collection, addDoc, serverTimestamp, getDocs, query, where, doc, deleteDoc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
@@ -1255,6 +1256,15 @@ export default function AdminPage() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* 채팅방 선택 삭제 섹션 이후에 전체 영상 관리 섹션 추가 */}
+      <div style={{ marginBottom: 40, padding: 20, backgroundColor: '#f0fff0', borderRadius: 12, border: '2px solid #28a745' }}>
+        <h2 style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 16, color: '#28a745' }}>🎞️ 전체 영상 관리</h2>
+        <p style={{ marginBottom: 16, color: '#4caf50' }}>
+          모든 채팅방에 업로드된 영상을 한눈에 보고 개별로 삭제할 수 있습니다.
+        </p>
+        <AdminVideoCleanup />
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 import { db } from '../firebase';
-import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
 import { getYoutubeId, fetchYoutubeMeta } from '../utils/youtube';
 
 export async function checkVideoDuplicate(roomId, videoId) {
@@ -556,4 +556,36 @@ function createMockVideoData() {
       type: 'short'
     }
   ];
+} 
+
+// ----- Admin utilities -----
+// 모든 chatRooms/*/videos 하위컬렉션의 영상을 가져온다
+export async function getAllVideos() {
+  const roomsSnap = await getDocs(collection(db, 'chatRooms'));
+  const results = [];
+  for (const room of roomsSnap.docs) {
+    const videosRef = collection(db, 'chatRooms', room.id, 'videos');
+    const videosSnap = await getDocs(videosRef);
+    videosSnap.forEach(docSnap => {
+      results.push({
+        roomId: room.id,
+        docId: docSnap.id,
+        data: docSnap.data(),
+        docPath: `chatRooms/${room.id}/videos/${docSnap.id}`
+      });
+    });
+  }
+  return results;
+}
+
+// 문서 경로로 영상 삭제
+export async function deleteVideoByDocPath(docPath) {
+  try {
+    await deleteDoc(doc(db, docPath));
+    console.log('��️  삭제 완료:', docPath);
+    return true;
+  } catch (e) {
+    console.error('❌ 삭제 실패:', docPath, e);
+    return false;
+  }
 } 

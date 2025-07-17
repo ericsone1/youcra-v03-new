@@ -12,7 +12,7 @@ export const useWatchedVideos = () => {
 };
 
 export const WatchedVideosProvider = ({ children }) => {
-  const { currentUser } = useAuth();
+  const { user: currentUser } = useAuth();
   const [watchedMap, setWatchedMap] = useState({}); // { videoId: { watchCount, certified, lastWatchedAt, watchedAt } }
 
   // Firestore 실시간 리스너
@@ -73,6 +73,16 @@ export const WatchedVideosProvider = ({ children }) => {
       data: updateData
     });
     
+    // 📌 1) 낙관적 로컬 업데이트 (버튼 즉시 비활성화 등 UI 반영)
+    setWatchedMap(prev => ({
+      ...prev,
+      [videoId]: {
+        ...(prev[videoId] || {}),
+        ...data,
+        updatedAt: Date.now(), // 로컬 타임스탬프
+      }
+    }));
+
     try {
       await setDoc(docRef, updateData, { merge: true });
       console.log('✅ [WatchedVideosContext] Firebase 저장 완료:', { videoId, data: updateData });

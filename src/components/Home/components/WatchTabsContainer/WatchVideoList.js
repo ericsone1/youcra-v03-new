@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../../../../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
@@ -101,8 +101,13 @@ const CountdownButton = ({ videoId, onTimeUp }) => {
 
 // 영상 리스트 렌더러 (공통, 페이지네이션 추가)
 const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos = [], getWatchCount = () => 0 }) => {
-  const { canRewatch, getTimeUntilRewatch } = useWatchedVideos();
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const { watchedMap, canRewatch, getTimeUntilRewatch } = useWatchedVideos();
+  const [refreshKey, setRefreshKey] = useState(0);
+  
+  // WatchedVideosContext가 업데이트될 때마다 리스트 강제 리렌더
+  useEffect(() => {
+    setRefreshKey(k => k + 1);
+  }, [watchedMap]);
   
   // 🔍 VideoListRenderer 디버깅
   console.log('🎬 [VideoListRenderer] 받은 데이터:', {
@@ -122,17 +127,36 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
   
   const PAGE_SIZE = 7;
   const [page, setPage] = useState(1);
-  const totalPages = Math.ceil((videos?.length || 0) / PAGE_SIZE);
-  const pagedVideos = videos?.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) || [];
+
+  // 재시청 가능 / 불가 영상 분리
+  const { availableVideos, lockedVideos } = useMemo(() => {
+    if (!Array.isArray(videos)) return { availableVideos: [], lockedVideos: [] };
+    const avail = [];
+    const locked = [];
+    videos.forEach(v => {
+      const videoId = v.id || v.videoId;
+      (canRewatch(videoId) ? avail : locked).push(v);
+    });
+    return { availableVideos: avail, lockedVideos: locked };
+  }, [videos, watchedMap, canRewatch]);
+
+  const totalPages = Math.ceil(availableVideos.length / PAGE_SIZE) || 1;
+
+  // 현재 페이지가 범위를 벗어나면 첫 페이지로 리셋
+  useEffect(() => {
+    if (page > totalPages) setPage(1);
+  }, [totalPages]);
+
+  const pagedVideos = availableVideos.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   // 시간이 지나서 재시청 가능해진 영상들 새로고침
   const handleTimeUp = (videoId) => {
     console.log('⏰ 재시청 가능해진 영상:', videoId);
-    setRefreshTrigger(prev => prev + 1);
+    setRefreshKey(prev => prev + 1);
   };
 
   // 🔧 조건 체크 강화
-  const hasVideos = Array.isArray(videos) && videos.length > 0;
+  const hasVideos = availableVideos.length > 0;
   console.log('🔍 [VideoListRenderer] 영상 있는지 체크:', {
     hasVideos,
     videosCheck: videos,
@@ -158,7 +182,7 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
                     {/* 썸네일 */}
                     <div className="relative flex-shrink-0">
                       <img
-                        src={video.thumbnail || video.thumbnailUrl || `https://img.youtube.com/vi/${video.id || video.videoId}/mqdefault.jpg`}
+                        src={video.thumbnail || video.thumbnailUrl || `https://img.youtube.com/vi/${video.videoId || video.id}/mqdefault.jpg`}
                         alt={video.title}
                         className="w-32 h-20 object-cover rounded-lg shadow-sm"
                         onError={(e) => {
@@ -222,18 +246,11 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
       <ul className="space-y-4">
         {pagedVideos.map((video, idx) => {
           const videoId = video.id || video.videoId;
-          const canWatchNow = canRewatch(videoId);
-          const timeUntilRewatch = getTimeUntilRewatch(videoId);
-          
           return (
             <li
-              key={videoId}
+              key={videoId + '-' + refreshKey}
               className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-lg hover:border-gray-200 transition-all duration-200 cursor-pointer"
-              onClick={() => {
-                if (canWatchNow) {
-                  onWatchClick(video, idx, videos);
-                }
-              }}
+              onClick={() => onWatchClick(video, idx, availableVideos)}
             >
               <div className="flex items-start gap-4">
                 {/* 썸네일 - 더 큰 사이즈로 */}
@@ -282,39 +299,62 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
                   </div>
                 </div>
 
+                {/* 시청하기 버튼 */}
                 <div className="flex-shrink-0">
-                  {canWatchNow ? (
-                    (() => {
-                      const info = getWatchCount(videoId);
-                      const watchCount = info.watchCount || 0;
-                      const isRewatch = watchCount > 0;
-                      const nextWatchCount = watchCount + 1;
-                      
-                      return (
-                        <button
-                          className={`px-4 py-2 text-white text-sm rounded-lg font-semibold transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 whitespace-nowrap ${
-                            isRewatch 
-                              ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700' 
-                              : 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700'
-                          }`}
-                          onClick={e => { e.stopPropagation(); onWatchClick(video, idx, videos); }}
-                        >
-                          {isRewatch ? `재시청하기 (${nextWatchCount}번째)` : '시청하기'}
-                        </button>
-                      );
-                    })()
-                  ) : (
-                    <CountdownButton 
-                      videoId={videoId} 
-                      onTimeUp={handleTimeUp}
-                    />
-                  )}
+                  <button
+                    className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white text-sm rounded-lg font-semibold transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 whitespace-nowrap"
+                    onClick={e => { e.stopPropagation(); onWatchClick(video, idx, availableVideos); }}
+                  >
+                    {getWatchCount(videoId).watchCount > 0 ? `재시청하기 (${getWatchCount(videoId).watchCount + 1}번째)` : '시청하기'}
+                  </button>
                 </div>
               </div>
             </li>
           );
         })}
       </ul>
+
+      {/* 재시청 대기 중인 영상들 */}
+      {lockedVideos.length > 0 && (
+        <div className="mt-10 space-y-4">
+          <h4 className="text-sm font-semibold text-gray-600 pl-1">최근 시청 영상 (재시청 대기 중)</h4>
+          <ul className="space-y-4">
+            {lockedVideos.map((video, idx) => {
+              const videoId = video.id || video.videoId;
+              const info = getWatchCount(videoId);
+              const watchCount = info.watchCount || 0;
+              const nextWatchCount = watchCount + 1;
+              return (
+                <li key={videoId + '-locked-' + refreshKey}
+                    className="bg-gray-50 p-5 rounded-xl border border-gray-200 flex items-start gap-4">
+                  {/* 썸네일 */}
+                  <div className="relative flex-shrink-0">
+                    <img src={video.thumbnail || video.thumbnailUrl || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`}
+                         alt={video.title}
+                         className="w-32 h-20 object-cover rounded-lg shadow-sm"
+                         onError={e => { e.target.src='https://via.placeholder.com/128x72?text=영상'; }} />
+                    {video.durationDisplay && (
+                      <span className="absolute bottom-1 right-1 bg-black bg-opacity-80 text-white text-xs px-1.5 py-0.5 rounded font-medium">
+                        {video.durationDisplay}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* 정보 */}
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-semibold text-gray-800 line-clamp-2 mb-1 leading-snug">{video.title}</h3>
+                    <p className="text-xs text-gray-600 mb-2">{video.channelTitle || video.channel || '채널명 없음'}</p>
+                    <div className="flex items-center gap-2">
+                      <CountdownButton videoId={videoId} onTimeUp={handleTimeUp} />
+                      <span className="text-xs text-gray-500">시청 {watchCount}회</span>
+                    </div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
       {/* 페이지네이션 */}
       {totalPages > 1 && (
@@ -368,6 +408,8 @@ export const WatchVideoList = ({
 }) => {
   const { currentUser } = useAuth();
   const { ucraVideos, loadingUcraVideos } = useUcraVideos();
+  const { watchedMap, canRewatch, getTimeUntilRewatch } = useWatchedVideos();
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // 내 영상 제외
   const filteredVideos = ucraVideos.filter(
@@ -376,10 +418,21 @@ export const WatchVideoList = ({
 
   // 전체/숏폼/롱폼 필터
   let displayVideos = filteredVideos;
+  const isShort = (v) => {
+    if (v.type) return v.type === 'short';
+    if (typeof v.durationSeconds === 'number') return v.durationSeconds < 60;
+    return false;
+  };
+  const isLong = (v) => {
+    if (v.type) return v.type === 'long';
+    if (typeof v.durationSeconds === 'number') return v.durationSeconds >= 60;
+    return true;
+  };
+
   if (videoFilter === 'short') {
-    displayVideos = filteredVideos.filter(v => v.type === 'short');
+    displayVideos = filteredVideos.filter(isShort);
   } else if (videoFilter === 'long') {
-    displayVideos = filteredVideos.filter(v => v.type === 'long');
+    displayVideos = filteredVideos.filter(isLong);
   }
 
   // 정렬 적용 (조회수 정렬은 Firestore 값만 사용)
@@ -397,9 +450,24 @@ export const WatchVideoList = ({
     }
   });
 
+  // 🔀 재시청 가능/불가에 따라 잠긴 영상은 항상 맨 아래로 이동
+  const activeVideos = [];
+  const lockedVideos = [];
+  displayVideos.forEach(v => {
+    const vid = v.videoId || v.id;
+    (canRewatch(vid) ? activeVideos : lockedVideos).push(v);
+  });
+  displayVideos = [...activeVideos, ...lockedVideos];
+
   // --- 더보기(페이지네이션) ---
   const [visibleCount, setVisibleCount] = useState(10);
   const visibleVideos = displayVideos.slice(0, visibleCount);
+
+  // 시간이 지나서 재시청 가능해진 영상들 새로고침
+  const handleTimeUp = (videoId) => {
+    console.log('⏰ 재시청 가능해진 영상:', videoId);
+    setRefreshTrigger(prev => prev + 1);
+  };
 
   if (loadingUcraVideos) {
     return (
@@ -422,48 +490,73 @@ export const WatchVideoList = ({
   return (
     <>
       <div className="flex flex-col gap-3">
-        {visibleVideos.map(video => (
-          <div
-            key={video.id || video.videoId}
-            className="flex items-center bg-white rounded-xl shadow hover:shadow-md transition p-2 sm:p-3 cursor-pointer gap-3"
-          >
-            {/* 썸네일: 등록 이미지 우선, 없으면 No Image */}
-            <div className="relative flex-shrink-0 w-32 h-20 rounded-lg overflow-hidden bg-gray-100">
-              <img
-                src={video.thumbnailUrl || video.thumbnail || 'https://via.placeholder.com/128x72?text=No+Image'}
-                alt={video.title}
-                className="w-full h-full object-cover"
-                loading="lazy"
-                onError={e => { e.target.src = 'https://via.placeholder.com/128x72?text=No+Image'; }}
-              />
-              {video.type === 'short' && (
-                <span className="absolute top-1 right-1 bg-red-500 text-white text-[11px] font-bold px-2 py-0.5 rounded-full shadow">
-                  쇼츠
-                </span>
-              )}
-            </div>
-            {/* 정보 영역 */}
-            <div className="flex-1 flex flex-col justify-between min-w-0">
-              <div className="font-semibold text-base text-gray-900 truncate" title={video.title}>{video.title}</div>
-              <div className="text-xs text-gray-500 mt-0.5 truncate">{video.channelTitle}</div>
-              <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
-                <span>
-                  조회수 {video.viewCount?.toLocaleString() || video.views?.toLocaleString() || '-'}
-                </span>
-                <span>· {video.uploadedAt}</span>
+        {visibleVideos.map(video => {
+          const videoId = video.videoId || video.id;
+          const canWatchNow = canRewatch(videoId);
+          
+          return (
+            <div
+              key={videoId + '-' + refreshTrigger}
+              className="flex items-center bg-white rounded-xl shadow hover:shadow-md transition p-2 sm:p-3 cursor-pointer gap-3"
+            >
+              {/* 썸네일: 등록 이미지 우선, 없으면 No Image */}
+              <div className="relative flex-shrink-0 w-32 h-20 rounded-lg overflow-hidden bg-gray-100">
+                <img
+                  src={video.thumbnailUrl || video.thumbnail || 'https://via.placeholder.com/128x72?text=No+Image'}
+                  alt={video.title}
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                  onError={e => { e.target.src = 'https://via.placeholder.com/128x72?text=No+Image'; }}
+                />
+                {video.type === 'short' && (
+                  <span className="absolute top-1 right-1 bg-red-500 text-white text-[11px] font-bold px-2 py-0.5 rounded-full shadow">
+                    쇼츠
+                  </span>
+                )}
+              </div>
+              {/* 정보 영역 */}
+              <div className="flex-1 flex flex-col justify-between min-w-0">
+                <div className="font-semibold text-base text-gray-900 truncate" title={video.title}>{video.title}</div>
+                <div className="text-xs text-gray-500 mt-0.5 truncate">{video.channelTitle}</div>
+                <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
+                  <span>
+                    조회수 {video.viewCount?.toLocaleString() || video.views?.toLocaleString() || '-'}
+                  </span>
+                  <span>· {video.uploadedAt}</span>
+                </div>
+              </div>
+              {/* 시청하기 버튼 */}
+              <div className="flex flex-col justify-end h-full">
+                {canWatchNow ? (
+                  (() => {
+                    const info = getWatchCount(videoId);
+                    const watchCount = info.watchCount || 0;
+                    const isRewatch = watchCount > 0;
+                    const nextWatchCount = watchCount + 1;
+                    
+                    return (
+                      <button
+                        className={`px-4 py-1.5 text-white text-xs font-semibold rounded-lg shadow-sm whitespace-nowrap transition-all duration-200 ${
+                          isRewatch 
+                            ? 'bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700' 
+                            : 'bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700'
+                        }`}
+                        onClick={e => { e.stopPropagation(); onWatchClick && onWatchClick(video, activeVideos.indexOf(video), activeVideos); }}
+                      >
+                        {isRewatch ? `재시청하기 (${nextWatchCount}번째)` : '시청하기'}
+                      </button>
+                    );
+                  })()
+                ) : (
+                  <CountdownButton 
+                    videoId={videoId} 
+                    onTimeUp={handleTimeUp}
+                  />
+                )}
               </div>
             </div>
-            {/* 시청하기 버튼 */}
-            <div className="flex flex-col justify-end h-full">
-              <button
-                className="px-4 py-1.5 bg-blue-500 hover:bg-blue-600 text-white text-xs font-semibold rounded-lg shadow-sm whitespace-nowrap"
-                onClick={e => { e.stopPropagation(); onWatchClick && onWatchClick(video); }}
-              >
-                시청하기
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
       {/* 더보기 버튼 */}
       {visibleCount < displayVideos.length && (
@@ -480,4 +573,4 @@ export const WatchVideoList = ({
   );
 };
 
-export { VideoListRenderer }; 
+export { VideoListRenderer };

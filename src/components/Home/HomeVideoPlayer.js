@@ -22,6 +22,12 @@ export default function HomeVideoPlayer({
   onDrag,
   onCertifyComplete
 }) {
+  console.log('[HomeVideoPlayer 렌더]', { video, videoQueue, currentIndex, minimized });
+  if (!video) {
+    console.log('[HomeVideoPlayer] video가 없어서 return null');
+    return null;
+  }
+  
   const {
     playerRef,
     setIsPlaying,
@@ -224,24 +230,21 @@ export default function HomeVideoPlayer({
    *  새로운 인증 FSM 로직 *
    **********************/
 
-  // 1) 90% 시청 시 인증 완료 처리
+  // 1) 100% 시청 시 인증 완료 처리 (GlobalVideoPlayer와 동일)
   useEffect(() => {
     if (certStage !== 'watching') return;
 
     const videoDuration = actualDuration > 0 ? actualDuration : (currentVideo?.duration || 0);
-    const isLong = videoDuration >= 180;
+    const progressRate = videoDuration > 0 ? (watchSeconds / videoDuration) : 0;
 
-    // 90% 시청 또는 3분 시청 시 인증 처리 (시청완료 표시)
-    const canCertify = isLong 
-      ? (watchSeconds >= videoDuration * 0.9 || watchSeconds >= 180)
-      : localVideoEnded;
+    // 영상이 끝나야만 인증 (100% 완전 시청)
+    const canCertify = localVideoEnded;
 
     if (canCertify && !fanCertified) {
-      console.log('✅ 인증 조건 만족 (90%) – 시청완료 처리');
-      setCertStage('countdown');
-      setTimer(5);
+      console.log('✅ 인증 조건 만족 (100% 시청) – 서버 저장 시작');
+      setCertStage('saving');
       
-      // 서버에 인증 저장
+      // 서버에 인증 저장 (응답 후 자동 이동)
       const certifyAsync = async () => {
         try {
           const vidId = currentVideo?.videoId || currentVideo?.id || video.videoId || video.id || video.videoId;
@@ -253,10 +256,27 @@ export default function HomeVideoPlayer({
             watchedAt: new Date()
           };
 
-          console.log('🔄 서버 인증 저장 시작', videoData);
+          console.log('🔄 [HomeVideoPlayer] 서버 인증 저장 시작', videoData);
           await handleCertification(videoData);
+          console.log('✅ [HomeVideoPlayer] 서버 저장 완료 - 다음 영상으로 자동 이동');
+          
+          // 서버 응답 후 상태 리셋
+          setCertStage('watching');
+          setLocalVideoEnded(false);
+          setWatchSeconds(0);
+          setTimer(5);
+          
+          // 다음 영상으로 이동
+          setTimeout(() => {
+            handleNextVideo();
+          }, 200);
+          
         } catch (err) {
-          console.error('❌ 인증 실패', err);
+          console.error('❌ [HomeVideoPlayer] 인증 실패:', err);
+          // 실패 시에도 상태 리셋
+          setCertStage('watching');
+          setLocalVideoEnded(false);
+          setWatchSeconds(0);
         }
       };
       
@@ -523,8 +543,6 @@ export default function HomeVideoPlayer({
     const s = sec % 60;
     return `${m}:${s.toString().padStart(2, '0')}`;
   }
-
-  if (!video) return null;
 
   // 인증 조건 분기
   const videoDuration = actualDuration > 0 ? actualDuration : (currentVideo?.duration || 0);
