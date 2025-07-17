@@ -15,7 +15,17 @@ export function useMyVideoViewers() {
   const [myVideos, setMyVideos] = useState([]);
 
   useEffect(() => {
-    if (!currentUser || !ucraVideos) return;
+    // 로그인하지 않은 경우 즉시 종료 (시청자 없음)
+    if (!currentUser) {
+      setViewers([]);
+      setMyVideos([]);
+      setLoading(false);
+      return;
+    }
+
+    // 아직 내 영상 데이터가 로드되지 않았다면 로딩 유지
+    if (!ucraVideos) return;
+
     setLoading(true);
 
     // 1. 내가 등록한 영상 리스트

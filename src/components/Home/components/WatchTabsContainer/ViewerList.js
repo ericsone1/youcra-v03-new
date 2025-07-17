@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useMyVideoViewers } from '../../hooks/useMyVideoViewers';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../../../../hooks/useAuth';
+// import { useAuth } from '../../../../hooks/useAuth';
 
 // 시간 포맷 함수
 const formatWatchTime = (seconds) => {
@@ -87,10 +87,8 @@ const mockViewers = [
 ];
 
 export const ViewerList = ({ onMessageClick }) => {
+  const { loading, viewers } = useMyVideoViewers();
   // const { currentUser } = useAuth();
-  // const { loading, viewers } = useMyVideoViewers();
-  const loading = false;
-  const viewers = mockViewers;
   const [selectedViewer, setSelectedViewer] = useState(null);
   const navigate = useNavigate();
   const [playerVideoId, setPlayerVideoId] = useState(null);
