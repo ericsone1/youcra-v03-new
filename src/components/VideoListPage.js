@@ -5,6 +5,36 @@ import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, g
 import { useVideoPlayer } from "../contexts/VideoPlayerContext";
 import { useWatchedVideos } from '../contexts/WatchedVideosContext';
 
+// duration을 포맷팅하는 함수
+const formatDuration = (duration) => {
+  if (!duration) return '0:00';
+  
+  // 이미 숫자인 경우 (초 단위)
+  if (typeof duration === 'number') {
+    const minutes = Math.floor(duration / 60);
+    const seconds = duration % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  }
+  
+  // YouTube duration 형식인 경우 (PT1M30S -> 1:30)
+  if (typeof duration === 'string' && duration.startsWith('PT')) {
+    const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+    if (match) {
+      const hours = parseInt(match[1] || 0);
+      const minutes = parseInt(match[2] || 0);
+      const seconds = parseInt(match[3] || 0);
+      
+      if (hours > 0) {
+        return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      } else {
+        return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      }
+    }
+  }
+  
+  return '0:00';
+};
+
 // YouTube ID 추출 함수
 function getYoutubeId(url) {
   const regExp = /(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?|shorts)\/|.*[?&]v=)|youtu\.be\/)([\w-]{11})/;
@@ -16,12 +46,13 @@ function getYoutubeId(url) {
 async function fetchYoutubeMeta(videoId) {
   const API_KEY = process.env.REACT_APP_YOUTUBE_API_KEY;
   const res = await fetch(
-    `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}&key=${API_KEY}`
+    `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id=${videoId}&key=${API_KEY}`
   );
   const data = await res.json();
   if (data.items && data.items.length > 0) {
     const snippet = data.items[0].snippet;
     const duration = data.items[0].contentDetails.duration;
+    const statistics = data.items[0].statistics;
     let seconds = 0;
     const match = duration.match(/PT(?:(\d+)M)?(?:(\d+)S)?/);
     if (match) {
@@ -35,6 +66,13 @@ async function fetchYoutubeMeta(videoId) {
       channel: snippet.channelTitle,
       videoId,
       duration: seconds,
+      viewCount: parseInt(statistics.viewCount || 0),
+      likeCount: parseInt(statistics.likeCount || 0),
+      views: parseInt(statistics.viewCount || 0),
+      publishedAt: snippet.publishedAt,
+      description: snippet.description || '',
+      ucraViewCount: 0, // 유크라 조회수 초기값
+      registeredAt: serverTimestamp(), // 등록 시간
     };
   }
   return null;
@@ -588,7 +626,7 @@ function VideoListPage() {
                             {video.title}
                           </h3>
                           <p className="text-xs text-gray-500 mb-1">{video.channel}</p>
-                          <p className="text-xs text-gray-400">등록: {video.registeredBy?.split('@')[0]}</p>
+                          <p className="text-xs text-gray-400">길이: {formatDuration(video.duration)}</p>
                         </div>
                         
                         {/* 우측 버튼 영역 */}

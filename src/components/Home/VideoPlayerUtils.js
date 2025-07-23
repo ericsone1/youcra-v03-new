@@ -160,7 +160,7 @@ export async function handleCertificationComplete(
     await incrementWatchCount(videoData.videoId);
     
     // 인증 상태 설정
-    await watchedVideosSetCertified(videoData.videoId, true);
+    await watchedVideosSetCertified(videoData.videoId, true, 'main');
     setFanCertified(true);
     setCertStage(CERT_STAGES.CERTIFIED);
     
@@ -186,7 +186,8 @@ export function handleVideoStateChange(
   watchInterval,
   setWatchInterval,
   setCertificationTimer,
-  setShowCertificationDelay
+  setShowCertificationDelay,
+  showCountdown
 ) {
   const state = event.data;
   

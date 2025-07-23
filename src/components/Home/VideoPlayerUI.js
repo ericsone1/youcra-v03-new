@@ -31,7 +31,10 @@ export const MinimizedPlayerUI = ({
   videoDuration,
   certStage,
   fanCertified,
-  timer
+  timer,
+  handleReady,
+  handleStateChange,
+  handleYoutubeEnd
 }) => (
   <div
     className={`fixed z-50 cursor-move transition-all duration-200 ${
@@ -57,9 +60,9 @@ export const MinimizedPlayerUI = ({
         <YouTubePlayerSection
           videoId={currentVideo?.videoId || video.videoId}
           minimized={true}
-          onReady={() => {}}
-          onStateChange={() => {}}
-          onEnd={() => {}}
+          onReady={handleReady}
+          onStateChange={handleStateChange}
+          onEnd={handleYoutubeEnd}
         />
       </div>
       
@@ -365,6 +368,9 @@ export const VideoPlayerUI = ({
           certStage={certStage}
           fanCertified={fanCertified}
           timer={timer}
+          handleReady={handleReady}
+          handleStateChange={handleStateChange}
+          handleYoutubeEnd={handleYoutubeEnd}
         />
       ) : (
         <ExpandedPlayerUI

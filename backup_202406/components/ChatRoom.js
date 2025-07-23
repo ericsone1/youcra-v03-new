@@ -492,18 +492,32 @@ function ChatRoom() {
     setCertLoading(false);
   };
 
-  // certAvailable 선언 (return문 바로 위)
+  // certAvailable 선언 (홈탭과 동일한 90% 시청 조건으로 수정)
   let certAvailable = false;
   if (
     selectedVideoIdx !== null &&
     videoList[selectedVideoIdx] &&
     typeof videoList[selectedVideoIdx].duration === "number"
   ) {
-    certAvailable =
-      videoList[selectedVideoIdx].duration >= 180
-        ? watchSeconds >= 180
-        : videoEnded;
+    const videoDuration = videoList[selectedVideoIdx].duration;
+    // 홈탭과 동일: 90% 시청 시 인증 가능
+    const progressRate = videoDuration > 0 ? (watchSeconds / videoDuration) : 0;
+    certAvailable = progressRate >= 0.9 || videoEnded;
   }
+  
+  // 홈탭과 동일한 자동 다음 영상 이동 로직
+  useEffect(() => {
+    if (certAvailable && selectedVideoIdx < videoList.length - 1) {
+      const timer = setTimeout(() => {
+        console.log('🎬 90% 시청 완료, 다음 영상으로 자동 이동');
+        setSelectedVideoIdx(selectedVideoIdx + 1);
+        setWatchSeconds(0);
+        setVideoEnded(false);
+      }, 3000); // 3초 후 자동 이동
+      
+      return () => clearTimeout(timer);
+    }
+  }, [certAvailable, selectedVideoIdx, videoList.length]);
 
   // 카운트다운 자동 이동 useEffect
   useEffect(() => {
@@ -603,9 +617,9 @@ function ChatRoom() {
               disabled={!certAvailable || certLoading}
               onClick={handleCertify}
             >
-              {certAvailable
-                ? (certLoading ? "인증 중..." : (videoList[selectedVideoIdx]?.duration >= 180 ? "3분 이상 인증완료" : "영상 끝 인증완료"))
-                : (videoList[selectedVideoIdx]?.duration >= 180 ? "3분 이상 시청해야 인증 가능" : "영상 끝까지 시청해야 인증 가능")}
+                          {certAvailable
+              ? (certLoading ? "인증 중..." : "90% 시청 인증완료")
+              : "90% 시청해야 인증 가능"}
             </button>
             {certAvailable && selectedVideoIdx < videoList.length - 1 && (
               <div className="mt-2 text-xs text-blue-500">

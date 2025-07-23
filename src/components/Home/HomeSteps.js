@@ -9,6 +9,7 @@ import { CategoryInputBox } from './components/CategoryInputBox';
 import { MyVideoListWithSelection } from './components/MyVideoListWithSelection';
 import { LoginStep } from './components/LoginStep';
 import { WatchTabsContainer } from './components/WatchTabsContainer';
+// import { WatchRateSummary } from './components/WatchRateSummary';
 import { stepVariants } from './HomeUtils';
 
 export const HomeSteps = ({
@@ -41,6 +42,11 @@ export const HomeSteps = ({
   setVideoFilter,
   getWatchCount,
   MOCK_VIEWERS,
+  
+  // 시청률 데이터
+  totalVideos,
+  watchedVideosCount,
+  watchRate,
   
   // 카테고리 접기/펼치기 핸들러
   setCategoryCollapsed,
@@ -157,6 +163,11 @@ export const HomeSteps = ({
             >
               <div className="space-y-4">
                 {/* 시청할 영상 리스트 */}
+                {/* <WatchRateSummary
+                  totalVideos={totalVideos}
+                  watchedVideosCount={watchedVideosCount}
+                  watchRate={watchRate}
+                /> */}
                 <WatchTabsContainer
                   activeTab={activeTab}
                   onTabChange={setActiveTab}

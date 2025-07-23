@@ -37,6 +37,10 @@ export default function AdminPage() {
   const [currentHost, setCurrentHost] = useState(null);
   const [isTransferringHost, setIsTransferringHost] = useState(false);
 
+  // 영상 조회수 업데이트 관련 상태 추가
+  const [isUpdatingViewCounts, setIsUpdatingViewCounts] = useState(false);
+  const [isInitializingUcraViewCounts, setIsInitializingUcraViewCounts] = useState(false);
+
   // 더미 게시물 데이터
   const dummyPosts = [
     // 협업모집 게시판
@@ -864,6 +868,242 @@ export default function AdminPage() {
     }
   };
 
+  // 영상 조회수 업데이트 함수
+  const updateAllVideoViewCounts = async () => {
+    if (!window.confirm('모든 영상의 조회수를 YouTube API에서 최신 정보로 업데이트하시겠습니까?\n\n이 작업은 시간이 오래 걸릴 수 있습니다.')) {
+      return;
+    }
+
+    setIsUpdatingViewCounts(true);
+
+    try {
+      console.log('🔄 영상 조회수 업데이트 시작');
+      
+      // 1. 모든 채팅방의 영상 수집
+      const roomsQuery = query(collection(db, "chatRooms"));
+      const roomsSnapshot = await getDocs(roomsQuery);
+      
+      let allVideos = [];
+      
+      for (const roomDoc of roomsSnapshot.docs) {
+        const videosQuery = query(collection(db, "chatRooms", roomDoc.id, "videos"));
+        const videosSnapshot = await getDocs(videosQuery);
+        
+        videosSnapshot.forEach(videoDoc => {
+          const videoData = videoDoc.data();
+          if (videoData.videoId) {
+            allVideos.push({
+              roomId: roomDoc.id,
+              videoDocId: videoDoc.id,
+              videoId: videoData.videoId,
+              title: videoData.title,
+              currentViewCount: videoData.viewCount || 0
+            });
+          }
+        });
+      }
+
+      // 2. 루트 videos 컬렉션 영상도 추가
+      try {
+        const rootVideosQuery = query(collection(db, "videos"));
+        const rootVideosSnap = await getDocs(rootVideosQuery);
+        
+        rootVideosSnap.forEach(docSnap => {
+          const videoData = docSnap.data();
+          if (videoData.videoId) {
+            allVideos.push({
+              roomId: null,
+              videoDocId: docSnap.id,
+              videoId: videoData.videoId,
+              title: videoData.title,
+              currentViewCount: videoData.viewCount || 0
+            });
+          }
+        });
+      } catch (err) {
+        console.error('⚠️ 루트 videos 로드 실패:', err);
+      }
+
+      console.log(`📊 총 ${allVideos.length}개 영상 조회수 업데이트 시작`);
+
+      let updatedCount = 0;
+      let errorCount = 0;
+
+      // 3. 각 영상의 조회수 업데이트
+      for (const video of allVideos) {
+        try {
+          // YouTube API에서 최신 정보 가져오기 (snippet, statistics 모두 포함)
+          const API_KEY = process.env.REACT_APP_YOUTUBE_API_KEY;
+          const res = await fetch(
+            `https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${video.videoId}&key=${API_KEY}`
+          );
+          const data = await res.json();
+          
+          if (data.items && data.items.length > 0) {
+            const item = data.items[0];
+            const snippet = item.snippet;
+            const statistics = item.statistics;
+            const newViewCount = parseInt(statistics.viewCount || 0);
+            const newLikeCount = parseInt(statistics.likeCount || 0);
+            
+            // Firestore 업데이트
+            if (video.roomId) {
+              // 채팅방 영상 업데이트
+              const videoRef = doc(db, "chatRooms", video.roomId, "videos", video.videoDocId);
+              await updateDoc(videoRef, {
+                viewCount: newViewCount,
+                likeCount: newLikeCount,
+                views: newViewCount,
+                publishedAt: snippet.publishedAt,
+                description: snippet.description || '',
+                title: snippet.title,
+                channel: snippet.channelTitle,
+                channelId: snippet.channelId,
+                thumbnail: snippet.thumbnails.medium.url,
+                ucraViewCount: video.currentData.ucraViewCount || 0, // 유크라 조회수 유지
+                lastUpdatedAt: serverTimestamp()
+              });
+            } else {
+              // 루트 영상 업데이트
+              const videoRef = doc(db, "videos", video.videoDocId);
+              await updateDoc(videoRef, {
+                viewCount: newViewCount,
+                likeCount: newLikeCount,
+                views: newViewCount,
+                publishedAt: snippet.publishedAt,
+                description: snippet.description || '',
+                title: snippet.title,
+                channel: snippet.channelTitle,
+                channelId: snippet.channelId,
+                thumbnail: snippet.thumbnails.medium.url,
+                ucraViewCount: video.currentData.ucraViewCount || 0, // 유크라 조회수 유지
+                lastUpdatedAt: serverTimestamp()
+              });
+            }
+            
+            updatedCount++;
+            console.log(`✅ ${video.title}: ${video.currentViewCount} → ${newViewCount}`);
+            
+            // API 제한 방지를 위한 딜레이
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        } catch (error) {
+          errorCount++;
+          console.error(`❌ ${video.title} 업데이트 실패:`, error);
+        }
+      }
+
+      console.log(`✅ 영상 정보 업데이트 완료: ${updatedCount}개 성공, ${errorCount}개 실패`);
+      alert(`✅ 영상 정보 업데이트 완료!\n\n성공: ${updatedCount}개\n실패: ${errorCount}개\n\n이제 홈 화면에서 실제 YouTube 조회수와 등록일이 표시됩니다.`);
+
+    } catch (error) {
+      console.error('❌ 조회수 업데이트 중 오류:', error);
+      alert('조회수 업데이트 중 오류가 발생했습니다: ' + error.message);
+    } finally {
+      setIsUpdatingViewCounts(false);
+    }
+  };
+
+  // 기존 영상들의 유크라 조회수 필드 초기화
+  const initializeUcraViewCounts = async () => {
+    if (!window.confirm('기존 영상들에 유크라 조회수 필드를 추가하시겠습니까?\n\n이 작업은 기존 영상들의 ucraViewCount 필드를 0으로 초기화합니다.')) {
+      return;
+    }
+
+    setIsInitializingUcraViewCounts(true);
+
+    try {
+      console.log('🔄 유크라 조회수 필드 초기화 시작');
+      
+      // 1. 모든 채팅방의 영상 수집
+      const roomsQuery = query(collection(db, "chatRooms"));
+      const roomsSnapshot = await getDocs(roomsQuery);
+      
+      let allVideos = [];
+      
+      for (const roomDoc of roomsSnapshot.docs) {
+        const videosQuery = query(collection(db, "chatRooms", roomDoc.id, "videos"));
+        const videosSnapshot = await getDocs(videosQuery);
+        
+        videosSnapshot.forEach(videoDoc => {
+          const videoData = videoDoc.data();
+          if (videoData.videoId && videoData.ucraViewCount === undefined) {
+            allVideos.push({
+              roomId: roomDoc.id,
+              videoDocId: videoDoc.id,
+              videoId: videoData.videoId,
+              title: videoData.title
+            });
+          }
+        });
+      }
+
+      // 2. 루트 videos 컬렉션 영상도 추가
+      try {
+        const rootVideosQuery = query(collection(db, "videos"));
+        const rootVideosSnap = await getDocs(rootVideosQuery);
+        
+        rootVideosSnap.forEach(docSnap => {
+          const videoData = docSnap.data();
+          if (videoData.videoId && videoData.ucraViewCount === undefined) {
+            allVideos.push({
+              roomId: null,
+              videoDocId: docSnap.id,
+              videoId: videoData.videoId,
+              title: videoData.title
+            });
+          }
+        });
+      } catch (err) {
+        console.error('⚠️ 루트 videos 로드 실패:', err);
+      }
+
+      console.log(`📊 총 ${allVideos.length}개 영상에 유크라 조회수 필드 추가 시작`);
+
+      let updatedCount = 0;
+      let errorCount = 0;
+
+      // 3. 각 영상에 ucraViewCount 필드 추가
+      for (const video of allVideos) {
+        try {
+          if (video.roomId) {
+            // 채팅방 영상 업데이트
+            const videoRef = doc(db, "chatRooms", video.roomId, "videos", video.videoDocId);
+            await updateDoc(videoRef, {
+              ucraViewCount: 0,
+              lastViewedAt: serverTimestamp()
+            });
+          } else {
+            // 루트 영상 업데이트
+            const videoRef = doc(db, "videos", video.videoDocId);
+            await updateDoc(videoRef, {
+              ucraViewCount: 0,
+              lastViewedAt: serverTimestamp()
+            });
+          }
+          
+          updatedCount++;
+          console.log(`✅ ${video.title}: 유크라 조회수 필드 추가 완료`);
+          
+          // API 제한 방지를 위한 딜레이
+          await new Promise(resolve => setTimeout(resolve, 50));
+        } catch (error) {
+          errorCount++;
+          console.error(`❌ ${video.title} 필드 추가 실패:`, error);
+        }
+      }
+
+      console.log(`✅ 유크라 조회수 필드 초기화 완료: ${updatedCount}개 성공, ${errorCount}개 실패`);
+      alert(`✅ 유크라 조회수 필드 초기화 완료!\n\n성공: ${updatedCount}개\n실패: ${errorCount}개\n\n이제 홈 화면에서 유크라 조회수가 정상적으로 표시됩니다.`);
+
+    } catch (error) {
+      console.error('❌ 유크라 조회수 필드 초기화 중 오류:', error);
+      alert('유크라 조회수 필드 초기화 중 오류가 발생했습니다: ' + error.message);
+    } finally {
+      setIsInitializingUcraViewCounts(false);
+    }
+  };
+
   return (
     <div style={{ maxWidth: 480, margin: '40px auto', padding: 32, background: '#fff', borderRadius: 16, boxShadow: '0 2px 16px #0001' }}>
       <h1 style={{ fontSize: 28, fontWeight: 'bold', marginBottom: 24, color: '#d00' }}>관리자 페이지</h1>
@@ -1249,6 +1489,53 @@ export default function AdminPage() {
         >
           {isCreatingPosts ? '⏳ 생성 중...' : '📝 더미 게시물 생성'}
         </button>
+      </div>
+
+      {/* 영상 정보 업데이트 섹션 */}
+      <div style={{ marginBottom: 40, padding: 20, backgroundColor: '#e8f5e8', borderRadius: 12, border: '2px solid #4caf50' }}>
+        <h2 style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 16, color: '#2e7d32' }}>📊 영상 정보 업데이트</h2>
+        <p style={{ marginBottom: 16, color: '#388e3c', lineHeight: 1.5 }}>
+          모든 등록된 영상의 조회수와 등록일을 YouTube API에서 최신 정보로 업데이트합니다.<br />
+          • 기존 영상들의 조회수가 0으로 표시되는 문제 해결<br />
+          • YouTube API를 통해 실시간 조회수 정보 가져오기<br />
+          • 등록일(publishedAt) 정보 추가<br />
+          • 좋아요 수도 함께 업데이트
+        </p>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <button
+            onClick={updateAllVideoViewCounts}
+            disabled={isUpdatingViewCounts}
+            style={{
+              padding: '12px 24px',
+              backgroundColor: isUpdatingViewCounts ? '#6c757d' : '#4caf50',
+              color: 'white',
+              border: 'none',
+              borderRadius: 8,
+              fontWeight: 'bold',
+              cursor: isUpdatingViewCounts ? 'not-allowed' : 'pointer',
+              fontSize: 16
+            }}
+          >
+            {isUpdatingViewCounts ? '⏳ 업데이트 중...' : '📊 영상 정보 업데이트'}
+          </button>
+          
+          <button
+            onClick={initializeUcraViewCounts}
+            disabled={isInitializingUcraViewCounts}
+            style={{
+              padding: '12px 24px',
+              backgroundColor: isInitializingUcraViewCounts ? '#6c757d' : '#2196f3',
+              color: 'white',
+              border: 'none',
+              borderRadius: 8,
+              fontWeight: 'bold',
+              cursor: isInitializingUcraViewCounts ? 'not-allowed' : 'pointer',
+              fontSize: 16
+            }}
+          >
+            {isInitializingUcraViewCounts ? '⏳ 초기화 중...' : '🔧 유크라 조회수 필드 초기화'}
+          </button>
+        </div>
       </div>
 
       {/* 기존 채팅방 삭제 섹션 */}

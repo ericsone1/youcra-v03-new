@@ -50,129 +50,129 @@ function App() {
   ];
 
   // 터치 이벤트 상태
-  const [touchStart, setTouchStart] = useState(null);
-  const [touchEnd, setTouchEnd] = useState(null);
-  const [swipeDirection, setSwipeDirection] = useState(null);
+  // const [touchStart, setTouchStart] = useState(null);
+  // const [touchEnd, setTouchEnd] = useState(null);
+  // const [swipeDirection, setSwipeDirection] = useState(null);
   
   // 디버깅 상태 (개발 모드에서만)
-  const [debugInfo, setDebugInfo] = useState({
-    touching: false,
-    startX: 0,
-    currentX: 0,
-    distance: 0,
-    lastEvent: ''
-  });
-  const isDev = process.env.NODE_ENV === 'development';
+  // const [debugInfo, setDebugInfo] = useState({
+  //   touching: false,
+  //   startX: 0,
+  //   currentX: 0,
+  //   distance: 0,
+  //   lastEvent: ''
+  // });
+  // const isDev = process.env.NODE_ENV === 'development';
 
   // 현재 탭 인덱스 찾기
-  const getCurrentTabIndex = () => {
-    const currentPath = location.pathname;
-    const index = tabs.findIndex(tab => {
-      if (tab.path === '/') {
-        return currentPath === '/';
-      }
-      return currentPath.startsWith(tab.path);
-    });
-    return index >= 0 ? index : 0;
-  };
+  // const getCurrentTabIndex = () => {
+  //   const currentPath = location.pathname;
+  //   const index = tabs.findIndex(tab => {
+  //     if (tab.path === '/') {
+  //       return currentPath === '/';
+  //     }
+  //     return currentPath.startsWith(tab.path);
+  //   });
+  //   return index >= 0 ? index : 0;
+  // };
 
   // 스와이프 핸들러
-  const handleSwipe = (direction) => {
-    const currentIndex = getCurrentTabIndex();
-    let newIndex;
+  // const handleSwipe = (direction) => {
+  //   const currentIndex = getCurrentTabIndex();
+  //   let newIndex;
 
-    if (direction === 'left') {
-      // 왼쪽 스와이프 = 다음 탭
-      newIndex = (currentIndex + 1) % tabs.length;
-    } else if (direction === 'right') {
-      // 오른쪽 스와이프 = 이전 탭
-      newIndex = (currentIndex - 1 + tabs.length) % tabs.length;
-    } else {
-      return;
-    }
+  //   if (direction === 'left') {
+  //     // 왼쪽 스와이프 = 다음 탭
+  //     newIndex = (currentIndex + 1) % tabs.length;
+  //   } else if (direction === 'right') {
+  //     // 오른쪽 스와이프 = 이전 탭
+  //     newIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+  //   } else {
+  //     return;
+  //   }
 
-    navigate(tabs[newIndex].path);
-  };
+  //   navigate(tabs[newIndex].path);
+  // };
 
   // 터치 시작
-  const handleTouchStart = (e) => {
-    const startX = e.touches[0].clientX;
-    setTouchEnd(null);
-    setTouchStart(startX);
+  // const handleTouchStart = (e) => {
+  //   const startX = e.touches[0].clientX;
+  //   setTouchEnd(null);
+  //   setTouchStart(startX);
     
-    // 디버깅 정보 업데이트
-    setDebugInfo({
-      touching: true,
-      startX: startX,
-      currentX: startX,
-      distance: 0,
-      lastEvent: 'touchStart'
-    });
-  };
+  //   // 디버깅 정보 업데이트
+  //   setDebugInfo({
+  //     touching: true,
+  //     startX: startX,
+  //     currentX: startX,
+  //     distance: 0,
+  //     lastEvent: 'touchStart'
+  //   });
+  // };
 
   // 터치 이동 
-  const handleTouchMove = (e) => {
-    if (!touchStart) return;
+  // const handleTouchMove = (e) => {
+  //   if (!touchStart) return;
     
-    const currentX = e.touches[0].clientX;
-    const distance = touchStart - currentX; // 부호 포함 거리
-    const absDistance = Math.abs(distance);
+  //   const currentX = e.touches[0].clientX;
+  //   const distance = touchStart - currentX; // 부호 포함 거리
+  //   const absDistance = Math.abs(distance);
     
-    // 디버깅 정보 업데이트
-    setDebugInfo(prev => ({
-      ...prev,
-      currentX: currentX,
-      distance: distance,
-      lastEvent: 'touchMove'
-    }));
+  //   // 디버깅 정보 업데이트
+  //   setDebugInfo(prev => ({
+  //     ...prev,
+  //     currentX: currentX,
+  //     distance: distance,
+  //     lastEvent: 'touchMove'
+  //   }));
     
-    // 가로 스와이프가 감지되면 세로 스크롤 방지
-    if (absDistance > 20 && e.cancelable) {
-      e.preventDefault();
-    }
+  //   // 가로 스와이프가 감지되면 세로 스크롤 방지
+  //   if (absDistance > 20 && e.cancelable) {
+  //     e.preventDefault();
+  //   }
     
-    setTouchEnd(currentX);
-  };
+  //   setTouchEnd(currentX);
+  // };
 
   // 터치 종료
-  const handleTouchEnd = (e) => {
-    const finalDistance = touchStart && touchEnd ? touchStart - touchEnd : 0;
+  // const handleTouchEnd = (e) => {
+  //   const finalDistance = touchStart && touchEnd ? touchStart - touchEnd : 0;
     
-    // 디버깅 정보 업데이트
-    setDebugInfo(prev => ({
-      ...prev,
-      touching: false,
-      distance: finalDistance,
-      lastEvent: `touchEnd (${finalDistance > 60 ? 'LEFT' : finalDistance < -60 ? 'RIGHT' : 'NONE'})`
-    }));
+  //   // 디버깅 정보 업데이트
+  //   setDebugInfo(prev => ({
+  //     ...prev,
+  //     touching: false,
+  //     distance: finalDistance,
+  //     lastEvent: `touchEnd (${finalDistance > 60 ? 'LEFT' : finalDistance < -60 ? 'RIGHT' : 'NONE'})`
+  //   }));
     
-    if (!touchStart || !touchEnd) {
-      return;
-    }
+  //   if (!touchStart || !touchEnd) {
+  //     return;
+  //   }
     
-    const distance = touchStart - touchEnd;
-    const isLeftSwipe = distance > 60; // 임계값 증가
-    const isRightSwipe = distance < -60;
+  //   const distance = touchStart - touchEnd;
+  //   const isLeftSwipe = distance > 60; // 임계값 증가
+  //   const isRightSwipe = distance < -60;
 
-    // 스와이프 감지시 기본 동작 방지
-    if ((isLeftSwipe || isRightSwipe) && e.cancelable) {
-      e.preventDefault();
+  //   // 스와이프 감지시 기본 동작 방지
+  //   if ((isLeftSwipe || isRightSwipe) && e.cancelable) {
+  //     e.preventDefault();
       
-      if (isLeftSwipe) {
-        setSwipeDirection('left');
-        setTimeout(() => setSwipeDirection(null), 500);
-        handleSwipe('left'); // 왼쪽으로 스와이프 = 다음 탭
-      } else if (isRightSwipe) {
-        setSwipeDirection('right');
-        setTimeout(() => setSwipeDirection(null), 500);
-        handleSwipe('right'); // 오른쪽으로 스와이프 = 이전 탭
-      }
-    }
+  //     if (isLeftSwipe) {
+  //       setSwipeDirection('left');
+  //       setTimeout(() => setSwipeDirection(null), 500);
+  //       handleSwipe('left'); // 왼쪽으로 스와이프 = 다음 탭
+  //     } else if (isRightSwipe) {
+  //       setSwipeDirection('right');
+  //       setTimeout(() => setSwipeDirection(null), 500);
+  //       handleSwipe('right'); // 오른쪽으로 스와이프 = 이전 탭
+  //     }
+  //   }
     
-    // 상태 초기화
-    setTouchStart(null);
-    setTouchEnd(null);
-  };
+  //   // 상태 초기화
+  //   setTouchStart(null);
+  //   setTouchEnd(null);
+  // };
 
   useEffect(() => {
     if (!auth.currentUser) return;
@@ -213,9 +213,9 @@ function App() {
           <ToastProvider>
             <div 
               className="bg-blue-100 min-h-screen pb-20"
-              onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
+              // onTouchStart={handleTouchStart}
+              // onTouchMove={handleTouchMove}
+              // onTouchEnd={handleTouchEnd}
               style={{ 
                 touchAction: 'pan-y', // 세로 스크롤만 허용
                 userSelect: 'none', // 텍스트 선택 방지
@@ -257,11 +257,11 @@ function App() {
               </AnimatePresence>
             
               {/* 스와이프 피드백 */}
-              {swipeDirection && (
+              {/* {swipeDirection && (
                 <div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 bg-black bg-opacity-70 text-white px-4 py-2 rounded-lg z-[9999] pointer-events-none">
                   {swipeDirection === 'left' ? '➡️ 다음 탭' : '⬅️ 이전 탭'}
                 </div>
-              )}
+              )} */}
               {/* 하단 네비게이션 바 */}
               <footer className="fixed bottom-0 inset-x-0 bg-white rounded-t-2xl shadow-lg border-t grid grid-cols-4 h-16 z-50">
                 <NavLink to="/" className={({isActive}) => `flex flex-col items-center justify-center touch-area ${isActive ? "text-blue-500 font-bold" : "text-gray-400"}`}>

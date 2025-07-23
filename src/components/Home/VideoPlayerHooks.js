@@ -101,7 +101,8 @@ export const useVideoEventHandlers = (
   watchInterval,
   setWatchInterval,
   setCertificationTimer,
-  setShowCertificationDelay
+  setShowCertificationDelay,
+  showCountdown
 ) => {
   const handleReady = (event) => {
     console.log('[YouTube Player Ready]', event);

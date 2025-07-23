@@ -1,7 +1,7 @@
 // 🎯 비디오 플레이어 핵심 로직
 // 원본: HomeVideoPlayer.js에서 추출
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useVideoPlayer } from '../../contexts/VideoPlayerContext';
 import { useWatchedVideos } from '../../contexts/WatchedVideosContext';
 import { VideoPlayerUI } from './VideoPlayerUI';
@@ -101,7 +101,8 @@ export default function VideoPlayerCore({
     watchInterval,
     setWatchInterval,
     setCertificationTimer,
-    setShowCertificationDelay
+    setShowCertificationDelay,
+    showCountdown
   );
 
   // 영상 큐 관리
@@ -129,15 +130,15 @@ export default function VideoPlayerCore({
   };
 
   // 터치 드래그 핸들러
-  const handleTouchStart = (e) => {
+  const handleTouchStartLocal = (e) => {
     return handleTouchStart(e, setIsDragging, position, setDragStart, onDrag);
   };
 
-  const handleTouchMove = (e) => {
+  const handleTouchMoveLocal = (e) => {
     handleTouchMove(e, isDragging, dragStart, setPosition, onDrag);
   };
 
-  const handleTouchEnd = (e) => {
+  const handleTouchEndLocal = (e) => {
     handleTouchEnd(setIsDragging, onDrag);
   };
 
@@ -152,7 +153,7 @@ export default function VideoPlayerCore({
           await incrementWatchCount(currentVideo.videoId);
           
           // 인증 상태 설정
-          await watchedVideosSetCertified(currentVideo.videoId, true);
+          await watchedVideosSetCertified(currentVideo.videoId, true, 'main');
           setFanCertified(true);
           setCertStage('certified');
           
@@ -205,8 +206,9 @@ export default function VideoPlayerCore({
     }
   }, [showCertificationDelay, certificationTimer, setCertStage]);
 
-  // 영상 변경 시 상태 초기화
+  // 영상 변경 시 상태 초기화 (영상 ID가 바뀔 때만)
   useEffect(() => {
+    // 영상 ID가 바뀔 때만 상태 초기화
     setWatchSeconds(0);
     setLocalVideoEnded(false);
     setCertStage('watching');
@@ -219,7 +221,7 @@ export default function VideoPlayerCore({
       clearInterval(watchInterval);
       setWatchInterval(null);
     }
-  }, [currentVideo?.videoId]);
+  }, [currentVideo?.videoId]); // 영상 ID만 의존성으로 설정
 
   // 영상 재생 상태에 따른 자동 다음 영상
   useEffect(() => {
@@ -244,9 +246,9 @@ export default function VideoPlayerCore({
       handleMouseDown={handleMouseDown}
       handleMouseMove={handleMouseMove}
       handleMouseUp={handleMouseUp}
-      handleTouchStart={handleTouchStart}
-      handleTouchMove={handleTouchMove}
-      handleTouchEnd={handleTouchEnd}
+      handleTouchStart={handleTouchStartLocal}
+      handleTouchMove={handleTouchMoveLocal}
+      handleTouchEnd={handleTouchEndLocal}
       onClose={onClose}
       onMinimize={onMinimize}
       onRestore={onRestore}

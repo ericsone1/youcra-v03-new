@@ -291,9 +291,9 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
                     </p>
                   </div>
                   
-                  {/* 조회수와 업로드 날짜 */}
+                  {/* 유크라 조회수와 등록일 */}
                   <div className="flex items-center text-sm text-gray-500">
-                    <span>조회수 {(video.viewCount || video.views || 0).toLocaleString()}회</span>
+                    <span>유크라 조회수 {(video.ucraViewCount || 0).toLocaleString()}회</span>
                     <span className="mx-2">•</span>
                     <span>{video.uploadedAt || '등록일 없음'}</span>
                   </div>
@@ -413,10 +413,70 @@ export const WatchVideoList = ({
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // 🔄 유크라에 등록된 모든 영상 + 사용자가 선택한 영상 합치기
+  // selectedVideos에 type 필드가 없는 경우 duration을 기반으로 추가
+  const processedSelectedVideos = Array.isArray(selectedVideos) ? selectedVideos.map(video => {
+    // duration 문자열을 초 단위로 변환하는 함수
+    const parseDurationToSeconds = (duration) => {
+      if (!duration) return 0;
+      
+      // 이미 숫자인 경우
+      if (typeof duration === 'number') return duration;
+      
+      // 문자열인 경우 (예: "3:45", "1:23:45")
+      if (typeof duration === 'string') {
+        const parts = duration.split(':').map(Number);
+        if (parts.length === 2) {
+          return parts[0] * 60 + parts[1]; // 분:초 형식
+        } else if (parts.length === 3) {
+          return parts[0] * 3600 + parts[1] * 60 + parts[2]; // 시:분:초 형식
+        }
+      }
+      
+      return 0;
+    };
+    
+    // durationSeconds가 없으면 duration에서 계산
+    let durationSeconds = video.durationSeconds;
+    if (!durationSeconds && video.duration) {
+      durationSeconds = parseDurationToSeconds(video.duration);
+    }
+    
+    // type 필드가 없거나 durationSeconds가 계산된 경우 type 재설정
+    if (!video.type || durationSeconds !== video.durationSeconds) {
+      return {
+        ...video,
+        type: durationSeconds >= 181 ? 'long' : 'short',
+        durationSeconds: durationSeconds || 0
+      };
+    }
+    
+    return video;
+  }) : [];
+
   let filteredVideos = computeUniqueVideos([
     ...ucraVideos,
-    ...(Array.isArray(selectedVideos) ? selectedVideos : [])
+    ...processedSelectedVideos
   ]);
+
+  // 디버깅: 처리된 영상 데이터 확인
+  console.log('🔍 [WatchVideoList] 영상 데이터 처리 결과:', {
+    ucraVideosCount: ucraVideos.length,
+    selectedVideosCount: selectedVideos?.length || 0,
+    processedSelectedVideosCount: processedSelectedVideos.length,
+    filteredVideosCount: filteredVideos.length,
+    originalSelectedVideos: selectedVideos?.map(v => ({
+      title: v.title,
+      type: v.type,
+      duration: v.duration,
+      durationSeconds: v.durationSeconds
+    })),
+    processedVideos: processedSelectedVideos.map(v => ({
+      title: v.title,
+      type: v.type,
+      duration: v.duration,
+      durationSeconds: v.durationSeconds
+    }))
+  });
 
   /* 카테고리 필터링 완전 비활성화 */
 
@@ -426,13 +486,13 @@ export const WatchVideoList = ({
   let displayVideos = filteredVideos;
   const isShort = (v) => {
     if (v.type) return v.type === 'short';
-    if (typeof v.durationSeconds === 'number') return v.durationSeconds < 60;
-    return false;
+    if (typeof v.durationSeconds === 'number') return v.durationSeconds < 181; // 3분 1초(181초) 미만은 쇼츠
+    return true; // type이 없고 durationSeconds도 없으면 기본적으로 쇼츠로 분류
   };
   const isLong = (v) => {
     if (v.type) return v.type === 'long';
-    if (typeof v.durationSeconds === 'number') return v.durationSeconds >= 60;
-    return true;
+    if (typeof v.durationSeconds === 'number') return v.durationSeconds >= 181; // 3분 1초(181초) 이상만 롱폼
+    return false; // type이 없고 durationSeconds도 없으면 기본적으로 쇼츠로 분류
   };
 
   if (videoFilter === 'short') {
@@ -502,6 +562,15 @@ export const WatchVideoList = ({
           const videoId = video.videoId || video.id;
           const canWatchNow = canRewatch(videoId);
           
+          // 디버깅: 쇼츠 분류 확인
+          console.log(`🎬 [영상] 쇼츠 분류:`, {
+            title: video.title,
+            type: video.type,
+            durationSeconds: video.durationSeconds,
+            isShortVideo: video.type === 'short',
+            durationCheck: video.durationSeconds >= 181 ? '롱폼(181초 이상)' : '쇼츠(181초 미만)'
+          });
+          
           return (
             <div
               key={videoId + '-' + refreshTrigger}
@@ -528,7 +597,7 @@ export const WatchVideoList = ({
                 <div className="text-xs text-gray-500 mt-0.5 truncate">{video.channelTitle}</div>
                 <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
                   <span>
-                    조회수 {video.viewCount?.toLocaleString() || video.views?.toLocaleString() || '-'}
+                    유크라 조회수 {video.ucraViewCount?.toLocaleString() || '0'}
                   </span>
                   <span>· {video.uploadedAt}</span>
                 </div>

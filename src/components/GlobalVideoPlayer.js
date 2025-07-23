@@ -55,7 +55,7 @@ function GlobalVideoPlayer() {
   const [position, setPosition] = useState(() => {
     return minimized 
       ? { x: window.innerWidth - 100, y: window.innerHeight - 100 }
-      : { x: (window.innerWidth - 400) / 2, y: 50 };
+      : { x: (window.innerWidth - 400) / 2, y: (window.innerHeight - 350) / 2 };
   });
 
   const dragRef = useRef();
@@ -232,7 +232,7 @@ function GlobalVideoPlayer() {
       try {
         await Promise.all([
           incrementWatchCount(finishedVideoId),
-          setCertified(finishedVideoId, true)
+          setCertified(finishedVideoId, true, 'main')
         ]);
       } catch (e) {
         console.error('watchCount 업데이트 실패', e);
@@ -274,10 +274,10 @@ function GlobalVideoPlayer() {
     return () => clearInterval(interval);
   }, [isPlaying]);
 
-  // 영상이 바뀔 때 시청 시간 초기화
+  // 영상이 바뀔 때 시청 시간 초기화 (영상 ID가 바뀔 때만)
   useEffect(() => {
     setWatchSeconds(0);
-  }, [selectedVideoId]);
+  }, [selectedVideoId]); // 영상 ID만 의존성으로 설정
 
   // 플레이어 닫기
   const closePlayer = () => {

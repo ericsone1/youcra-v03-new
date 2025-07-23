@@ -10,10 +10,12 @@ import { useHomeChannelState } from './hooks/useHomeChannelState';
 import { useHomeCategoryState } from './hooks/useHomeCategoryState';
 import { useHomeVideoSelectionState } from './hooks/useHomeVideoSelectionState';
 import { useHomeTabState } from './hooks/useHomeTabState';
+import { useUcraVideos } from './hooks/useUcraVideos';
 import { useToast } from '../common/Toast';
 import GlobalVideoPlayer from '../GlobalVideoPlayer';
 import { HomeSteps } from './HomeSteps';
 import { useHomeActions } from './HomeActions';
+import { WatchRateSummary } from './components/WatchRateSummary';
 import { 
   MOCK_VIEWERS, 
   checkInitialState, 
@@ -36,6 +38,9 @@ export const HomeContainer = () => {
   
   // 시청된 영상 관리 (WatchedVideosContext에서 통합 관리)
   const { getWatchInfo } = useWatchedVideos();
+  
+  // 유크라 영상 및 시청률 데이터
+  const { totalVideos, watchedVideosCount, watchRate } = useUcraVideos();
   
   // 채널 등록 상태 (custom hook)
   const {
@@ -219,6 +224,11 @@ export const HomeContainer = () => {
         setVideoFilter={setVideoFilter}
         getWatchCount={getWatchInfo}
         MOCK_VIEWERS={MOCK_VIEWERS}
+        
+        // 시청률 데이터
+        totalVideos={totalVideos}
+        watchedVideosCount={watchedVideosCount}
+        watchRate={watchRate}
         
         // 접기/펼치기 핸들러
         setCategoryCollapsed={setCategoryCollapsed}

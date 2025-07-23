@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { doc, getDoc, collection, onSnapshot, deleteDoc, addDoc, serverTimestamp, getDocs, updateDoc, arrayRemove } from 'firebase/firestore';
+import { useWatchedVideos } from '../contexts/WatchedVideosContext';
+import { doc, getDoc, collection, query, onSnapshot, deleteDoc, addDoc, serverTimestamp, getDocs, updateDoc, arrayRemove } from 'firebase/firestore';
 import { db } from '../firebase';
 import { 
   IoChatbubbleEllipsesOutline, 
@@ -18,12 +19,11 @@ export default function ChatRoomInfo() {
   const { roomId } = useParams();
   const navigate = useNavigate();
   const { currentUser } = useAuth();
+  const { getWatchedVideos } = useWatchedVideos();
   
   const [roomData, setRoomData] = useState(null);
   const [participants, setParticipants] = useState([]);
   const [videoList, setVideoList] = useState([]);
-  const [participantWatchRates, setParticipantWatchRates] = useState({});
-  const [isCalculatingWatchRates, setIsCalculatingWatchRates] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
@@ -31,9 +31,15 @@ export default function ChatRoomInfo() {
   const [showLeaveModal, setShowLeaveModal] = useState(false);
   const [leaving, setLeaving] = useState(false);
 
-  // 시청률 계산 캐시
-  const [watchRateCache, setWatchRateCache] = useState({});
-  const [lastCacheUpdate, setLastCacheUpdate] = useState(0);
+  // 메인피드 시청률 데이터
+  const [mainFeedWatchData, setMainFeedWatchData] = useState({
+    totalVideos: 0,
+    watchedVideos: 0,
+    watchRate: 0
+  });
+
+  // 참여자별 시청률 데이터
+  const [participantWatchRates, setParticipantWatchRates] = useState({});
 
   const isOwner = roomData?.createdBy === currentUser?.uid;
 
@@ -134,82 +140,190 @@ export default function ChatRoomInfo() {
     }
   };
 
-  // 참여자별 시청률 계산 함수 (최적화된 버전)
-  const calculateWatchRates = async (videosList, participantsList) => {
-    if (!videosList.length || !participantsList.length) {
-      return {};
-    }
-
-    console.log('🔄 시청률 계산 시작:', { 
-      참여자수: participantsList.length, 
-      영상수: videosList.length 
-    });
-
+  // 참여자별 시청률 계산 함수 (홈탭 메인피드 영상만 대상)
+  const calculateParticipantWatchRates = async (participantsList, homeFeedVideoIds) => {
     try {
-      // 1. 모든 영상의 인증 데이터를 병렬로 한 번에 가져오기
-      const allCertificationsPromises = videosList.map(async (video) => {
-        try {
-          const certificationsRef = collection(db, 'chatRooms', roomId, 'videos', video.id, 'certifications');
-          const certificationsSnapshot = await getDocs(certificationsRef);
-          
-          // 해당 영상에 인증한 사용자 UID 목록 반환
-          const certifiedUids = certificationsSnapshot.docs.map(doc => doc.data().uid);
-          
-          return {
-            videoId: video.id,
-            certifiedUids: certifiedUids
-          };
-        } catch (error) {
-          console.error(`영상 ${video.id} 인증 데이터 로딩 실패:`, error);
-          return {
-            videoId: video.id,
-            certifiedUids: []
-          };
-        }
-      });
-
-      // 모든 인증 데이터 대기
-      const allCertifications = await Promise.all(allCertificationsPromises);
-      
-      // 2. 인증 데이터를 Map으로 변환 (빠른 조회를 위해)
-      const certificationMap = new Map();
-      allCertifications.forEach(({ videoId, certifiedUids }) => {
-        certificationMap.set(videoId, new Set(certifiedUids));
-      });
-
-      // 3. 각 참여자의 시청률 계산 (메모리에서 빠르게 처리)
       const watchRates = {};
       
-      participantsList.forEach(participant => {
-        let certifiedCount = 0;
-        
-        // 각 영상에 대해 이 참여자가 인증했는지 확인
-        videosList.forEach(video => {
-          const certifiedUids = certificationMap.get(video.id);
-          if (certifiedUids && certifiedUids.has(participant.id)) {
-            certifiedCount++;
-          }
-        });
-        
-        // 시청률 계산 (인증한 영상 수 / 전체 영상 수 * 100)
-        const watchRate = videosList.length > 0 ? Math.round((certifiedCount / videosList.length) * 100) : 0;
-        watchRates[participant.id] = watchRate;
-      });
-
-      console.log('✅ 시청률 계산 완료:', watchRates);
-      return watchRates;
-
-    } catch (error) {
-      console.error('❌ 시청률 계산 전체 오류:', error);
+      console.log('📊 홈탭 메인피드 영상 ID 목록 (참여자별 계산용):', homeFeedVideoIds);
+      const totalVideos = homeFeedVideoIds.length;
       
-      // 오류 발생 시 기본값 반환 (모든 참여자 0%)
+      for (const participant of participantsList) {
+        try {
+          // 각 참여자의 시청한 영상들을 가져오기
+          const participantWatchedRef = collection(db, 'users', participant.id, 'watchedVideos');
+          const participantWatchedSnap = await getDocs(participantWatchedRef);
+          
+          const participantWatchedVideos = participantWatchedSnap.docs.map(doc => doc.data());
+          
+          // 중복 제거 (같은 videoId는 하나로)
+          const uniqueParticipantWatched = participantWatchedVideos.filter((video, index, self) => 
+            index === self.findIndex(v => v.videoId === video.videoId)
+          );
+          
+          // 홈탭 메인피드 영상 목록에 포함된 시청한 영상들만 카운트
+          const relevantWatchedCount = uniqueParticipantWatched.filter(video => 
+            homeFeedVideoIds.includes(video.videoId)
+          ).length;
+          
+          const watchRate = totalVideos > 0 ? 
+            Math.min(Math.round((relevantWatchedCount / totalVideos) * 100), 100) : 0;
+          
+          watchRates[participant.id] = watchRate;
+          
+          console.log(`📊 ${participant.name} 홈탭 시청률 계산:`, {
+            participantId: participant.id,
+            participantName: participant.name,
+            totalWatched: uniqueParticipantWatched.length,
+            relevantWatched: relevantWatchedCount,
+            totalVideos: totalVideos,
+            watchRate: `${watchRate}%`,
+            watchedVideoIds: uniqueParticipantWatched.map(v => v.videoId)
+          });
+          
+        } catch (participantError) {
+          console.error(`❌ ${participant.name} 시청률 계산 실패:`, participantError);
+          watchRates[participant.id] = 0;
+        }
+      }
+      
+      setParticipantWatchRates(watchRates);
+      console.log('✅ 참여자별 홈탭 시청률 계산 완료:', watchRates);
+      
+    } catch (error) {
+      console.error('❌ 참여자별 홈탭 시청률 계산 오류:', error);
+      // 오류 시 모든 참여자 0%로 설정
       const fallbackRates = {};
       participantsList.forEach(participant => {
         fallbackRates[participant.id] = 0;
       });
-      return fallbackRates;
+      setParticipantWatchRates(fallbackRates);
     }
   };
+
+  // 메인피드 시청률 계산 함수 (홈탭 메인피드 영상만 대상)
+  const calculateMainFeedWatchRate = async () => {
+    try {
+      console.log('🔄 홈탭 메인피드 시청률 계산 시작');
+      
+      // 홈탭 메인피드에 표시되는 영상들만 수집 (useUcraVideos와 동일한 로직)
+      let allVideos = [];
+      
+      // 1. 모든 채팅방의 영상들 수집 (홈탭에 표시됨)
+      try {
+        const roomsQuery = query(collection(db, "chatRooms"));
+        const roomsSnapshot = await getDocs(roomsQuery);
+        console.log('📊 채팅방 수:', roomsSnapshot.size);
+        
+        for (const roomDoc of roomsSnapshot.docs) {
+          const roomData = roomDoc.data();
+          const videosQuery = query(
+            collection(db, "chatRooms", roomDoc.id, "videos"),
+            orderBy("registeredAt", "desc")
+          );
+          const videosSnapshot = await getDocs(videosQuery);
+          
+          videosSnapshot.forEach(videoDoc => {
+            const videoData = videoDoc.data();
+            if (videoData.videoId) {
+              allVideos.push({
+                id: videoDoc.id,
+                videoId: videoData.videoId,
+                roomId: roomDoc.id,
+                roomName: roomData.name || '채팅방'
+              });
+            }
+          });
+        }
+      } catch (error) {
+        console.error('⚠️ 채팅방 영상 로드 실패:', error);
+      }
+      
+      // 2. 루트 videos 컬렉션 영상들 수집 (홈탭에 표시됨)
+      try {
+        const rootVideosQuery = query(collection(db, "videos"), orderBy("registeredAt", "desc"));
+        const rootVideosSnap = await getDocs(rootVideosQuery);
+        console.log('📊 루트 videos 영상 수:', rootVideosSnap.size);
+        
+        rootVideosSnap.forEach(docSnap => {
+          const videoData = docSnap.data();
+          if (videoData.videoId) {
+            allVideos.push({
+              id: docSnap.id,
+              videoId: videoData.videoId,
+              roomId: null,
+              roomName: '루트'
+            });
+          }
+        });
+      } catch (error) {
+        console.error('⚠️ 루트 videos 로드 실패:', error);
+      }
+      
+      // 3. 중복 제거 (같은 videoId는 하나로)
+      const uniqueVideos = allVideos.filter((video, index, self) => 
+        index === self.findIndex(v => v.videoId === video.videoId)
+      );
+      
+      const uniqueVideoIds = uniqueVideos.map(v => v.videoId);
+      const totalVideos = uniqueVideoIds.length;
+      
+      console.log('📊 홈탭 메인피드 영상 목록:', uniqueVideos.map(v => ({ videoId: v.videoId, roomName: v.roomName })));
+      console.log('📊 홈탭 메인피드 총 영상 수:', totalVideos);
+      
+      // 4. 현재 사용자의 시청한 영상들 가져오기
+      const watchedVideos = getWatchedVideos();
+      const uniqueWatchedVideos = watchedVideos.filter((video, index, self) => 
+        index === self.findIndex(v => v.videoId === video.videoId)
+      );
+      
+      // 5. 홈탭 메인피드 영상 목록에 포함된 시청한 영상들만 카운트
+      const relevantWatchedVideos = uniqueWatchedVideos.filter(video => 
+        uniqueVideoIds.includes(video.videoId)
+      );
+      const watchedVideosCount = relevantWatchedVideos.length;
+      
+      console.log('🔍 디버깅 - 홈탭 시청률 계산 상세:', {
+        totalVideos,
+        watchedVideos: watchedVideos.length,
+        uniqueWatchedVideos: uniqueWatchedVideos.length,
+        relevantWatchedVideos: relevantWatchedVideos.length,
+        watchedVideosCount,
+        uniqueVideoIds: uniqueVideoIds,
+        watchedVideoIds: relevantWatchedVideos.map(v => v.videoId)
+      });
+      
+      // 6. 시청률 계산 (100%를 넘지 않도록 제한)
+      const watchRate = totalVideos > 0 ? Math.min(Math.round((watchedVideosCount / totalVideos) * 100), 100) : 0;
+      
+      setMainFeedWatchData({
+        totalVideos,
+        watchedVideos: watchedVideosCount,
+        watchRate
+      });
+      
+      console.log('📊 홈탭 메인피드 시청률 계산 완료:', {
+        totalVideos,
+        watchedVideos: watchedVideosCount,
+        watchRate: `${watchRate}%`
+      });
+      
+      // 7. 참여자별 시청률 계산 (홈탭 메인피드 기준)
+      if (participants.length > 0) {
+        await calculateParticipantWatchRates(participants, uniqueVideoIds);
+      }
+      
+    } catch (error) {
+      console.error('❌ 홈탭 메인피드 시청률 계산 오류:', error);
+      setMainFeedWatchData({
+        totalVideos: 0,
+        watchedVideos: 0,
+        watchRate: 0
+      });
+    }
+  };
+
+
 
   useEffect(() => {
     if (!roomId || !currentUser) return;
@@ -391,52 +505,26 @@ export default function ChatRoomInfo() {
       fetchRoomData();
     setLoading(false);
 
+    // 메인피드 시청률 계산
+    if (currentUser) {
+      calculateMainFeedWatchRate();
+    }
+
+    // 시청률 계산을 주기적으로 업데이트 (5분마다)
+    const watchRateInterval = setInterval(() => {
+      if (currentUser) {
+        calculateMainFeedWatchRate();
+      }
+    }, 5 * 60 * 1000); // 5분
+
     return () => {
       unsubscribeParticipants();
       unsubscribeVideos();
+      clearInterval(watchRateInterval);
     };
   }, [roomId, currentUser]);
 
-  // 참여자와 영상 목록이 모두 로드된 후 시청률 계산
-  useEffect(() => {
-    if (participants.length > 0 && videoList.length > 0) {
-      // 캐시 키 생성 (참여자와 영상 목록의 해시)
-      const participantIds = participants.map(p => p.id).sort().join(',');
-      const videoIds = videoList.map(v => v.id).sort().join(',');
-      const cacheKey = `${participantIds}_${videoIds}`;
-      const currentTime = Date.now();
-      
-      // 캐시가 유효한지 확인 (5분 내)
-      const cacheValid = watchRateCache[cacheKey] && 
-                        (currentTime - lastCacheUpdate < 300000); // 5분 = 300,000ms
-      
-      if (cacheValid) {
-        console.log('🚀 시청률 캐시 사용:', watchRateCache[cacheKey]);
-        setParticipantWatchRates(watchRateCache[cacheKey]);
-        return;
-      }
-      
-      console.log('💾 시청률 새로 계산 중...');
-      setIsCalculatingWatchRates(true);
-      
-      calculateWatchRates(videoList, participants).then(watchRates => {
-        setParticipantWatchRates(watchRates);
-        setIsCalculatingWatchRates(false);
-        
-        // 캐시 업데이트
-        setWatchRateCache(prev => ({
-          ...prev,
-          [cacheKey]: watchRates
-        }));
-        setLastCacheUpdate(currentTime);
-        
-        console.log('💾 시청률 캐시 업데이트 완료');
-      }).catch(error => {
-        console.error('시청률 계산 오류:', error);
-        setIsCalculatingWatchRates(false);
-      });
-    }
-  }, [participants, videoList, roomId]);
+
 
   if (loading) {
     return (
@@ -536,6 +624,46 @@ export default function ChatRoomInfo() {
           </div>
         )}
 
+
+
+        {/* 메인피드 시청률 정보 */}
+        <div className="bg-gradient-to-r from-green-500 to-emerald-500 rounded-xl shadow-md mb-4 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <div className="bg-white bg-opacity-20 rounded-lg p-2">
+                <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                  <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">
+                  홈탭 시청률
+                </h3>
+                <p className="text-green-100 text-xs">
+                  홈탭 {mainFeedWatchData.totalVideos}개 영상 중 {mainFeedWatchData.watchedVideos}개 시청
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-2xl font-bold text-white">
+                {mainFeedWatchData.watchRate}%
+              </div>
+              <div className="text-green-100 text-xs">
+                시청률
+              </div>
+            </div>
+          </div>
+          
+          {/* 시청률 진행바 */}
+          <div className="w-full bg-white bg-opacity-20 rounded-full h-2 mb-2">
+            <div 
+              className="bg-white h-2 rounded-full transition-all duration-500"
+              style={{ width: `${mainFeedWatchData.watchRate}%` }}
+            ></div>
+          </div>
+        </div>
+
         {/* 콘텐츠 시청리스트 */}
         <div className="bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl shadow-md mb-4 p-4">
           <div className="flex items-center justify-between mb-3">
@@ -600,19 +728,24 @@ export default function ChatRoomInfo() {
                     <div className="font-medium text-blue-800">
                       {participant.name || participant.email?.split('@')[0] || '익명'}
                       {participant.isMe && <span className="text-green-600 font-bold"> (나)</span>}
-                      {isCalculatingWatchRates ? (
-                        <span className="ml-2 text-sm text-gray-500 animate-pulse">
-                          📊 계산중...
-                        </span>
-                      ) : (
-                        <span className={`ml-2 text-sm font-medium ${
-                          (participantWatchRates[participant.id] ?? 0) < 50 
-                            ? 'text-red-500' 
-                            : 'text-blue-500'
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <div className="flex items-center gap-1">
+                        <svg className="w-3 h-3 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                          <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
+                        </svg>
+                        <span className={`text-xs font-medium ${
+                          (participantWatchRates[participant.id] || 0) >= 80 ? 'text-green-600' :
+                          (participantWatchRates[participant.id] || 0) >= 50 ? 'text-yellow-600' :
+                          (participantWatchRates[participant.id] || 0) >= 20 ? 'text-orange-600' : 'text-red-600'
                         }`}>
-                          시청률 {participantWatchRates[participant.id] ?? 0}%
+                          홈탭 시청률 {participantWatchRates[participant.id] || 0}%
                         </span>
-                      )}
+                      </div>
+                      <span className="text-xs text-gray-400">
+                        (홈탭 {mainFeedWatchData.totalVideos}개 중 {Math.round((participantWatchRates[participant.id] || 0) * mainFeedWatchData.totalVideos / 100)}개)
+                      </span>
                     </div>
                     {participant.role === 'host' && (
                       <span className="text-xs bg-gradient-to-r from-yellow-400 to-orange-400 text-white px-2 py-1 rounded-full font-medium">

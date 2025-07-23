@@ -12,12 +12,13 @@ function getYoutubeId(url) {
 async function fetchYoutubeMeta(videoId) {
   const API_KEY = process.env.REACT_APP_YOUTUBE_API_KEY;
   const res = await fetch(
-    `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}&key=${API_KEY}`
+    `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id=${videoId}&key=${API_KEY}`
   );
   const data = await res.json();
   if (data.items && data.items.length > 0) {
     const snippet = data.items[0].snippet;
     const duration = data.items[0].contentDetails.duration;
+    const statistics = data.items[0].statistics;
     let seconds = 0;
     const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
     if (match) {
@@ -34,6 +35,13 @@ async function fetchYoutubeMeta(videoId) {
       channelThumbnail: snippet.thumbnails.default?.url || snippet.thumbnails.medium?.url,
       videoId,
       duration: seconds,
+      viewCount: parseInt(statistics.viewCount || 0),
+      likeCount: parseInt(statistics.likeCount || 0),
+      views: parseInt(statistics.viewCount || 0),
+      publishedAt: snippet.publishedAt,
+      description: snippet.description || '',
+      ucraViewCount: 0, // 유크라 조회수 초기값
+      registeredAt: serverTimestamp(), // 등록 시간
     };
   }
   return null;

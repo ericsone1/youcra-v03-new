@@ -10,11 +10,15 @@ import {
   onSnapshot,
   getDocs,
   deleteDoc,
+  setDoc,
+  where,
 } from "firebase/firestore";
+import { useWatchedVideos } from "../contexts/WatchedVideosContext";
 
 function UserProfile() {
   const { roomId, uid } = useParams();
   const navigate = useNavigate();
+  const { watchedMap, getWatchInfo } = useWatchedVideos();
   const [user, setUser] = useState(null);
   const [videos, setVideos] = useState([]);
   const [certifiedIds, setCertifiedIds] = useState([]);
@@ -26,6 +30,10 @@ function UserProfile() {
   const [myChannel, setMyChannel] = useState(null); // 내 유튜브 채널 정보
   const [isSubscribedToMe, setIsSubscribedToMe] = useState(null); // 상대방이 내 채널 구독 여부
   const [isOwner, setIsOwner] = useState(false);
+  
+  // 유크라 전체에서 시청한 영상 목록
+  const [ucraWatchedVideos, setUcraWatchedVideos] = useState([]);
+  const [ucraWatchedLoading, setUcraWatchedLoading] = useState(true);
 
   // 유저 정보 불러오기
   useEffect(() => {
@@ -72,7 +80,217 @@ function UserProfile() {
     fetchMyChannel();
   }, []);
 
-  // 영상 리스트 불러오기
+  // 유크라 전체에서 시청한 영상 목록 불러오기
+  useEffect(() => {
+    async function fetchUcraWatchedVideos() {
+      if (!uid) {
+        console.log('❌ [프로필] uid가 없어서 시청 영상 로딩 중단');
+        setUcraWatchedVideos([]);
+        setUcraWatchedLoading(false);
+        return;
+      }
+
+      try {
+        setUcraWatchedLoading(true);
+        console.log('🔍 [프로필] 유크라 시청 영상 로딩 시작:', { uid });
+        
+        // 현재 로그인한 사용자 정보 확인
+        const currentUser = auth.currentUser;
+        console.log('👤 [프로필] 현재 로그인한 사용자:', {
+          currentUid: currentUser?.uid,
+          profileUid: uid,
+          isMyProfile: currentUser?.uid === uid
+        });
+        
+        let watchedVideos = [];
+        
+        // 1. WatchedVideosContext에서 시청한 영상들 가져오기 (우선)
+        console.log('📊 [프로필] WatchedVideosContext watchedMap:', watchedMap);
+        
+        const watchedVideoIds = Object.keys(watchedMap).filter(videoId => {
+          const watchInfo = watchedMap[videoId];
+          console.log('🎬 [프로필] WatchedVideosContext 영상 데이터:', { videoId, watchInfo });
+          return watchInfo && watchInfo.certified;
+        });
+        
+        console.log('✅ [프로필] WatchedVideosContext에서 시청 완료된 영상 ID 목록:', watchedVideoIds);
+        
+        // WatchedVideosContext에서 시청한 영상들이 어느 채팅방에 있는지 찾기
+        if (watchedVideoIds.length > 0) {
+          const roomsQuery = query(collection(db, "chatRooms"));
+          const roomsSnapshot = await getDocs(roomsQuery);
+          
+          console.log('🏠 [프로필] 검색할 채팅방 수:', roomsSnapshot.docs.length);
+          
+          for (const videoId of watchedVideoIds) {
+            console.log('🔍 [프로필] 영상 검색 시작:', { videoId });
+            let found = false;
+            
+            for (const roomDoc of roomsSnapshot.docs) {
+              const roomData = roomDoc.data();
+              console.log('🔍 [프로필] 채팅방 검색 중:', { roomId: roomDoc.id, roomName: roomData.name });
+              
+              // videoId 필드로 검색 (문서 ID가 아닌 필드 값으로 검색)
+              const videosQuery = query(
+                collection(db, "chatRooms", roomDoc.id, "videos"),
+                where("videoId", "==", videoId)
+              );
+              const videosSnapshot = await getDocs(videosQuery);
+              
+              console.log('📹 [프로필] videoId로 검색 결과:', { 
+                videoId, 
+                roomId: roomDoc.id, 
+                foundCount: videosSnapshot.docs.length 
+              });
+              
+              if (!videosSnapshot.empty) {
+                const videoDoc = videosSnapshot.docs[0]; // 첫 번째 결과 사용
+                const videoData = videoDoc.data();
+                const watchInfo = watchedMap[videoId];
+                
+                console.log('🔍 [프로필] watchInfo 상세 확인:', { 
+                  videoId, 
+                  watchInfo,
+                  watchedMapKeys: Object.keys(watchedMap),
+                  hasWatchInfo: !!watchInfo,
+                  watchInfoKeys: watchInfo ? Object.keys(watchInfo) : []
+                });
+                
+                console.log('🎯 [프로필] WatchedVideosContext에서 시청한 영상 발견:', { 
+                  videoId: videoId, 
+                  title: videoData.title,
+                  roomId: roomDoc.id,
+                  roomName: roomData.name,
+                  docId: videoDoc.id,
+                  watchInfo: watchInfo
+                });
+                
+                const videoToAdd = {
+                  ...videoData,
+                  id: videoDoc.id, // 실제 Firestore 문서 ID
+                  videoId: videoId, // YouTube ID
+                  roomId: roomDoc.id,
+                  roomName: roomData.name || '제목 없음',
+                  watchedAt: watchInfo?.watchedAt || Date.now(),
+                  watchCount: watchInfo?.watchCount || 1,
+                  certified: watchInfo?.certified || false
+                };
+                
+                console.log('➕ [프로필] 영상 추가:', videoToAdd);
+                watchedVideos.push(videoToAdd);
+                found = true;
+                break; // 영상을 찾았으면 다음 채팅방은 검색하지 않음
+              }
+            }
+            
+            if (!found) {
+              console.log('⚠️ [프로필] 영상을 찾지 못함:', { videoId });
+            }
+          }
+          
+          console.log('📋 [프로필] WatchedVideosContext 처리 후 watchedVideos 배열:', {
+            length: watchedVideos.length,
+            videos: watchedVideos.map(v => ({ id: v.id, title: v.title }))
+          });
+        }
+        
+        // 2. 만약 WatchedVideosContext에 데이터가 없으면 Firestore watchedVideos 컬렉션에서 가져오기 (백업)
+        if (watchedVideos.length === 0) {
+          console.log('⚠️ [프로필] WatchedVideosContext에 데이터가 없음. Firestore watchedVideos 컬렉션에서 가져오겠습니다.');
+          
+          const watchedVideosRef = collection(db, 'users', uid, 'watchedVideos');
+          const watchedSnap = await getDocs(watchedVideosRef);
+          
+          console.log('📊 [프로필] watchedVideos 조회 결과:', {
+            totalDocs: watchedSnap.docs.length,
+            docs: watchedSnap.docs.map(doc => ({ id: doc.id, data: doc.data() }))
+          });
+          
+          // 기존 로직: watchedVideos 컬렉션에서 직접 가져오기
+          console.log('🔍 [프로필] watchedVideos 컬렉션에서 직접 가져오기 시작');
+          
+          for (const watchedDoc of watchedSnap.docs) {
+            const data = watchedDoc.data();
+            console.log('🎬 [프로필] 시청 영상 데이터:', { id: watchedDoc.id, data });
+            
+            // watchedVideos 컬렉션에 문서가 존재한다는 것은 시청했다는 의미
+            // data가 비어있어도 문서가 존재하면 시청한 영상으로 간주
+            const isWatched = true; // 문서가 존재하면 시청한 것으로 간주
+            
+            if (isWatched) { // 시청 완료된 영상만
+              // watchedVideos 컬렉션에는 videoId가 키로 저장되어 있음
+              const videoId = watchedDoc.id;
+              console.log('🔍 [프로필] 영상 검색 시작:', { videoId });
+              
+              // 해당 영상이 어느 채팅방에 있는지 찾기
+              const roomsQuery = query(collection(db, "chatRooms"));
+              const roomsSnapshot = await getDocs(roomsQuery);
+              
+              console.log('🏠 [프로필] 검색할 채팅방 수:', roomsSnapshot.docs.length);
+              
+              let found = false;
+              for (const roomDoc of roomsSnapshot.docs) {
+                const roomData = roomDoc.data();
+                console.log('🔍 [프로필] 채팅방 검색 중:', { roomId: roomDoc.id, roomName: roomData.name });
+                
+                const videoDocRef = doc(db, "chatRooms", roomDoc.id, "videos", videoId);
+                const videoDocSnap = await getDoc(videoDocRef);
+                
+                if (videoDocSnap.exists()) {
+                  const videoData = videoDocSnap.data();
+                  console.log('🎯 [프로필] 시청한 영상 발견:', { 
+                    videoId: videoId, 
+                    title: videoData.title,
+                    roomId: roomDoc.id,
+                    roomName: roomData.name
+                  });
+                  
+                  watchedVideos.push({
+                    ...videoData,
+                    id: videoId,
+                    roomId: roomDoc.id,
+                    roomName: roomData.name || '제목 없음',
+                    watchedAt: data?.watchedAt || Date.now(), // data가 비어있으면 현재 시간 사용
+                    watchCount: data?.watchCount || 1 // data가 비어있으면 1로 설정
+                  });
+                  found = true;
+                  break; // 영상을 찾았으면 다음 채팅방은 검색하지 않음
+                }
+              }
+              
+              if (!found) {
+                console.log('⚠️ [프로필] 영상을 찾지 못함:', { videoId });
+              }
+            }
+          }
+        }
+
+        console.log('📋 [프로필] 최종 시청 영상 목록:', {
+          totalVideos: watchedVideos.length,
+          videos: watchedVideos.map(v => ({ id: v.id, title: v.title, roomName: v.roomName }))
+        });
+
+        // 시청 시간 순으로 정렬 (최근 순)
+        watchedVideos.sort((a, b) => {
+          const aTime = a.watchedAt || 0;
+          const bTime = b.watchedAt || 0;
+          return bTime - aTime;
+        });
+
+        setUcraWatchedVideos(watchedVideos);
+        console.log('✅ [프로필] 유크라 시청 영상 로딩 완료:', watchedVideos.length);
+      } catch (error) {
+        console.error('❌ [프로필] 유크라 시청 영상 로딩 오류:', error);
+        setUcraWatchedVideos([]);
+      } finally {
+        setUcraWatchedLoading(false);
+      }
+    }
+
+    fetchUcraWatchedVideos();
+  }, [uid, watchedMap]); // watchedMap 의존성 추가
+
+  // 영상 리스트 불러오기 (기존 방별 영상 - 등록한 영상 탭용)
   useEffect(() => {
     if (!roomId) return;
     const q = query(collection(db, "chatRooms", roomId, "videos"), orderBy("registeredAt", "desc"));
@@ -99,7 +317,7 @@ function UserProfile() {
     return () => unsub();
   }, [roomId, uid, user]);
 
-  // 인증 영상 id 리스트 및 인증 횟수 불러오기
+  // 인증 영상 id 리스트 및 인증 횟수 불러오기 (기존 방별 인증 - 등록한 영상 탭용)
   useEffect(() => {
     if (!roomId || !uid || videos.length === 0) {
       setCertifiedIds([]);
@@ -136,41 +354,36 @@ function UserProfile() {
     if (activeTab === 'registered' && registeredVideos.length > 0) {
       calculateViewRates();
     }
-  }, [activeTab, registeredVideos]); // registeredVideos가 업데이트되면 재계산
+  }, [activeTab, registeredVideos]);
 
-  // 각 영상별 시청률 계산 함수
+  // 시청률 계산 함수
   const calculateViewRates = async () => {
-    if (!roomId || registeredVideos.length === 0) {
-      setVideoViewRates({});
-      return;
-    }
+    if (!roomId || registeredVideos.length === 0) return;
 
     try {
+      // 방 참여자 수 계산
       const participantsRef = collection(db, "chatRooms", roomId, "participants");
       const participantsSnap = await getDocs(participantsRef);
       const totalParticipants = participantsSnap.size;
 
-      if (totalParticipants === 0) {
-        setVideoViewRates({});
-        return;
-      }
-
       const rates = {};
-      for (const video of registeredVideos) { // 'videos' 대신 'registeredVideos' 사용
-        const certificationsRef = collection(db, "chatRooms", roomId, "videos", video.id, "certifications");
-        const certificationsSnap = await getDocs(certificationsRef);
+      
+      for (const video of registeredVideos) {
+        const certRef = collection(db, "chatRooms", roomId, "videos", video.id, "certifications");
+        const certSnap = await getDocs(certRef);
+        const viewerCount = certSnap.size;
+        const viewRate = totalParticipants > 0 ? Math.round((viewerCount / totalParticipants) * 100) : 0;
         
-        const uniqueViewers = new Set(certificationsSnap.docs.map(doc => doc.data().uid));
-        const viewerCount = uniqueViewers.size;
-        const viewRate = Math.round((viewerCount / totalParticipants) * 100);
-        
-        rates[video.id] = { viewerCount, totalParticipants, viewRate };
+        rates[video.id] = {
+          viewRate,
+          viewerCount,
+          totalParticipants
+        };
       }
       
       setVideoViewRates(rates);
     } catch (error) {
-      console.error('❌ [시청률] 계산 오류:', error);
-      setVideoViewRates({});
+      console.error('시청률 계산 오류:', error);
     }
   };
 
@@ -214,220 +427,104 @@ function UserProfile() {
     }
   };
 
-  // 방장 여부 확인
-  useEffect(() => {
-    async function checkOwner() {
-      if (!roomId || !uid) {
-        setIsOwner(false);
+  // 1:1 채팅 시작
+  const handleStartChat = () => {
+    if (!auth.currentUser) {
+      alert('로그인이 필요합니다.');
         return;
       }
-      try {
-        // 방 정보 확인
-        const roomDoc = await getDoc(doc(db, 'chatRooms', roomId));
-        const roomData = roomDoc.exists() ? roomDoc.data() : null;
-        if (roomData && roomData.createdBy === uid) {
-          setIsOwner(true);
+    
+    // DM 채팅방으로 이동
+    navigate(`/dm/${uid}`);
+  };
+
+  // 구독 요청
+  const handleSubscribeRequest = async () => {
+    if (!auth.currentUser) {
+      alert('로그인이 필요합니다.');
           return;
         }
-        // participants 서브컬렉션 role 확인
-        const participantDoc = await getDoc(doc(db, 'chatRooms', roomId, 'participants', uid));
-        if (participantDoc.exists()) {
-          const pData = participantDoc.data();
-          if (pData.role === 'owner') {
-            setIsOwner(true);
+
+    if (!user?.youtubeChannel) {
+      alert('상대방의 YouTube 채널 정보가 없습니다.');
             return;
           }
-        }
-        setIsOwner(false);
-      } catch (err) {
-        console.error('방장 여부 확인 오류:', err);
-        setIsOwner(false);
-      }
+
+    try {
+      const reqRef = doc(collection(db, 'subscribeRequests'));
+      await setDoc(reqRef, {
+        fromUid: auth.currentUser.uid,
+        toUid: uid,
+        channelId: user.youtubeChannel.channelId,
+        createdAt: new Date(),
+      });
+      alert('구독 요청이 전송되었습니다!');
+    } catch (error) {
+      console.error('구독 요청 오류:', error);
+      alert('구독 요청 전송 중 오류가 발생했습니다.');
     }
-    checkOwner();
-  }, [roomId, uid]);
+  };
+
+  // 시청률 계산
+  const calculateWatchRate = () => {
+    if (ucraWatchedVideos.length === 0) return 0;
+    
+    // 전체 유크라 영상 수를 가져와서 시청률 계산
+    // 실제로는 모든 채팅방의 영상 수를 계산해야 하지만, 
+    // 현재는 시청한 영상 수만 표시
+    return ucraWatchedVideos.length;
+  };
 
   useEffect(() => {
     setLoading(false);
   }, [user]);
 
+  if (loading) return <div>로딩 중...</div>;
+  if (!user) return <div>유저 정보를 찾을 수 없습니다.</div>;
 
-
-
-
-  if (loading) return (
-    <div className="max-w-md mx-auto bg-white rounded-2xl shadow-lg overflow-hidden min-h-screen flex items-center justify-center">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-        <div className="text-gray-600">프로필을 불러오는 중...</div>
-      </div>
-    </div>
-  );
-
-  if (!user) return (
-    <div className="max-w-md mx-auto bg-white rounded-2xl shadow-lg overflow-hidden min-h-screen">
-      {/* 상단 헤더 */}
-      <div className="flex items-center justify-between px-4 py-4 border-b">
+  return (
+    <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg overflow-hidden">
+      {/* 프로필 상단 */}
+      <div className="relative bg-gradient-to-r from-blue-500 to-purple-600 p-6 text-white">
         <button 
-          onClick={() => navigate(-1)} 
-          className="text-2xl text-gray-600 hover:text-blue-600 transition-colors" 
-          aria-label="뒤로가기"
+          onClick={() => navigate(-1)}
+          className="absolute top-4 left-4 w-8 h-8 bg-white bg-opacity-20 rounded-full flex items-center justify-center text-white hover:bg-opacity-30 transition-all"
         >
           ←
         </button>
-        <h1 className="font-bold text-lg">프로필</h1>
-        <div className="w-8" />
-      </div>
-
-      {/* 오류 메시지 */}
-      <div className="flex flex-col items-center justify-center h-96">
-        <div className="text-6xl mb-4">😵</div>
-        <div className="text-gray-600 text-center px-4">
-          <div className="font-medium mb-2">유저 정보를 찾을 수 없습니다</div>
-          <div className="text-sm text-gray-500 mb-6">
-            다음과 같은 이유일 수 있습니다:<br/>
-            • 사용자가 프로필을 삭제했거나<br/>
-            • 임시 사용자이거나<br/>
-            • 연결 오류가 발생했습니다
-          </div>
-          <button
-            onClick={() => navigate(-1)}
-            className="bg-blue-500 text-white px-6 py-3 rounded-lg hover:bg-blue-600 transition-colors"
-          >
-            이전으로 돌아가기
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-
-  // 커버 이미지 (채널 배너 or 그라데이션)
-  const coverUrl = user.youtubeChannel?.channelBanner || undefined;
-  // 프로필 이미지 (없으면 이니셜)
-  const profileUrl = user.profileImage || undefined;
-  const profileInitial = user.email?.slice(0, 2).toUpperCase() || 'US';
-
-  return (
-    <div className="max-w-md mx-auto bg-white rounded-2xl shadow-lg overflow-hidden pb-20">
-      {/* 커버 */}
-      <div className="relative h-52 bg-gradient-to-r from-blue-400 to-purple-500">
-        {coverUrl && (
-          <img 
-            src={coverUrl} 
-            alt="커버" 
-            className="w-full h-full object-cover" 
-            onError={(e) => {
-              e.target.style.display = 'none';
-            }}
+        
+        <div className="flex flex-col items-center">
+          <img
+            src={user.photoURL || `https://i.pravatar.cc/100?u=${user.email}`}
+            alt="profile"
+            className="w-20 h-20 rounded-full border-4 border-white mb-3"
           />
-        )}
-        
-        {/* 뒤로가기 버튼 */}
-        <button 
-          onClick={() => navigate(-1)}
-          className="absolute top-4 left-4 p-2 bg-black/30 hover:bg-black/50 text-white rounded-full transition-all duration-200 backdrop-blur-sm" 
-          aria-label="뒤로가기"
-          title="뒤로가기"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-        </button>
-        
-        {/* 프로필 이미지 */}
-        <div className="absolute left-1/2 -bottom-10 transform -translate-x-1/2">
-          {profileUrl ? (
-            <img src={profileUrl} alt="프로필" className="w-20 h-20 rounded-full border-4 border-white shadow-lg bg-gray-200 object-cover" />
-          ) : (
-            <div className="w-20 h-20 rounded-full border-4 border-white shadow-lg bg-gray-200 flex items-center justify-center text-2xl font-bold text-blue-600">
-              {profileInitial}
+          <div className="font-bold text-xl mb-1">{user.displayName || user.email}</div>
+          <div className="flex items-center gap-1 text-sm opacity-90">
+            <span>👤</span>
+            <span>{user.youtubeChannel?.title || '동감맛집'} 구독자 {user.youtubeChannel?.subscriberCount || 15} 방문</span>
             </div>
-          )}
         </div>
-      </div>
-      <div className="pt-14 pb-4 text-center">
-        <div className="font-bold text-lg flex items-center justify-center gap-1">
-          {user.displayName || user.email}
-          {isOwner && (
-            <span className="text-yellow-500 text-xl" title="방장">👑</span>
-          )}
-        </div>
-        {user.youtubeChannel ? (
-          <div className="mt-1">
-            <div className="flex items-center justify-center gap-2">
-              <img src={user.youtubeChannel.channelThumbnail} alt="채널" className="w-8 h-8 rounded-full" />
-              <span className="font-semibold text-sm">{user.youtubeChannel.channelTitle}</span>
-              <span className="text-xs text-gray-500">구독자 {user.youtubeChannel.subscriberCount?.toLocaleString()}</span>
-              <a href={`https://www.youtube.com/channel/${user.youtubeChannel.channelId}`} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline text-xs">방문</a>
             </div>
             
-            {/* 내 채널 구독 여부 표시 */}
-            {myChannel && auth.currentUser?.uid !== uid && (
-              <div className="flex items-center justify-center mt-2">
-                {isSubscribedToMe === true && (
-                  <div className="flex items-center gap-1 bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-semibold">
-                    <span>✅</span>
-                    <span>내 채널 구독중입니다</span>
-                  </div>
-                )}
-                {isSubscribedToMe === false && (
-                  <div className="flex items-center gap-1 bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs">
-                    <span>❌</span>
-                    <span>미구독중</span>
-                  </div>
-                )}
-                {isSubscribedToMe === null && myChannel && (
-                  <div className="flex items-center gap-1 bg-blue-100 text-blue-600 px-3 py-1 rounded-full text-xs">
-                    <span>🔍</span>
-                    <span>구독 여부 확인 중...</span>
-                  </div>
-                )}
-              </div>
-            )}
-            
-            {/* 내가 채널 등록하지 않은 경우 */}
-            {!myChannel && auth.currentUser?.uid !== uid && (
-              <div className="flex items-center justify-center mt-2">
-                <div className="flex items-center gap-1 bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs">
-                  <span>⚠️</span>
-                  <span>내 유튜브 채널이 등록되지 않았습니다</span>
-                </div>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="mt-1">
-            <div className="flex items-center justify-center">
-              <div className="flex items-center gap-1 bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs">
-                <span>📺</span>
-                <span>
-                  {auth.currentUser?.uid === uid 
-                    ? "유튜브 채널이 등록되지 않았습니다" 
-                    : "상대방이 유튜브 채널 등록이 되어있지 않습니다"
-                  }
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-      {/* 1:1 채팅 버튼 (상단) */}
-      <div className="px-4 mb-2">
+      {/* 액션 버튼 */}
+      <div className="p-4">
         <button
-          className="w-full bg-blue-500 text-white py-3 rounded-xl font-bold text-lg hover:bg-blue-600 shadow"
-          onClick={() => navigate(`/dm/${uid}`)}
+          onClick={handleStartChat}
+          className="w-full bg-blue-500 text-white py-3 rounded-lg font-bold hover:bg-blue-600 transition-colors"
         >
-          {auth.currentUser?.uid === uid ? '나에게 채팅하기' : '1:1 채팅하기'}
+          나에게 채팅하기
         </button>
       </div>
-      {/* 탭 메뉴 */}
+
+      {/* 탭 */}
       <div className="px-4 mb-2">
         <div className="flex gap-2 mb-2">
           <button
             className={`flex-1 py-2 rounded-t-lg font-bold text-sm transition-all ${activeTab === 'watched' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}
             onClick={() => setActiveTab('watched')}
           >
-            이 방에서 시청한 영상
+            유크라에서 시청한 영상
           </button>
           <button
             className={`flex-1 py-2 rounded-t-lg font-bold text-sm transition-all ${activeTab === 'registered' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}
@@ -439,32 +536,16 @@ function UserProfile() {
         {/* 탭 컨텐츠 */}
         <div className="bg-gray-50 rounded-b-lg p-3 min-h-[120px]">
           {activeTab === 'watched' ? (
-            videos.length === 0 ? (
-              <div className="text-sm text-gray-400">아직 등록된 영상이 없습니다.</div>
+            ucraWatchedLoading ? (
+              <div className="text-sm text-gray-400">시청 영상을 불러오는 중...</div>
+            ) : ucraWatchedVideos.length === 0 ? (
+              <div className="text-sm text-gray-400">아직 유크라에서 시청한 영상이 없습니다.</div>
             ) : (
               <div className="flex flex-col gap-3">
-                {videos.map((video) => {
-                  const watched = certifiedIds.includes(video.id);
-                  const certCount = certificationCounts[video.id] || 0;
-                  const percent = watched ? 100 : 0;
-                  
-                  // 인증 버튼 텍스트 결정
-                  let certText = "미인증";
-                  let certStyle = "text-gray-400";
-                  
-                  if (certCount > 0) {
-                    if (certCount === 1) {
-                      certText = "시청완료";
-                    } else {
-                      certText = `${certCount}회\n시청완료`;
-                    }
-                    certStyle = "text-green-600 font-bold";
-                  }
-                  
-                  // 내가 등록한 영상인지 확인
-                  const isMyVideo = video.registeredBy === auth.currentUser?.uid || 
-                                   video.registeredBy === auth.currentUser?.email ||
-                                   (auth.currentUser?.uid === uid && video.registeredBy === user?.email);
+                {ucraWatchedVideos.map((video) => {
+                  const watchInfo = getWatchInfo(video.videoId); // video.id 대신 video.videoId 사용
+                  const watchRate = watchInfo.certified ? 100 : 0;
+                  const watchCount = watchInfo.watchCount || 0;
                   
                   return (
                     <div key={video.id} className="flex items-center gap-3 p-2 border rounded-lg bg-white">
@@ -473,32 +554,22 @@ function UserProfile() {
                         <div className="font-semibold truncate text-sm">{video.title}</div>
                         <div className="text-xs text-gray-500">{video.channel}</div>
                         <div className="w-full bg-gray-200 h-2 rounded mt-1">
-                          <div className={`h-2 rounded ${watched ? 'bg-green-500' : 'bg-blue-400'}`} style={{ width: `${percent}%` }} />
+                          <div className={`h-2 rounded ${watchInfo.certified ? 'bg-green-500' : 'bg-blue-400'}`} style={{ width: `${watchRate}%` }} />
                         </div>
-                        <div className="text-xs text-right text-gray-500 mt-0.5">{percent}%</div>
+                        <div className="text-xs text-right text-gray-500 mt-0.5">{watchRate}%</div>
                       </div>
                       
                       <div className="flex flex-col items-center gap-1">
-                        <span className={`text-xs font-medium ${certStyle} whitespace-pre-line text-center`}>
-                          {certText}
+                        <span className={`text-xs font-medium ${watchInfo.certified ? 'text-green-600 font-bold' : 'text-gray-400'} whitespace-pre-line text-center`}>
+                          {watchInfo.certified ? `${watchCount}회 시청완료` : "미시청"}
                         </span>
-                        
-                        {/* 삭제하기 버튼 (내가 등록한 영상인 경우에만 표시) */}
-                        {isMyVideo && (
-                          <button
-                            onClick={() => handleDeleteVideo(video.id)}
-                            className="px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 transition-colors"
-                          >
-                            삭제하기
-                          </button>
-                        )}
                       </div>
                     </div>
                   );
                 })}
               </div>
             )
-          ) : (
+          ) :
             registeredVideos.length === 0 ? (
               <div className="text-sm text-gray-400">이 사용자가 등록한 영상이 없습니다.</div>
             ) : (
@@ -542,7 +613,7 @@ function UserProfile() {
                       {isMyVideo && (
                         <button
                           onClick={() => handleDeleteVideo(video.id)}
-                          className="px-3 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 transition-colors"
+                          className="px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 transition-colors"
                         >
                           삭제하기
                         </button>
@@ -551,10 +622,23 @@ function UserProfile() {
                   );
                 })}
               </div>
-            )
           )}
         </div>
       </div>
+
+      {/* 시청률 요약 */}
+      {activeTab === 'watched' && ucraWatchedVideos.length > 0 && (
+        <div className="px-4 pb-4">
+          <div className="bg-blue-50 rounded-lg p-3">
+            <div className="text-sm font-medium text-blue-800 mb-1">
+              유크라 시청률 요약
+            </div>
+            <div className="text-xs text-blue-600">
+              총 {ucraWatchedVideos.length}개 영상 시청완료
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -27,6 +27,7 @@ import { useWatchedVideos } from "../contexts/WatchedVideosContext";
 // import { MessageList } from './chat/MessageList'; // 임시 비활성화
 import { useChat } from '../hooks/useChat';
 import HomeVideoPlayer from './Home/HomeVideoPlayer';
+import { WatchTabsContainer } from './Home/components/WatchTabsContainer';
 
 const MAX_LENGTH = 200;
 
@@ -141,12 +142,13 @@ function getYoutubeId(url) {
 async function fetchYoutubeMeta(videoId) {
   const API_KEY = process.env.REACT_APP_YOUTUBE_API_KEY;
   const res = await fetch(
-    `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}&key=${API_KEY}`
+    `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails,statistics&id=${videoId}&key=${API_KEY}`
   );
   const data = await res.json();
   if (data.items && data.items.length > 0) {
     const snippet = data.items[0].snippet;
     const duration = data.items[0].contentDetails.duration;
+    const statistics = data.items[0].statistics;
     let seconds = 0;
     // ISO 8601: PT#H#M#S (시간-분-초) 모두 포착
     const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
@@ -162,6 +164,13 @@ async function fetchYoutubeMeta(videoId) {
       channel: snippet.channelTitle,
       videoId,
       duration: seconds,
+      viewCount: parseInt(statistics.viewCount || 0),
+      likeCount: parseInt(statistics.likeCount || 0),
+      views: parseInt(statistics.viewCount || 0),
+      publishedAt: snippet.publishedAt,
+      description: snippet.description || '',
+      ucraViewCount: 0, // 유크라 조회수 초기값
+      registeredAt: serverTimestamp(), // 등록 시간
     };
   }
   return null;
@@ -233,6 +242,30 @@ function ChatRoom() {
     watchMode: 'partial'
   });
   
+  // === 홈탭과 동일한 영상 리스트 핸들러 ===
+  const handleVideoClick = (video, idx) => {
+    console.log('🎬 영상 클릭:', { video, idx });
+    initializePlayer(roomId, videoList, idx);
+  };
+  
+  const handleWatchClick = (video, idx) => {
+    console.log('🎬 시청하기 클릭:', { video, idx });
+    initializePlayer(roomId, videoList, idx);
+  };
+  
+  const handleMessageClick = (video) => {
+    console.log('💬 메시지 클릭:', video);
+    // 채팅방에서 메시지 클릭 시 현재 채팅방에 영상 링크 추가
+    const videoUrl = `https://www.youtube.com/watch?v=${video.videoId}`;
+    setNewMsg(`🎬 ${video.title}\n${videoUrl}`);
+  };
+  
+  const getWatchCount = (videoId) => {
+    // WatchedVideosContext에서 시청 정보 가져오기
+    const watchInfo = getWatchInfo(videoId);
+    return watchInfo ? watchInfo.watchCount : 0;
+  };
+  
   // === 방장 기능 관련 State ===
   const [showMessageOptions, setShowMessageOptions] = useState(null);
   const [showUserModal, setShowUserModal] = useState(null);
@@ -256,6 +289,11 @@ function ChatRoom() {
   const [showImageModal, setShowImageModal] = useState(null); // 이미지 모달
   const [watching, setWatching] = useState(0); // 시청자 수
   const [showParticipants, setShowParticipants] = useState(false); // 참여자 목록 표시
+  
+  // === 영상 리스트 표시 관련 State (홈탭과 동일) ===
+  const [showVideoList, setShowVideoList] = useState(false); // 영상 리스트 표시 여부
+  const [activeTab, setActiveTab] = useState('watch'); // 현재 활성 탭
+  const [videoFilter, setVideoFilter] = useState('all'); // 영상 필터
   
   // === Refs ===
   const messagesEndRef = useRef(null);
@@ -1418,6 +1456,18 @@ function ChatRoom() {
             </svg>
           </button>
           
+          {/* 영상 리스트 버튼 */}
+          <button 
+            onClick={() => setShowVideoList(!showVideoList)} 
+            className="p-2 text-green-500 hover:text-green-700 hover:bg-green-50 rounded-full transition-all duration-200 hover:scale-110" 
+            aria-label="영상 리스트"
+            title="영상 리스트"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+          </button>
+          
           {/* 메뉴 버튼 */}
           <button onClick={() => navigate(`/chat/${roomId}/info`)} className="text-4xl text-gray-600 hover:text-blue-600 p-2" aria-label="메뉴">≡</button>
         </div>
@@ -1779,6 +1829,40 @@ function ChatRoom() {
         <button className="flex flex-col items-center text-gray-500 hover:text-blue-500 text-sm font-bold focus:outline-none" onClick={() => navigate('/board')}>📋<span>게시판</span></button>
         <button className="flex flex-col items-center text-gray-500 hover:text-blue-500 text-sm font-bold focus:outline-none" onClick={() => navigate('/my')}>👤<span>마이채널</span></button>
       </nav>
+
+      {/* 영상 리스트 패널 (홈탭과 동일한 UI) */}
+      {showVideoList && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+            {/* 헤더 */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-xl font-bold text-gray-800">🎬 영상 리스트</h2>
+              <button
+                onClick={() => setShowVideoList(false)}
+                className="text-gray-400 hover:text-gray-600 text-2xl"
+              >
+                ✕
+              </button>
+            </div>
+            
+            {/* 영상 리스트 컨텐츠 */}
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+              <WatchTabsContainer
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+                videoFilter={videoFilter}
+                onFilterChange={setVideoFilter}
+                selectedVideos={videoList}
+                onVideoClick={handleVideoClick}
+                onWatchClick={handleWatchClick}
+                onMessageClick={handleMessageClick}
+                getWatchCount={getWatchCount}
+                viewers={participants}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ChatRoom 전용 Home 스타일 플레이어 */}
       {selectedVideoId && videoList && videoList.length > 0 && currentIndex >= 0 && currentIndex < videoList.length && (
