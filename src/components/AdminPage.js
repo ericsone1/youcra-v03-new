@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import AdminDeleteAllChatRooms from './AdminDeleteAllChatRooms';
 import AdminVideoCleanup from './AdminVideoCleanup';
-import { collection, addDoc, serverTimestamp, getDocs, query, where, doc, deleteDoc, getDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, getDocs, query, where, doc, deleteDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 
 export default function AdminPage() {
@@ -29,6 +29,13 @@ export default function AdminPage() {
   const [isLoadingRooms, setIsLoadingRooms] = useState(false);
   const [selectedRooms, setSelectedRooms] = useState([]);
   const [isDeletingRooms, setIsDeletingRooms] = useState(false);
+
+  // 방장 위임 관련 상태 추가
+  const [hostManagementRoomId, setHostManagementRoomId] = useState('');
+  const [roomParticipants, setRoomParticipants] = useState([]);
+  const [isLoadingParticipants, setIsLoadingParticipants] = useState(false);
+  const [currentHost, setCurrentHost] = useState(null);
+  const [isTransferringHost, setIsTransferringHost] = useState(false);
 
   // 더미 게시물 데이터
   const dummyPosts = [
@@ -704,6 +711,159 @@ export default function AdminPage() {
     }
   };
 
+  // 방장 위임 관련 함수들
+  const loadRoomParticipantsForHostTransfer = async () => {
+    if (!hostManagementRoomId.trim()) {
+      alert('채팅방 ID를 입력해주세요.');
+      return;
+    }
+
+    setIsLoadingParticipants(true);
+    setRoomParticipants([]);
+    setCurrentHost(null);
+
+    try {
+      console.log('👑 방장 위임을 위한 참여자 목록 로드 시작:', hostManagementRoomId);
+      
+      // 1. 채팅방 정보 가져오기 (현재 방장 확인)
+      const roomRef = doc(db, 'chatRooms', hostManagementRoomId);
+      const roomSnapshot = await getDoc(roomRef);
+      
+      if (!roomSnapshot.exists()) {
+        alert('해당 채팅방을 찾을 수 없습니다.');
+        return;
+      }
+
+      const roomData = roomSnapshot.data();
+      console.log('🏠 채팅방 정보:', roomData);
+      
+      // 2. 참여자 목록 가져오기
+      const participantsRef = collection(db, 'chatRooms', hostManagementRoomId, 'participants');
+      const participantsSnapshot = await getDocs(participantsRef);
+      
+      if (participantsSnapshot.empty) {
+        alert('해당 채팅방에 참여자가 없습니다.');
+        return;
+      }
+
+      const participantsList = await Promise.all(
+        participantsSnapshot.docs.map(async (participantDoc) => {
+          const uid = participantDoc.id;
+          const participantData = participantDoc.data();
+          
+          // users 컬렉션에서 상세 정보 가져오기
+          try {
+            const userRef = doc(db, 'users', uid);
+            const userSnapshot = await getDoc(userRef);
+            
+            if (userSnapshot.exists()) {
+              const userData = userSnapshot.data();
+              return {
+                uid,
+                nickname: userData.displayName || userData.nick || userData.name || participantData.displayName || participantData.nickname,
+                displayName: userData.displayName || userData.nick || userData.name || participantData.displayName,
+                email: userData.email || participantData.email,
+                photoURL: userData.photoURL || userData.profileImage || participantData.photoURL,
+                isHost: roomData.createdBy === uid,
+                joinTime: participantData.joinTime || null,
+                ...participantData
+              };
+            }
+          } catch (userError) {
+            console.error('❌ users 컬렉션 조회 실패:', userError);
+          }
+          
+          return {
+            uid,
+            nickname: participantData.displayName || participantData.nickname || participantData.email?.split('@')[0],
+            displayName: participantData.displayName || participantData.nickname,
+            email: participantData.email,
+            photoURL: participantData.photoURL,
+            isHost: roomData.createdBy === uid,
+            joinTime: participantData.joinTime || null,
+            ...participantData
+          };
+        })
+      );
+
+      // 현재 방장 찾기
+      const host = participantsList.find(p => p.isHost);
+      setCurrentHost(host);
+      
+      console.log(`✅ ${participantsList.length}명의 참여자를 찾았습니다.`);
+      console.log('👑 현재 방장:', host);
+      setRoomParticipants(participantsList);
+
+    } catch (error) {
+      console.error('❌ 참여자 목록 로드 실패:', error);
+      alert('참여자 목록을 불러오는데 실패했습니다: ' + error.message);
+    } finally {
+      setIsLoadingParticipants(false);
+    }
+  };
+
+  const transferHostRole = async (newHostUid) => {
+    if (!currentHost) {
+      alert('현재 방장 정보를 찾을 수 없습니다.');
+      return;
+    }
+
+    const newHost = roomParticipants.find(p => p.uid === newHostUid);
+    if (!newHost) {
+      alert('새 방장 정보를 찾을 수 없습니다.');
+      return;
+    }
+
+    if (currentHost.uid === newHostUid) {
+      alert('이미 방장인 사용자입니다.');
+      return;
+    }
+
+    const confirmMessage = `정말로 방장을 변경하시겠습니까?\n\n현재 방장: ${currentHost.nickname || currentHost.displayName}\n새 방장: ${newHost.nickname || newHost.displayName}`;
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    setIsTransferringHost(true);
+
+    try {
+      console.log('👑 방장 위임 시작:', {
+        roomId: hostManagementRoomId,
+        fromHost: currentHost.uid,
+        toHost: newHostUid
+      });
+
+      // 1. 채팅방 문서 업데이트 (createdBy 필드 변경)
+      const roomRef = doc(db, 'chatRooms', hostManagementRoomId);
+      await updateDoc(roomRef, {
+        createdBy: newHostUid,
+        hostTransferredAt: serverTimestamp(),
+        previousHost: currentHost.uid
+      });
+
+      // 2. 방장 변경 로그 추가 (선택사항)
+      const messagesRef = collection(db, 'chatRooms', hostManagementRoomId, 'messages');
+      await addDoc(messagesRef, {
+        type: 'system',
+        content: `👑 방장이 ${newHost.nickname || newHost.displayName}님에게 위임되었습니다.`,
+        createdAt: serverTimestamp(),
+        systemMessage: true
+      });
+
+      console.log('✅ 방장 위임 완료');
+      alert(`✅ 방장이 ${newHost.nickname || newHost.displayName}님에게 성공적으로 위임되었습니다!`);
+
+      // 3. 상태 새로고침
+      await loadRoomParticipantsForHostTransfer();
+
+    } catch (error) {
+      console.error('❌ 방장 위임 실패:', error);
+      alert('방장 위임 중 오류가 발생했습니다: ' + error.message);
+    } finally {
+      setIsTransferringHost(false);
+    }
+  };
+
   return (
     <div style={{ maxWidth: 480, margin: '40px auto', padding: 32, background: '#fff', borderRadius: 16, boxShadow: '0 2px 16px #0001' }}>
       <h1 style={{ fontSize: 28, fontWeight: 'bold', marginBottom: 24, color: '#d00' }}>관리자 페이지</h1>
@@ -1265,6 +1425,177 @@ export default function AdminPage() {
           모든 채팅방에 업로드된 영상을 한눈에 보고 개별로 삭제할 수 있습니다.
         </p>
         <AdminVideoCleanup />
+      </div>
+
+      {/* 방장 위임 관리 섹션 추가 */}
+      <div style={{ marginBottom: 40, padding: 20, backgroundColor: '#fff8e1', borderRadius: 12, border: '2px solid #ffc107' }}>
+        <h2 style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 16, color: '#ff8f00' }}>👑 방장 위임 관리</h2>
+        <p style={{ marginBottom: 16, color: '#f57c00' }}>
+          채팅방의 방장을 다른 참여자에게 위임할 수 있습니다.
+        </p>
+        
+        {/* 채팅방 ID 입력 */}
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold', color: '#333' }}>
+            📂 채팅방 ID:
+          </label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              type="text"
+              value={hostManagementRoomId}
+              onChange={(e) => setHostManagementRoomId(e.target.value)}
+              placeholder="채팅방 ID를 입력하세요"
+              style={{
+                flex: 1,
+                padding: '12px',
+                border: '1px solid #ddd',
+                borderRadius: 6,
+                fontSize: 14
+              }}
+            />
+            <button
+              onClick={loadRoomParticipantsForHostTransfer}
+              disabled={isLoadingParticipants}
+              style={{
+                padding: '12px 16px',
+                backgroundColor: isLoadingParticipants ? '#6c757d' : '#ffc107',
+                color: 'white',
+                border: 'none',
+                borderRadius: 6,
+                fontWeight: 'bold',
+                cursor: isLoadingParticipants ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {isLoadingParticipants ? '🔄 로딩...' : '👑 참여자 조회'}
+            </button>
+          </div>
+        </div>
+
+        {/* 현재 방장 정보 표시 */}
+        {currentHost && (
+          <div style={{ marginBottom: 16, padding: 12, backgroundColor: '#fff3cd', borderRadius: 8, border: '1px solid #ffeaa7' }}>
+            <h3 style={{ margin: 0, marginBottom: 8, color: '#856404' }}>👑 현재 방장:</h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {currentHost.photoURL && (
+                <img 
+                  src={currentHost.photoURL} 
+                  alt="프로필" 
+                  style={{ 
+                    width: 40, 
+                    height: 40, 
+                    borderRadius: '50%', 
+                    objectFit: 'cover' 
+                  }} 
+                />
+              )}
+              <div>
+                <div style={{ fontWeight: 'bold', color: '#856404' }}>
+                  {currentHost.nickname || currentHost.displayName || '닉네임 없음'}
+                </div>
+                <div style={{ fontSize: 12, color: '#856404' }}>
+                  이메일: {currentHost.email || '없음'}
+                </div>
+                <div style={{ fontSize: 11, color: '#856404' }}>
+                  UID: {currentHost.uid}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 참여자 목록 및 위임 버튼 */}
+        {roomParticipants.length > 0 && (
+          <div>
+            <h3 style={{ marginBottom: 12, color: '#333' }}>👥 참여자 목록 ({roomParticipants.length}명):</h3>
+            <div style={{ 
+              maxHeight: 400, 
+              overflowY: 'auto', 
+              border: '1px solid #ddd', 
+              borderRadius: 6,
+              backgroundColor: '#fff'
+            }}>
+              {roomParticipants.map((participant, index) => (
+                <div 
+                  key={participant.uid} 
+                  style={{ 
+                    padding: 12, 
+                    borderBottom: index < roomParticipants.length - 1 ? '1px solid #eee' : 'none',
+                    display: 'flex', 
+                    alignItems: 'center',
+                    backgroundColor: participant.isHost ? '#fff3cd' : 'transparent'
+                  }}
+                >
+                  {/* 프로필 이미지 */}
+                  {participant.photoURL && (
+                    <img 
+                      src={participant.photoURL} 
+                      alt="프로필" 
+                      style={{ 
+                        width: 32, 
+                        height: 32, 
+                        borderRadius: '50%', 
+                        objectFit: 'cover',
+                        marginRight: 12
+                      }} 
+                    />
+                  )}
+                  
+                  {/* 참여자 정보 */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ 
+                      fontWeight: 'bold', 
+                      marginBottom: 4, 
+                      color: '#333',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
+                    }}>
+                      {participant.nickname || participant.displayName || '닉네임 없음'}
+                      {participant.isHost && (
+                        <span style={{ 
+                          marginLeft: 8,
+                          fontSize: 12,
+                          padding: '2px 6px',
+                          backgroundColor: '#ffc107',
+                          color: '#856404',
+                          borderRadius: 10
+                        }}>
+                          👑 방장
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#666', marginBottom: 2 }}>
+                      이메일: {participant.email || '없음'}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#999' }}>
+                      UID: {participant.uid}
+                    </div>
+                  </div>
+                  
+                  {/* 위임 버튼 */}
+                  {!participant.isHost && (
+                    <button
+                      onClick={() => transferHostRole(participant.uid)}
+                      disabled={isTransferringHost}
+                      style={{
+                        padding: '8px 12px',
+                        backgroundColor: isTransferringHost ? '#6c757d' : '#ffc107',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: 4,
+                        fontSize: 12,
+                        cursor: isTransferringHost ? 'not-allowed' : 'pointer',
+                        fontWeight: 'bold'
+                      }}
+                    >
+                      {isTransferringHost ? '⏳ 위임 중...' : '👑 방장 위임'}
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

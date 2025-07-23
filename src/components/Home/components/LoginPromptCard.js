@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth, db } from '../../../firebase';
 import { doc, setDoc } from 'firebase/firestore';
+import { isInAppBrowser, handleInAppBrowserRedirect } from '../../../utils/browserDetector';
 
 export const LoginPromptCard = () => {
   const navigate = useNavigate();
@@ -13,6 +14,16 @@ export const LoginPromptCard = () => {
   const handleGoogleLogin = async () => {
     setGoogleError('');
     setLoadingGoogle(true);
+    
+    // 인앱 브라우저 감지 및 처리
+    if (isInAppBrowser()) {
+      setLoadingGoogle(false);
+      // 현재 URL을 외부 브라우저에서 열도록 처리
+      const currentUrl = window.location.href;
+      handleInAppBrowserRedirect(currentUrl, false); // 사용자 확인 후 실행
+      return;
+    }
+    
     const provider = new GoogleAuthProvider();
     try {
       const result = await signInWithPopup(auth, provider);
@@ -27,7 +38,15 @@ export const LoginPromptCard = () => {
       }, { merge: true });
       // 로그인 후 상태 갱신은 context/provider 또는 상위 상태에서 처리
     } catch (err) {
-      setGoogleError('구글 로그인 실패: ' + err.message);
+      // 403 disallowed_useragent 오류인지 확인
+      if (err.message.includes('disallowed_useragent') || err.message.includes('403')) {
+        setGoogleError('카카오톡 내 브라우저에서는 구글 로그인이 지원되지 않습니다. 외부 브라우저에서 접속해주세요.');
+        // 자동으로 외부 브라우저 실행
+        const currentUrl = window.location.href;
+        handleInAppBrowserRedirect(currentUrl, true);
+      } else {
+        setGoogleError('구글 로그인 실패: ' + err.message);
+      }
     } finally {
       setLoadingGoogle(false);
     }

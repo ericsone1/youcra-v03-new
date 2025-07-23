@@ -11,6 +11,7 @@ import { LoadingSpinner } from "./components/common/LoadingSpinner";
 import Navigation from "./components/common/Navigation";
 import PerformanceMonitor from "./components/common/PerformanceMonitor";
 import { WatchedVideosProvider } from './contexts/WatchedVideosContext';
+import InAppBrowserHandler from './components/common/InAppBrowserHandler';
 
 // 공유 링크 처리 컴포넌트
 const SharedLinkHandler = () => {
@@ -79,6 +80,7 @@ const ChatRoomProfile = React.lazy(() => import("./components/ChatRoomProfile"))
 const MyPointsPage = React.lazy(() => import("./components/MyPointsPage"));
 const MyViewersPage = React.lazy(() => import("./components/MyFeedViewersPage"));
 const MyFeedViewersPage = React.lazy(() => import("./components/MyFeedViewersPage"));
+const InAppBrowserTest = React.lazy(() => import("./components/InAppBrowserTest"));
 
 // Fallback 컴포넌트만 유지
 
@@ -98,8 +100,9 @@ function App() {
       <WatchedVideosProvider>
         <VideoPlayerProvider>
           <ToastProvider>
-            <Router>
-              <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 relative overflow-hidden">
+            <InAppBrowserHandler>
+              <Router>
+                <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 relative overflow-hidden">
                 {/* 배경 장식 요소 */}
                 <div className="absolute inset-0 overflow-hidden pointer-events-none">
                   <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full opacity-10 blur-3xl"></div>
@@ -129,6 +132,7 @@ function App() {
                       <Route path="/" element={<Home />} />
                       <Route path="/login" element={<Login />} />
                       <Route path="/test" element={<div style={{padding: '50px', textAlign: 'center', background: 'red', color: 'white', fontSize: '20px'}}>🎉 테스트 성공! 라우팅 작동 중!</div>} />
+                      <Route path="/inapp-test" element={<InAppBrowserTest />} />
                       
                       {/* 보호된 라우트 */}
                       <Route
@@ -378,6 +382,7 @@ function App() {
                 />
               </div>
             </Router>
+            </InAppBrowserHandler>
           </ToastProvider>
         </VideoPlayerProvider>
       </WatchedVideosProvider>

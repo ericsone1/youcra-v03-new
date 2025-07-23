@@ -404,6 +404,7 @@ export const WatchVideoList = ({
   onTokenEarned, 
   onWatchClick, 
   selectedCategories = [], 
+  selectedVideos = [], // 추가된 파라미터
   getWatchCount = () => 0 // 시청 횟수 조회 함수
 }) => {
   const { currentUser } = useAuth();
@@ -411,24 +412,15 @@ export const WatchVideoList = ({
   const { watchedMap, canRewatch, getTimeUntilRewatch } = useWatchedVideos();
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  // 내 영상 제외
-  let filteredVideos = ucraVideos.filter(
-    v => v.registeredBy !== currentUser?.uid && v.registeredBy !== currentUser?.email
-  );
+  // 🔄 유크라에 등록된 모든 영상 + 사용자가 선택한 영상 합치기
+  let filteredVideos = computeUniqueVideos([
+    ...ucraVideos,
+    ...(Array.isArray(selectedVideos) ? selectedVideos : [])
+  ]);
 
-  // ✅ 카테고리 필터링: '유크라' 카테고리가 선택되어 있지 않은 경우에만 적용
-  if (selectedCategories.length > 0 && !selectedCategories.includes('유크라')) {
-    const recommended = getRecommendedCategories(selectedCategories);
-    filteredVideos = filterVideosByRecommendedCategories(filteredVideos, recommended);
-  }
+  /* 카테고리 필터링 완전 비활성화 */
 
-  // 📌 카테고리가 전혀 등록되지 않은 영상은 제외 (홈탭 노출 조건)
-  filteredVideos = filteredVideos.filter(v => {
-    return v.category && String(v.category).trim().length > 0;
-  });
-
-  // 🆕 중복 제거 (videoId 기준)
-  filteredVideos = computeUniqueVideos(filteredVideos);
+  // category 유무와 상관없이 모든 영상 표시
 
   // 전체/숏폼/롱폼 필터
   let displayVideos = filteredVideos;
@@ -500,6 +492,8 @@ export const WatchVideoList = ({
       </div>
     );
   }
+
+  console.log(`🧮 [WatchVideoList] 최종 노출 영상 개수: ${displayVideos.length}`);
 
   return (
     <>

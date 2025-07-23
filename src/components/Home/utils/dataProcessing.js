@@ -180,9 +180,16 @@ export function filterVideosByRecommendedCategories(videos, recommendedCategorie
     // 2️⃣ keywords(tags) 배열 매칭
     if (Array.isArray(video.keywords) && video.keywords.some(k => catsLower.includes(String(k).toLowerCase()))) return true;
 
-    // ⚠️ Fallback 텍스트(제목/설명) 매칭은 제외조건에 따라 비활성화됨
+    // 3️⃣ 제목과 설명에서 키워드 매칭 (Fallback)
+    const title = (video.title || '').toLowerCase();
+    const description = (video.description || '').toLowerCase();
+    const channelTitle = (video.channelTitle || video.channel || '').toLowerCase();
+    
+    const allText = `${title} ${description} ${channelTitle}`;
+    
+    if (catsLower.some(cat => allText.includes(cat))) return true;
 
-    return false; // 카테고리·키워드 둘 다 없으면 제외
+    return false; // 모든 조건에 해당하지 않으면 제외
   });
 } 
 

@@ -134,7 +134,7 @@ export async function fetchYouTubeChannelInfo(channelData) {
     let apiUrl = '';
     if (channelData.type === 'channel') {
       console.log('🔍 [YouTube] 채널 ID로 조회:', channelData.value);
-      apiUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings&id=${encodeURIComponent(channelData.value)}&key=${apiKey}`;
+      apiUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings,topicDetails&id=${encodeURIComponent(channelData.value)}&key=${apiKey}`;
     } else if (['username', 'handle'].includes(channelData.type)) {
       // 핸들의 경우 직접 핸들 URL로 채널 ID를 먼저 찾기
       console.log(`🔍 [YouTube] ${channelData.type} 직접 조회:`, channelData.value);
@@ -145,7 +145,7 @@ export async function fetchYouTubeChannelInfo(channelData) {
         console.log('🔍 [YouTube] 핸들 URL 생성:', handleUrl);
         
         // 핸들로 직접 채널 조회 (forHandle 파라미터 사용)
-        apiUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings&forHandle=${encodeURIComponent(channelData.value)}&key=${apiKey}`;
+        apiUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings,topicDetails&forHandle=${encodeURIComponent(channelData.value)}&key=${apiKey}`;
         
         console.log('🔍 [YouTube] forHandle API 사용:', apiUrl);
         
@@ -157,6 +157,9 @@ export async function fetchYouTubeChannelInfo(channelData) {
           console.log('✅ [YouTube] 핸들로 채널 정보 조회 성공:', channel.snippet.title);
           console.log('📊 [YouTube] 구독자 수:', channel.statistics.subscriberCount);
           
+          const topicCategory = channel.topicDetails?.topicCategories?.[0] || null;
+          const mappedCategory = mapTopicUrlToCategory(topicCategory);
+
           return {
             channelId: channel.id,
             channelTitle: channel.snippet.title,
@@ -169,7 +172,8 @@ export async function fetchYouTubeChannelInfo(channelData) {
             lastSyncAt: new Date(),
             originalUrl: channelData.originalUrl || null,
             originalType: channelData.type,
-            originalValue: channelData.value
+            originalValue: channelData.value,
+            category: mappedCategory || null,
           };
         } else {
           console.warn('⚠️ [YouTube] forHandle로 채널 조회 실패, Search API로 대체');
@@ -223,7 +227,7 @@ export async function fetchYouTubeChannelInfo(channelData) {
         console.log('🎯 [YouTube] 최종 선택된 채널명:', bestMatch.snippet.title);
         
         // 찾은 채널 ID로 상세 정보 조회
-        apiUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings&id=${channelId}&key=${apiKey}`;
+        apiUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings,topicDetails&id=${channelId}&key=${apiKey}`;
       } else {
         console.warn('⚠️ [YouTube] 검색 결과 없음:', channelData.value);
         return createMockChannelData(channelData);
@@ -272,7 +276,7 @@ export async function fetchYouTubeChannelInfo(channelData) {
         console.log('🎯 [YouTube] 최종 선택된 채널명:', bestMatch.snippet.title);
         
         // 찾은 채널 ID로 상세 정보 조회
-        apiUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings&id=${channelId}&key=${apiKey}`;
+        apiUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings,topicDetails&id=${channelId}&key=${apiKey}`;
       } else {
         console.warn('⚠️ [YouTube] 검색 결과 없음:', channelData.value);
         return createMockChannelData(channelData);
@@ -290,6 +294,9 @@ export async function fetchYouTubeChannelInfo(channelData) {
       console.log('✅ [YouTube] 채널 정보 조회 성공:', channel.snippet.title);
       console.log('📊 [YouTube] 구독자 수:', channel.statistics.subscriberCount);
       
+      const topicCategory = channel.topicDetails?.topicCategories?.[0] || null;
+      const mappedCategory = mapTopicUrlToCategory(topicCategory);
+
       return {
         channelId: channel.id,
         channelTitle: channel.snippet.title,
@@ -303,7 +310,8 @@ export async function fetchYouTubeChannelInfo(channelData) {
         // 원본 URL 정보 추가 저장
         originalUrl: channelData.originalUrl || null,
         originalType: channelData.type,
-        originalValue: channelData.value
+        originalValue: channelData.value,
+        category: mappedCategory || null,
       };
     } else {
       console.warn('⚠️ [YouTube] 채널 정보 조회 실패');
@@ -385,7 +393,7 @@ export const getYouTubeChannelInfo = async (channelUrl) => {
         
         // ... existing code ...
         
-        const apiUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings&id=${channelId}&key=${apiKey}`;
+        const apiUrl = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings,topicDetails&id=${channelId}&key=${apiKey}`;
         
         const response = await fetch(apiUrl);
         const data = await response.json();
@@ -588,4 +596,20 @@ export async function deleteVideoByDocPath(docPath) {
     console.error('❌ 삭제 실패:', docPath, e);
     return false;
   }
+} 
+
+// 토픽 URL → 내부 카테고리 매핑 함수
+function mapTopicUrlToCategory(url = '') {
+  if (!url) return null;
+  const lower = url.toLowerCase();
+  if (lower.includes('music')) return '음악';
+  if (lower.includes('video_game') || lower.includes('gaming')) return '게임';
+  if (lower.includes('food') || lower.includes('drink') || lower.includes('cuisine')) return '요리';
+  if (lower.includes('sport')) return '스포츠';
+  if (lower.includes('film') || lower.includes('entertainment') || lower.includes('tv')) return '엔터테인먼트';
+  if (lower.includes('beauty')) return '뷰티';
+  if (lower.includes('travel')) return '여행';
+  if (lower.includes('education')) return '교육';
+  if (lower.includes('lifestyle')) return '일상';
+  return null; // 매칭 실패
 } 

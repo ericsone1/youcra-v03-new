@@ -53,7 +53,8 @@ export const WatchTabsContainer = (props) => {
     selectedCategories,
     onTokenEarned,
     onWatchClick,
-    getWatchCount
+    getWatchCount,
+    selectedVideos
   } = props;
   const { currentUser } = useAuth();
   const navigate = useNavigate();
@@ -131,6 +132,7 @@ export const WatchTabsContainer = (props) => {
                 onTokenEarned={onTokenEarned}
                 onWatchClick={onWatchClick}
                 selectedCategories={selectedCategories}
+                selectedVideos={selectedVideos}
                 getWatchCount={getWatchCount}
               />
             </motion.div>

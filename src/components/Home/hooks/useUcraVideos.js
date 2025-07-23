@@ -3,6 +3,44 @@ import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { db } from '../../../firebase';
 import { CATEGORY_KEYWORDS } from '../utils/constants';
 
+// 제목과 설명에서 카테고리 추출
+function extractCategoryFromTitle(title, description) {
+  const text = (title + ' ' + description).toLowerCase();
+  
+  // 카테고리 매핑
+  const categoryMap = {
+    '게임': ['게임', '롤', 'lol', '리그오브레전드', '배그', 'pubg', '오버워치', 'fps', 'rpg', 'mmorpg'],
+    '음악': ['음악', '노래', '뮤직', 'kpop', '힙합', '랩', '커버', '작곡', '연주'],
+    '요리': ['요리', '레시피', '먹방', '맛집', '쿠킹', '베이킹', '음식', '식사'],
+    '여행': ['여행', '브이로그', '여행기', '관광', '해외', '국내', '캠핑'],
+    '뷰티': ['뷰티', '메이크업', '화장', '스킨케어', '패션', '헤어', '네일'],
+    '일상': ['일상', '브이로그', '라이프', '생활', '집', '가족', '친구'],
+    '교육': ['교육', '강의', '공부', '학습', '튜토리얼', '설명', '강좌'],
+    '스포츠': ['스포츠', '축구', '농구', '야구', '운동', '헬스', '다이어트'],
+    '리뷰': ['리뷰', '언박싱', '제품', '평가', '후기', '추천'],
+    '엔터테인먼트': ['드라마', '영화', '애니', '예능', '코미디', '웃긴', '개그']
+  };
+  
+  for (const [category, keywords] of Object.entries(categoryMap)) {
+    if (keywords.some(keyword => text.includes(keyword))) {
+      return category;
+    }
+  }
+  
+  return '기타';
+}
+
+// 제목과 설명에서 키워드 추출
+function extractKeywordsFromTitle(title, description) {
+  const text = (title + ' ' + description).toLowerCase();
+  const allKeywords = [
+    '게임', '롤', '음악', '노래', '요리', '레시피', '여행', '브이로그', '뷰티', '메이크업',
+    '일상', '교육', '강의', '스포츠', '축구', '리뷰', '언박싱', '드라마', '영화', '애니'
+  ];
+  
+  return allKeywords.filter(keyword => text.includes(keyword));
+}
+
 // 재생 시간 포맷팅 함수
 const formatDuration = (duration) => {
   if (typeof duration === 'string' && duration.includes(':')) {
@@ -75,6 +113,15 @@ export const useUcraVideos = (userCategory = null) => {
           videosSnapshot.forEach(videoDoc => {
             const videoData = videoDoc.data();
             if (videoData.videoId) {
+              // 카테고리 정보가 없으면 제목에서 추출
+              let category = videoData.category;
+              let keywords = videoData.keywords || [];
+              
+              if (!category) {
+                category = extractCategoryFromTitle(videoData.title || '', videoData.description || '');
+                keywords = extractKeywordsFromTitle(videoData.title || '', videoData.description || '');
+              }
+              
               allVideos.push({
                 id: videoDoc.id,
                 videoId: videoData.videoId,
@@ -97,13 +144,63 @@ export const useUcraVideos = (userCategory = null) => {
                 roomName: roomData.name || '채팅방',
                 type: getDurationType(videoData.duration),
                 thumbnailUrl: videoData.thumbnail || `https://img.youtube.com/vi/${videoData.videoId}/mqdefault.jpg`,
+                category: category, // 카테고리 추가
+                keywords: keywords, // 키워드 추가
+                description: videoData.description || '', // 설명 추가
               });
             }
           });
         }
 
-        console.log('🔍 [useUcraVideos] 전체 채팅방 수:', roomsSnapshot.size);
-        console.log('🔍 [useUcraVideos] 총 발견된 영상 수:', allVideos.length);
+        // ✅ 루트 videos 컬렉션 영상도 추가
+        try {
+          const rootVideosQuery = query(collection(db, "videos"), orderBy("registeredAt", "desc"));
+          const rootVideosSnap = await getDocs(rootVideosQuery);
+          console.log('🔍 [useUcraVideos] 루트 videos 컬렉션 수:', rootVideosSnap.size);
+
+          rootVideosSnap.forEach(docSnap => {
+            const videoData = docSnap.data();
+            if (!videoData.videoId) return;
+
+            let category = videoData.category;
+            let keywords = videoData.keywords || [];
+            if (!category) {
+              category = extractCategoryFromTitle(videoData.title || '', videoData.description || '');
+              keywords = extractKeywordsFromTitle(videoData.title || '', videoData.description || '');
+            }
+
+            allVideos.push({
+              id: docSnap.id,
+              videoId: videoData.videoId,
+              title: videoData.title || '제목 없음',
+              thumbnail: videoData.thumbnail || `https://img.youtube.com/vi/${videoData.videoId}/mqdefault.jpg`,
+              channel: videoData.channelTitle || videoData.channel || '채널명 없음',
+              channelId: videoData.channelId,
+              channelTitle: videoData.channelTitle || videoData.channel || '채널명 없음',
+              duration: videoData.duration,
+              durationSeconds: typeof videoData.duration === 'number' ? videoData.duration : 0,
+              durationDisplay: formatDuration(videoData.duration),
+              views: videoData.views || 0,
+              viewCount: videoData.viewCount || videoData.views || 0,
+              likeCount: videoData.likeCount || 0,
+              registeredAt: videoData.registeredAt,
+              uploadedAt: formatUploadDate(videoData.registeredAt),
+              publishedAt: videoData.publishedAt || videoData.registeredAt?.toDate?.()?.toISOString?.(),
+              registeredBy: videoData.registeredBy,
+              roomId: null,
+              roomName: '루트',
+              type: getDurationType(videoData.duration),
+              thumbnailUrl: videoData.thumbnail || `https://img.youtube.com/vi/${videoData.videoId}/mqdefault.jpg`,
+              category,
+              keywords,
+              description: videoData.description || '',
+            });
+          });
+        } catch (errRoot) {
+          console.error('⚠️ [useUcraVideos] 루트 videos 로드 실패:', errRoot);
+        }
+
+        console.log('🔍 [useUcraVideos] 총 영상 수 (chatRooms + root):', allVideos.length);
 
         // 등록일 기준으로 최신순 정렬
         allVideos.sort((a, b) => {

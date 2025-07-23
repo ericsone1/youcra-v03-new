@@ -510,8 +510,8 @@ function Home() {
           )}
         </AnimatePresence>
       
-        {/* 5단계: 영상 시청하기 - 제목 없이 (채널 연동 후에만 표시) */}
-        {channelRegistered && (
+        {/* 5단계: 영상 시청하기 - 제목 없이 (카테고리 등록 완료 후에만 표시) */}
+        {categoryStepDone && (
           <AnimatePresence mode="wait">
             <motion.div
               key="watch-step"
