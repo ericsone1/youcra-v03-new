@@ -18,11 +18,29 @@ import { useState } from 'react';
 const WatchRewatchList = () => {
   const { certifiedVideoIds, initializePlayer } = useVideoPlayer();
   const { ucraVideos, loadingUcraVideos } = useUcraVideos();
-  // 내 영상 제외
-  const currentUser = JSON.parse(localStorage.getItem('ucra_currentUser') || '{}');
-  const filteredVideos = ucraVideos.filter(
-    v => v.registeredBy !== currentUser?.uid && v.registeredBy !== currentUser?.email
-  );
+  const { currentUser } = useAuth();
+  
+  // 내 영상 제외 (강화된 필터링)
+  const filteredVideos = ucraVideos.filter(video => {
+    if (!currentUser) return true;
+    
+    const isMyVideo = 
+      video.registeredBy === currentUser.uid ||
+      video.registeredBy === currentUser.email ||
+      video.uploaderUid === currentUser.uid ||
+      video.channelId === currentUser.uid ||
+      video.channelTitle === currentUser.displayName ||
+      (video.uploader && video.uploader === currentUser.displayName) ||
+      (video.channel && video.channel === currentUser.displayName) ||
+      (video.registeredByEmail && video.registeredByEmail === currentUser.email) ||
+      (video.registeredByUid && video.registeredByUid === currentUser.uid) ||
+      (video.channelUrl && video.channelUrl.includes(currentUser.uid)) ||
+      (currentUser.displayName && video.title && 
+       video.title.toLowerCase().includes(currentUser.displayName.toLowerCase()));
+    
+    return !isMyVideo;
+  });
+  
   // 중복 제거
   const uniqueVideos = computeUniqueVideos(filteredVideos);
   // 시청 완료된 영상만 필터링 (전체/숏폼/롱폼 구분 제거)

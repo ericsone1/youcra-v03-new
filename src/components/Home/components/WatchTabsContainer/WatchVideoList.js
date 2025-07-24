@@ -291,11 +291,11 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
                     </p>
                   </div>
                   
-                  {/* 유크라 조회수와 등록일 */}
+                  {/* 유크라 플레이 횟수와 업로드일 */}
                   <div className="flex items-center text-sm text-gray-500">
-                    <span>유크라 조회수 {(video.ucraViewCount || 0).toLocaleString()}회</span>
+                    <span>유크라 플레이 {(video.ucraViewCount || 0).toLocaleString()}회</span>
                     <span className="mx-2">•</span>
-                    <span>{video.uploadedAt || '등록일 없음'}</span>
+                    <span>{formatDate(video.publishedAt || video.uploadedAt)}</span>
                   </div>
                 </div>
 
@@ -408,74 +408,51 @@ export const WatchVideoList = ({
   getWatchCount = () => 0 // 시청 횟수 조회 함수
 }) => {
   const { currentUser } = useAuth();
-  const { ucraVideos, loadingUcraVideos } = useUcraVideos();
+  const { ucraVideos, loadingUcraVideos, error } = useUcraVideos();
   const { watchedMap, canRewatch, getTimeUntilRewatch } = useWatchedVideos();
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  // 🔄 유크라에 등록된 모든 영상 + 사용자가 선택한 영상 합치기
-  // selectedVideos에 type 필드가 없는 경우 duration을 기반으로 추가
-  const processedSelectedVideos = Array.isArray(selectedVideos) ? selectedVideos.map(video => {
-    // duration 문자열을 초 단위로 변환하는 함수
-    const parseDurationToSeconds = (duration) => {
-      if (!duration) return 0;
-      
-      // 이미 숫자인 경우
-      if (typeof duration === 'number') return duration;
-      
-      // 문자열인 경우 (예: "3:45", "1:23:45")
-      if (typeof duration === 'string') {
-        const parts = duration.split(':').map(Number);
-        if (parts.length === 2) {
-          return parts[0] * 60 + parts[1]; // 분:초 형식
-        } else if (parts.length === 3) {
-          return parts[0] * 3600 + parts[1] * 60 + parts[2]; // 시:분:초 형식
-        }
-      }
-      
-      return 0;
-    };
-    
-    // durationSeconds가 없으면 duration에서 계산
-    let durationSeconds = video.durationSeconds;
-    if (!durationSeconds && video.duration) {
-      durationSeconds = parseDurationToSeconds(video.duration);
-    }
-    
-    // type 필드가 없거나 durationSeconds가 계산된 경우 type 재설정
-    if (!video.type || durationSeconds !== video.durationSeconds) {
-      return {
-        ...video,
-        type: durationSeconds >= 181 ? 'long' : 'short',
-        durationSeconds: durationSeconds || 0
-      };
-    }
-    
-    return video;
-  }) : [];
+  // 🚨 props 디버깅
+  console.log('🚨 [WatchVideoList] 받은 props:', {
+    videoFilter: videoFilter,
+    sortKey: sortKey,
+    propsDebug: { videoFilter, sortKey }
+  });
 
-  let filteredVideos = computeUniqueVideos([
-    ...ucraVideos,
-    ...processedSelectedVideos
-  ]);
+  // 🚨 useUcraVideos 상태 디버깅
+  console.log('🚨 [WatchVideoList] useUcraVideos 상태:', {
+    ucraVideos: ucraVideos,
+    ucraVideosLength: ucraVideos?.length || 0,
+    loadingUcraVideos: loadingUcraVideos,
+    error: error,
+    isArray: Array.isArray(ucraVideos)
+  });
+
+  // 🔄 useUcraVideos에서 이미 모든 사용자의 영상을 가져오므로 selectedVideos는 무시
+  // useUcraVideos에는 이미 다음이 포함됨:
+  // 1. 채팅방의 videos 서브컬렉션
+  // 2. 루트 videos 컬렉션  
+  // 3. 모든 사용자 프로필의 myVideos
+  
+  console.log('🔍 [WatchVideoList] 데이터 소스:', {
+    ucraVideosCount: ucraVideos.length,
+    selectedVideosCount: selectedVideos?.length || 0,
+    selectedVideosIgnored: true // selectedVideos는 이제 무시됨
+  });
+
+  let filteredVideos = [...ucraVideos]; // ucraVideos만 사용
+
+  // ✅ useUcraVideos에서 이미 내 영상 + 중복 영상 필터링이 완료됨
+  console.log('✅ [WatchVideoList] useUcraVideos에서 필터링 완료된 영상 사용');
+  console.log('🔍 [WatchVideoList] 필터링 완료된 영상 개수:', filteredVideos.length);
+  // 내 영상 필터링 건너뜀
 
   // 디버깅: 처리된 영상 데이터 확인
   console.log('🔍 [WatchVideoList] 영상 데이터 처리 결과:', {
     ucraVideosCount: ucraVideos.length,
     selectedVideosCount: selectedVideos?.length || 0,
-    processedSelectedVideosCount: processedSelectedVideos.length,
     filteredVideosCount: filteredVideos.length,
-    originalSelectedVideos: selectedVideos?.map(v => ({
-      title: v.title,
-      type: v.type,
-      duration: v.duration,
-      durationSeconds: v.durationSeconds
-    })),
-    processedVideos: processedSelectedVideos.map(v => ({
-      title: v.title,
-      type: v.type,
-      duration: v.duration,
-      durationSeconds: v.durationSeconds
-    }))
+    note: 'selectedVideos는 이제 무시됨 - useUcraVideos에서 모든 사용자 영상을 가져옴'
   });
 
   /* 카테고리 필터링 완전 비활성화 */
@@ -483,6 +460,11 @@ export const WatchVideoList = ({
   // category 유무와 상관없이 모든 영상 표시
 
   // 전체/숏폼/롱폼 필터
+  console.log('🎯 [WatchVideoList] 필터링 시작:', {
+    videoFilter: videoFilter,
+    filteredVideosCount: filteredVideos.length
+  });
+
   let displayVideos = filteredVideos;
   const isShort = (v) => {
     if (v.type) return v.type === 'short';
@@ -496,10 +478,23 @@ export const WatchVideoList = ({
   };
 
   if (videoFilter === 'short') {
+    console.log('🎯 [필터] 숏폼 필터링 적용');
     displayVideos = filteredVideos.filter(isShort);
+    console.log('🎯 [필터] 숏폼 결과:', displayVideos.length);
   } else if (videoFilter === 'long') {
+    console.log('🎯 [필터] 롱폼 필터링 적용');
     displayVideos = filteredVideos.filter(isLong);
+    console.log('🎯 [필터] 롱폼 결과:', displayVideos.length);
+  } else {
+    console.log('🎯 [필터] 전체 필터 (필터링 없음)');
   }
+
+  console.log('🎯 [WatchVideoList] 최종 필터링 결과:', {
+    videoFilter: videoFilter,
+    beforeFilter: filteredVideos.length,
+    afterFilter: displayVideos.length,
+    sampleTypes: displayVideos.slice(0, 3).map(v => ({ title: v.title?.substring(0, 20), type: v.type, durationSeconds: v.durationSeconds }))
+  });
 
   // 정렬 적용 (조회수 정렬은 Firestore 값만 사용)
   displayVideos = [...displayVideos].sort((a, b) => {
@@ -554,6 +549,16 @@ export const WatchVideoList = ({
   }
 
   console.log(`🧮 [WatchVideoList] 최종 노출 영상 개수: ${displayVideos.length}`);
+  
+  // 🔍 현재 표시되는 영상들의 상세 정보 출력
+  console.log('🔍 [WatchVideoList] 현재 표시되는 영상들:', displayVideos.map(video => ({
+    title: video.title,
+    registeredBy: video.registeredBy,
+    uploaderUid: video.uploaderUid,
+    channelId: video.channelId,
+    channelTitle: video.channelTitle,
+    videoId: video.videoId || video.id
+  })));
 
   return (
     <>
@@ -574,36 +579,42 @@ export const WatchVideoList = ({
           return (
             <div
               key={videoId + '-' + refreshTrigger}
-              className="flex items-center bg-white rounded-xl shadow hover:shadow-md transition p-2 sm:p-3 cursor-pointer gap-3"
+              className="bg-white rounded-xl shadow hover:shadow-md transition p-3 cursor-pointer"
             >
-              {/* 썸네일: 등록 이미지 우선, 없으면 No Image */}
-              <div className="relative flex-shrink-0 w-32 h-20 rounded-lg overflow-hidden bg-gray-100">
-                <img
-                  src={video.thumbnailUrl || video.thumbnail || 'https://via.placeholder.com/128x72?text=No+Image'}
-                  alt={video.title}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                  onError={e => { e.target.src = 'https://via.placeholder.com/128x72?text=No+Image'; }}
-                />
-                {video.type === 'short' && (
-                  <span className="absolute top-1 right-1 bg-red-500 text-white text-[11px] font-bold px-2 py-0.5 rounded-full shadow">
-                    쇼츠
-                  </span>
-                )}
-              </div>
-              {/* 정보 영역 */}
-              <div className="flex-1 flex flex-col justify-between min-w-0">
-                <div className="font-semibold text-base text-gray-900 truncate" title={video.title}>{video.title}</div>
-                <div className="text-xs text-gray-500 mt-0.5 truncate">{video.channelTitle}</div>
-                <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
-                  <span>
-                    유크라 조회수 {video.ucraViewCount?.toLocaleString() || '0'}
-                  </span>
-                  <span>· {video.uploadedAt}</span>
+              {/* 상단: 썸네일 + 제목 + 시청하기 버튼 */}
+              <div className="flex items-center gap-3 mb-2">
+                {/* 썸네일 */}
+                <div className="relative flex-shrink-0 w-20 h-14 rounded-lg overflow-hidden bg-gray-100">
+                  <img
+                    src={video.thumbnailUrl || video.thumbnail || 'https://via.placeholder.com/80x56?text=No+Image'}
+                    alt={video.title}
+                    className="w-full h-full object-cover"
+                    loading="lazy"
+                    onError={e => { e.target.src = 'https://via.placeholder.com/80x56?text=No+Image'; }}
+                  />
+                  {video.type === 'short' && (
+                    <span className="absolute top-0.5 right-0.5 bg-red-500 text-white text-[9px] font-bold px-1 py-0.5 rounded-full shadow">
+                      쇼츠
+                    </span>
+                  )}
                 </div>
-              </div>
-              {/* 시청하기 버튼 */}
-              <div className="flex flex-col justify-end h-full">
+                
+                {/* 제목 */}
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-sm text-gray-900 leading-tight" 
+                      style={{
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden'
+                      }}
+                      title={video.title}>
+                    {video.title}
+                  </h3>
+                </div>
+                
+                {/* 시청하기 버튼 */}
+                <div className="flex-shrink-0">
                 {canWatchNow ? (
                   (() => {
                     const info = getWatchCount(videoId);
@@ -630,6 +641,17 @@ export const WatchVideoList = ({
                     onTimeUp={handleTimeUp}
                   />
                 )}
+                </div>
+              </div>
+              
+              {/* 하단: 부가정보 */}
+              <div className="flex items-center justify-between text-xs text-gray-500 pt-2 border-t border-gray-100">
+                <span className="truncate">{video.channelTitle}</span>
+                <div className="flex items-center gap-2 text-xs text-gray-400 ml-2">
+                  <span>유크라 플레이 {video.ucraViewCount?.toLocaleString() || '0'}회</span>
+                  <span>•</span>
+                  <span className="whitespace-nowrap">{formatDate(video.publishedAt || video.uploadedAt)}</span>
+                </div>
               </div>
             </div>
           );

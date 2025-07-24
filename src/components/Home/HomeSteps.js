@@ -150,8 +150,8 @@ export const HomeSteps = ({
           )}
         </AnimatePresence>
       
-        {/* 5단계: 영상 시청하기 - 제목 없이 (카테고리 등록 완료 후에만 표시) */}
-        {categoryStepDone && videoSelectionDone && (
+        {/* 5단계: 영상 시청하기 - 제목 없이 (로그인 완료 후에만 표시) */}
+        {categoryStepDone && videoSelectionDone && currentUser && (
           <AnimatePresence mode="wait">
             <motion.div
               key="watch-step"

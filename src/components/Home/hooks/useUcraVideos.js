@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { db } from '../../../firebase';
-import { collection, query, orderBy, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, doc, getDoc } from 'firebase/firestore';
 import { CATEGORY_KEYWORDS } from '../utils/constants';
 import { useWatchedVideos } from '../../../contexts/WatchedVideosContext';
 
@@ -75,6 +75,16 @@ export const useUcraVideos = (userCategory = null) => {
   const [loadingUcraVideos, setLoadingUcraVideos] = useState(true);
   const [error, setError] = useState(null);
   const { getWatchedVideos } = useWatchedVideos();
+  
+  // 현재 사용자 정보 가져오기 (내 영상 필터링용)
+  const getCurrentUser = () => {
+    try {
+      const userFromLocal = JSON.parse(localStorage.getItem('ucra_currentUser') || '{}');
+      return userFromLocal;
+    } catch {
+      return {};
+    }
+  };
 
   useEffect(() => {
     const fetchVideos = async () => {
@@ -83,20 +93,54 @@ export const useUcraVideos = (userCategory = null) => {
         setError(null);
 
         console.log('🔍 [useUcraVideos] 유크라 업로드 영상 로딩 시작');
+        
+        // 🚨 임시: 모든 필터링 비활성화하고 원본 데이터만 확인
+        console.log('🚨 [DEBUG MODE] 모든 필터링 비활성화 - 원본 데이터 확인');
 
         // 모든 채팅방의 영상을 통합해서 가져오기
         const roomsQuery = query(collection(db, "chatRooms"));
         const roomsSnapshot = await getDocs(roomsQuery);
         
+        console.log('🔍 [Firebase 디버깅] 채팅방 정보:', {
+          채팅방개수: roomsSnapshot.size,
+          채팅방목록: roomsSnapshot.docs.map(doc => ({
+            id: doc.id,
+            데이터: doc.data()
+          }))
+        });
+        
         let allVideos = [];
         
         for (const roomDoc of roomsSnapshot.docs) {
           const roomData = roomDoc.data();
-          const videosQuery = query(
-            collection(db, "chatRooms", roomDoc.id, "videos"),
-            orderBy("registeredAt", "desc")
-          );
+          console.log(`🔍 [Firebase] ${roomDoc.id} 채팅방 처리 중...`);
+          
+          // orderBy 없이 먼저 시도 (인덱스 문제 방지)
+          try {
+            const videosQuery = query(
+              collection(db, "chatRooms", roomDoc.id, "videos"),
+              orderBy("registeredAt", "desc")
+            );
+            const videosSnapshot = await getDocs(videosQuery);
+            console.log(`✅ [Firebase] ${roomDoc.id} orderBy 성공:`, videosSnapshot.size);
+          } catch (orderByError) {
+            console.warn(`⚠️ [Firebase] ${roomDoc.id} orderBy 실패, 기본 쿼리로 재시도:`, orderByError);
+            const videosQuery = collection(db, "chatRooms", roomDoc.id, "videos");
+            const videosSnapshot = await getDocs(videosQuery);
+            console.log(`🔄 [Firebase] ${roomDoc.id} 기본 쿼리 결과:`, videosSnapshot.size);
+          }
+          
+          // 실제 사용할 쿼리
+          const videosQuery = collection(db, "chatRooms", roomDoc.id, "videos");
           const videosSnapshot = await getDocs(videosQuery);
+          
+          console.log(`🔍 [Firebase] ${roomDoc.id} 채팅방 영상:`, {
+            영상개수: videosSnapshot.size,
+            영상목록: videosSnapshot.docs.map(doc => ({
+              id: doc.id,
+              데이터: doc.data()
+            }))
+          });
           
           for (const videoDoc of videosSnapshot.docs) {
             const videoData = videoDoc.data();
@@ -270,7 +314,62 @@ export const useUcraVideos = (userCategory = null) => {
           console.error('⚠️ [useUcraVideos] 루트 videos 로드 실패:', errRoot);
         }
 
-        console.log('🔍 [useUcraVideos] 총 영상 수 (chatRooms + root):', allVideos.length);
+        // 🆕 모든 사용자 프로필의 myVideos 추가
+        try {
+          const usersSnap = await getDocs(collection(db, "users"));
+          console.log('🔍 [useUcraVideos] 사용자 프로필 수:', usersSnap.size);
+
+          usersSnap.forEach(userDoc => {
+            const userData = userDoc.data();
+            const userUid = userDoc.id;
+            if (Array.isArray(userData.myVideos)) {
+              userData.myVideos.forEach(v => {
+                // durationSeconds 계산
+                let durationSeconds = v.durationSeconds;
+                if (!durationSeconds && typeof v.duration === 'string') {
+                  const parts = v.duration.split(':').map(Number);
+                  if (parts.length === 2) {
+                    durationSeconds = parts[0] * 60 + parts[1];
+                  } else if (parts.length === 3) {
+                    durationSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+                  }
+                }
+
+                allVideos.push({
+                  id: v.id || v.videoId,
+                  videoId: v.videoId || v.id,
+                  title: v.title || '제목 없음',
+                  thumbnail: v.thumbnail || v.thumbnailUrl || `https://img.youtube.com/vi/${v.videoId || v.id}/mqdefault.jpg`,
+                  channel: v.channelTitle || v.channel || userData.displayName || '채널명 없음',
+                  channelId: v.channelId || userUid,
+                  channelTitle: v.channelTitle || v.channel || userData.displayName || '채널명 없음',
+                  duration: v.duration,
+                  durationSeconds: durationSeconds || 0,
+                  durationDisplay: v.durationDisplay || v.duration || '',
+                  views: v.views || 0,
+                  viewCount: v.viewCount || v.views || 0,
+                  likeCount: v.likeCount || 0,
+                  ucraViewCount: v.ucraViewCount || 0,
+                  registeredAt: null,
+                  uploadedAt: v.publishedAt || '',
+                  publishedAt: v.publishedAt || '',
+                  registeredBy: userUid,
+                  roomId: null,
+                  roomName: '프로필',
+                  type: v.type || getDurationType(durationSeconds),
+                  thumbnailUrl: v.thumbnail || v.thumbnailUrl || `https://img.youtube.com/vi/${v.videoId || v.id}/mqdefault.jpg`,
+                  category: v.category || null,
+                  keywords: v.keywords || [],
+                  description: v.description || '',
+                });
+              });
+            }
+          });
+        } catch (userErr) {
+          console.error('⚠️ [useUcraVideos] 사용자 프로필 myVideos 로드 실패:', userErr);
+        }
+
+        console.log('🔍 [useUcraVideos] 총 영상 수 (chatRooms + root + profiles):', allVideos.length);
         
         // 디버깅: 영상 분류 확인
         allVideos.slice(0, 3).forEach((video, index) => {
@@ -291,41 +390,11 @@ export const useUcraVideos = (userCategory = null) => {
           return bTime - aTime;
         });
 
-        // 유효한 썸네일이 있는 영상만 필터링
+        // 🚨 임시로 모든 유효성 검사 비활성화 - 모든 영상 통과
+        console.log('🚨 [DEBUG] 유효성 검사 건너뜀 - 모든 영상 허용');
         const validVideos = allVideos.filter(video => {
-          // 기본 필드 검증
-          if (!video.videoId || !video.title) return false;
-          // YouTube 영상 ID 유효성 검증 (11자리 영문숫자 조합)
-          const isValidVideoId = /^[a-zA-Z0-9_-]{11}$/.test(video.videoId);
-          if (!isValidVideoId) return false;
-          // 썸네일 검증 - img.youtube.com이 포함된 썸네일은 무조건 허용
-          const isYouTubeThumb = video.thumbnail && video.thumbnail.includes('img.youtube.com');
-          const hasValidThumbnail = isYouTubeThumb || (
-            video.thumbnail &&
-            video.thumbnail !== 'https://via.placeholder.com/320x180/cccccc/ffffff?text=영상' &&
-            !video.thumbnail.includes('placeholder') &&
-            (video.thumbnail.includes('youtube') || video.thumbnail.includes('http'))
-          );
-          // 제목이 너무 짧거나 의미없는 경우 제외 (3글자 제한 제거, '제목 없음'만 제외)
-          const hasValidTitle = video.title && video.title !== '제목 없음' && video.title !== 'Untitled';
-          // 재생 불가능한 영상 패턴 제외
-          const playableVideo = video.title &&
-            !video.title.includes('동영상을 재생할 수 없음') &&
-            !video.title.includes('Video unavailable') &&
-            !video.title.includes('Private video') &&
-            !video.title.includes('Deleted video') &&
-            !video.title.includes('[삭제된 동영상]') &&
-            !video.title.includes('[비공개 동영상]') &&
-            !video.title.toLowerCase().includes('this video is unavailable') &&
-            !video.title.toLowerCase().includes('this video is private');
-          // 썸네일이 기본 YouTube 오류 이미지인지 확인
-          const notErrorThumbnail = video.thumbnail &&
-            !video.thumbnail.includes('hqdefault_live.jpg') &&
-            !video.thumbnail.includes('no_thumbnail') &&
-            // YouTube의 기본 오류 썸네일 패턴 제외, 단 img.youtube.com이면 허용
-            (!video.thumbnail.endsWith('/hqdefault.jpg') || isYouTubeThumb) &&
-            !video.thumbnail.includes('default_120.jpg');
-          return hasValidThumbnail && hasValidTitle && playableVideo && notErrorThumbnail;
+          // 최소한의 검증만: videoId와 title만 있으면 통과
+          return video.videoId && video.title;
         });
         // 제외된 영상들 로깅 (개발 환경에서만)
         if (process.env.NODE_ENV === 'development') {
@@ -363,37 +432,180 @@ export const useUcraVideos = (userCategory = null) => {
             '오류 썸네일 제외'
           ]
         });
+        
+        // 🚨 임시로 50개 제한 해제
+        const videos = validVideos; // 모든 영상 사용
 
-        // 최대 50개로 제한
-        const videos = validVideos.slice(0, 50);
+        console.log('📊 [useUcraVideos] 서버 등록 영상 총계:', {
+          채팅방수: roomsSnapshot.size,
+          전체등록영상: allVideos.length,
+          유효영상: validVideos.length,
+          최종노출영상: videos.length
+        });
 
-        // 카테고리 필터링
+        // 🚨 카테고리 필터링 완전 제거 - 모든 영상 표시
+        console.log('🚨 [useUcraVideos] 카테고리 필터링 제거 - 모든 영상 표시');
         let filteredVideos = videos;
-        if (userCategory && userCategory.id !== 'other') {
-          const categoryKeywords = CATEGORY_KEYWORDS[userCategory.id] || [];
-          filteredVideos = videos.filter(video => {
-            const title = video.title?.toLowerCase() || '';
-            const description = video.description?.toLowerCase() || '';
-            const channelTitle = video.channel?.toLowerCase() || '';
-            return categoryKeywords.some(keyword => 
-              title.includes(keyword.toLowerCase()) ||
-              description.includes(keyword.toLowerCase()) ||
-              channelTitle.includes(keyword.toLowerCase())
-            );
-          });
-        }
         // 조회수 기준 정렬 (문자열일 경우 숫자 변환 시도)
         filteredVideos.sort((a, b) => {
           const va = typeof a.views === 'string' ? parseInt(a.views.replace(/[^\d]/g, '')) : (a.views || 0);
           const vb = typeof b.views === 'string' ? parseInt(b.views.replace(/[^\d]/g, '')) : (b.views || 0);
           return vb - va;
         });
+
+        // 🎬 영상 타입 분류 상세 디버깅 및 수정
+        console.log('🎬 [useUcraVideos] 영상 타입 분류 검사 시작...');
+        let typeFixCount = 0;
+        
+        filteredVideos.forEach((video, index) => {
+          if (index < 5) { // 처음 5개만 상세 로그
+            const durationSeconds = video.durationSeconds || 0;
+            const calculatedType = getDurationType(durationSeconds);
+            
+            console.log(`🎬 [영상${index + 1}] 타입 분류:`, {
+              title: video.title?.substring(0, 30) + '...',
+              duration: video.duration,
+              durationSeconds: durationSeconds,
+              currentType: video.type,
+              shouldBe: calculatedType,
+              classification: durationSeconds >= 181 ? '롱폼(181초 이상)' : '쇼츠(181초 미만)',
+              needsFix: video.type !== calculatedType
+            });
+          }
+          
+          // 잘못된 타입 수정
+          const correctType = getDurationType(video.durationSeconds || 0);
+          if (video.type !== correctType) {
+            if (typeFixCount < 3) { // 처음 3개만 로그
+              console.warn(`⚠️ [타입 수정] ${video.title?.substring(0, 20)}... : ${video.type} → ${correctType}`);
+            }
+            video.type = correctType;
+            typeFixCount++;
+          }
+        });
+        
+        if (typeFixCount > 0) {
+          console.log(`🔧 [useUcraVideos] 총 ${typeFixCount}개 영상의 타입을 수정했습니다.`);
+        }
+        
+        // 🔄 강화된 중복 영상 제거 (videoId + 제목 기준) - 로그인 상태 무관
+        console.log('🚨 [useUcraVideos] 중복 제거 로직 실행 시작!', { beforeCount: filteredVideos.length });
+        
+        const beforeDuplicateFilter = filteredVideos.length;
+          const seenVideos = new Map(); // videoId -> 첫 번째 영상 정보
+          const duplicateVideos = [];
+          
+          filteredVideos = filteredVideos.filter(video => {
+            const videoId = video.videoId || video.id;
+            const title = video.title?.trim();
+            
+            if (!videoId) {
+              console.warn('⚠️ [중복체크] videoId가 없는 영상:', title);
+              return true; // videoId가 없으면 일단 유지
+            }
+            
+            // videoId로 먼저 체크
+            if (seenVideos.has(videoId)) {
+              const existingVideo = seenVideos.get(videoId);
+              duplicateVideos.push({
+                title: title,
+                videoId: videoId,
+                registeredBy: video.registeredBy,
+                roomName: video.roomName,
+                duplicateType: 'same_videoId',
+                existingRegisteredBy: existingVideo.registeredBy
+              });
+              console.log(`🔄 [중복 발견 - videoId] ${title?.substring(0, 30)}... (등록자: ${video.registeredBy} vs ${existingVideo.registeredBy})`);
+              return false;
+            }
+            
+            // 제목이 동일한 영상도 체크 (다른 videoId지만 같은 제목)
+            const duplicateByTitle = Array.from(seenVideos.values()).find(existing => 
+              existing.title?.trim() === title && title && title.length > 10
+            );
+            
+            if (duplicateByTitle) {
+              duplicateVideos.push({
+                title: title,
+                videoId: videoId,
+                registeredBy: video.registeredBy,
+                roomName: video.roomName,
+                duplicateType: 'same_title',
+                existingVideoId: duplicateByTitle.videoId,
+                existingRegisteredBy: duplicateByTitle.registeredBy
+              });
+              console.log(`🔄 [중복 발견 - 제목] ${title?.substring(0, 30)}... (videoId: ${videoId} vs ${duplicateByTitle.videoId})`);
+              return false;
+            }
+            
+            // 첫 번째 등장하는 영상은 유지
+            seenVideos.set(videoId, {
+              title: title,
+              videoId: videoId,
+              registeredBy: video.registeredBy,
+              roomName: video.roomName
+            });
+            
+            return true;
+          });
+          
+          console.log(`🔄 [useUcraVideos] 중복 영상 제거: ${beforeDuplicateFilter}개 → ${filteredVideos.length}개`);
+          if (duplicateVideos.length > 0) {
+            console.log('🔄 [제거된 중복 영상들]:', duplicateVideos);
+          }
+
+        // 🚫 내 영상 제외 필터링
+        const currentUser = getCurrentUser();
+        console.log('🚨 [useUcraVideos] 내 영상 제거 체크:', {
+          currentUser: currentUser,
+          hasUid: !!currentUser?.uid,
+          hasEmail: !!currentUser?.email,
+          willExecuteMyVideoFilter: !!(currentUser && (currentUser.uid || currentUser.email))
+        });
+        
+        if (currentUser && (currentUser.uid || currentUser.email)) {
+          const beforeMyVideoFilter = filteredVideos.length;
+          
+          filteredVideos = filteredVideos.filter(video => {
+            const isMyVideo = 
+              video.registeredBy === currentUser.uid ||
+              video.registeredBy === currentUser.email ||
+              video.uploaderUid === currentUser.uid ||
+              video.channelId === currentUser.uid ||
+              video.channelTitle === currentUser.displayName ||
+              (video.uploader && video.uploader === currentUser.displayName) ||
+              (video.channel && video.channel === currentUser.displayName) ||
+              (video.registeredByEmail && video.registeredByEmail === currentUser.email) ||
+              (video.registeredByUid && video.registeredByUid === currentUser.uid) ||
+              (video.channelUrl && video.channelUrl.includes(currentUser.uid)) ||
+              (currentUser.displayName && video.title && 
+               video.title.toLowerCase().includes(currentUser.displayName.toLowerCase()));
+            
+            if (isMyVideo) {
+              console.log('🚫 [내 영상 제외]:', video.title);
+            }
+            return !isMyVideo;
+          });
+          
+          console.log(`🚫 [useUcraVideos] 내 영상 필터링: ${beforeMyVideoFilter}개 → ${filteredVideos.length}개 (${beforeMyVideoFilter - filteredVideos.length}개 제외)`);
+        }
+
+        
+        console.log('🚨 [useUcraVideos] setUcraVideos 호출:', {
+          filteredVideosLength: filteredVideos.length,
+          sampleTitles: filteredVideos.slice(0, 3).map(v => v.title)
+        });
+        
         setUcraVideos(filteredVideos);
+        
+        console.log('🚨 [useUcraVideos] setUcraVideos 완료');
       } catch (err) {
-        console.error('Error fetching videos:', err);
+        console.error('❌ [useUcraVideos] Error fetching videos:', err);
         setError('영상을 불러오는 중 오류가 발생했습니다.');
+        setUcraVideos([]); // 에러 시 빈 배열로 설정
       } finally {
         setLoadingUcraVideos(false);
+        console.log('🚨 [useUcraVideos] 로딩 완료, loadingUcraVideos = false');
       }
     };
 
