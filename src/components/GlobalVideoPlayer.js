@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useVideoPlayer } from '../contexts/VideoPlayerContext';
-import { FaBolt, FaYoutube, FaPlay, FaFire, FaMinus, FaSpinner } from 'react-icons/fa';
+import { FaBolt, FaYoutube, FaPlay, FaFire, FaMinus, FaSpinner, FaExpand } from 'react-icons/fa';
 import { MdClose } from 'react-icons/md';
 import YouTubePlayerSection from './Home/YouTubePlayerSection';
 import { useWatchedVideos } from '../contexts/WatchedVideosContext';
@@ -51,6 +51,8 @@ function GlobalVideoPlayer() {
   // 다음 영상으로 넘어가는 중 상태
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  // 드래그 여부 플래그 (드래그 후 클릭 구분)
+  const [hasDragged, setHasDragged] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [position, setPosition] = useState(() => {
     return minimized 
@@ -68,6 +70,7 @@ function GlobalVideoPlayer() {
     }
     
     e.preventDefault();
+    setHasDragged(false);
     setIsDragging(true);
     
     // 현재 마우스 위치에서 플레이어 위치를 뺀 오프셋을 저장
@@ -113,6 +116,9 @@ function GlobalVideoPlayer() {
       setIsDragging(false);
       document.body.style.userSelect = '';
       document.body.style.webkitUserSelect = '';
+
+      // 드래그 종료 후 약간의 지연 후 hasDragged 리셋
+      setTimeout(() => setHasDragged(false), 50);
     }
   };
 
@@ -122,16 +128,11 @@ function GlobalVideoPlayer() {
       return;
     }
     
-    // 최소화 상태에서는 드래그 시작하지 않음 (확장 우선)
-    if (minimized) {
-      return;
-    }
-    
-    const touch = e.touches[0];
+    setHasDragged(false);
     setIsDragging(true);
     setDragStart({
-      x: touch.clientX - position.x,
-      y: touch.clientY - position.y
+      x: e.touches[0].clientX - position.x,
+      y: e.touches[0].clientY - position.y
     });
   };
 
@@ -164,6 +165,7 @@ function GlobalVideoPlayer() {
       e.preventDefault();
       e.stopPropagation();
       setIsDragging(false);
+      setTimeout(() => setHasDragged(false), 50);
     }
   };
 
@@ -190,8 +192,8 @@ function GlobalVideoPlayer() {
   useEffect(() => {
     if (minimized) {
       setPosition({
-        x: window.innerWidth - 100,
-        y: window.innerHeight - 100,
+        x: (window.innerWidth - 80) / 2,
+        y: (window.innerHeight - 80) / 2,
       });
     } else {
       setPosition({
@@ -342,6 +344,26 @@ function GlobalVideoPlayer() {
             className="w-16 h-16 bg-gradient-to-br from-red-500 via-red-600 to-red-700 rounded-2xl shadow-2xl flex items-center justify-center border-2 border-white/20 group cursor-pointer backdrop-blur-sm"
             onClick={(e) => {
               e.stopPropagation();
+              if (!hasDragged) {
+                setMinimized(false);
+              }
+            }}
+            onTouchEnd={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              if (!hasDragged) {
+                setMinimized(false);
+              }
+            }}
+            style={{ touchAction: 'manipulation' }}
+          >
+            <FaPlay className="text-white text-3xl" />
+          </div>
+          {/* 최대화 버튼 */}
+          <button
+            className="absolute -top-2 -left-2 w-7 h-7 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-sm flex items-center justify-center shadow-lg transition-all duration-200 z-10"
+            onClick={(e) => {
+              e.stopPropagation();
               setMinimized(false);
             }}
             onTouchEnd={(e) => {
@@ -350,9 +372,11 @@ function GlobalVideoPlayer() {
               setMinimized(false);
             }}
             style={{ touchAction: 'manipulation' }}
+            title="최대화"
           >
-            <FaPlay className="text-white text-3xl" />
-          </div>
+            <FaExpand size={14} />
+          </button>
+          
           {/* 최소화 상태에서도 항상 보이는 닫기 버튼 */}
           <button
             className="absolute -top-2 -right-2 w-7 h-7 bg-gray-800 hover:bg-red-600 text-white rounded-full text-sm flex items-center justify-center shadow-lg transition-all duration-200 z-10"
