@@ -705,7 +705,7 @@ function ChatRoom() {
               <div className="flex-1 min-w-0">
                 <div className="font-bold text-base truncate">{video.title}</div>
                 <div className="text-xs text-gray-500">{video.channel}</div>
-                <div className="text-xs text-gray-400">등록자: {video.registeredBy}</div>
+                <div className="text-xs text-gray-400">{video.durationDisplay || '시간 미확인'}</div>
               </div>
               {certifiedVideoIds.includes(video.id) ? (
                 <button

@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { db } from '../../../firebase';
-import { collection, query, orderBy, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, doc, getDoc, where, onSnapshot } from 'firebase/firestore';
 import { CATEGORY_KEYWORDS } from '../utils/constants';
 import { useWatchedVideos } from '../../../contexts/WatchedVideosContext';
+import { computeUniqueVideos } from '../utils/dataProcessing';
+import { filterVideosByRecommendedCategories } from '../utils/dataProcessing';
 
 // YouTube API에서 영상 정보 가져오기
 const fetchYoutubeVideoInfo = async (videoId) => {
@@ -68,6 +70,47 @@ const getDurationType = (duration) => {
   }
   
   return 'short'; // 기본값
+};
+
+// 모든 사용자의 시청 데이터를 집계해서 총 시청 횟수 계산
+const calculateTotalViewCounts = async (videos) => {
+  try {
+    console.log('📊 [useUcraVideos] 총 시청 횟수 계산 시작...');
+    const viewCounts = {};
+    
+    // 모든 사용자 가져오기
+    const usersSnapshot = await getDocs(collection(db, 'users'));
+    
+    for (const userDoc of usersSnapshot.docs) {
+      try {
+        const watchedVideosSnapshot = await getDocs(collection(db, 'users', userDoc.id, 'watchedVideos'));
+        
+        watchedVideosSnapshot.forEach(watchedDoc => {
+          const watchedData = watchedDoc.data();
+          const videoId = watchedDoc.id;
+          const watchCount = watchedData.watchCount || 0;
+          
+          if (watchCount > 0) {
+            viewCounts[videoId] = (viewCounts[videoId] || 0) + watchCount;
+          }
+        });
+      } catch (error) {
+        console.error(`❌ [useUcraVideos] 사용자 ${userDoc.id} 시청 데이터 조회 실패:`, error);
+      }
+    }
+    
+    console.log('✅ [useUcraVideos] 총 시청 횟수 계산 완료:', viewCounts);
+    
+    // 영상 데이터에 계산된 총 시청 횟수 반영
+    return videos.map(video => ({
+      ...video,
+      ucraViewCount: viewCounts[video.videoId] || 0
+    }));
+    
+  } catch (error) {
+    console.error('❌ [useUcraVideos] 총 시청 횟수 계산 실패:', error);
+    return videos;
+  }
 };
 
 export const useUcraVideos = (userCategory = null) => {
@@ -340,9 +383,9 @@ export const useUcraVideos = (userCategory = null) => {
                   videoId: v.videoId || v.id,
                   title: v.title || '제목 없음',
                   thumbnail: v.thumbnail || v.thumbnailUrl || `https://img.youtube.com/vi/${v.videoId || v.id}/mqdefault.jpg`,
-                  channel: v.channelTitle || v.channel || userData.displayName || '채널명 없음',
+                  channel: v.channelTitle || v.channel || '채널명 없음',
                   channelId: v.channelId || userUid,
-                  channelTitle: v.channelTitle || v.channel || userData.displayName || '채널명 없음',
+                  channelTitle: v.channelTitle || v.channel || '채널명 없음',
                   duration: v.duration,
                   durationSeconds: durationSeconds || 0,
                   durationDisplay: v.durationDisplay || v.duration || '',
@@ -596,9 +639,29 @@ export const useUcraVideos = (userCategory = null) => {
           sampleTitles: filteredVideos.slice(0, 3).map(v => v.title)
         });
         
-        setUcraVideos(filteredVideos);
-        
-        console.log('🚨 [useUcraVideos] setUcraVideos 완료');
+        // 🎬 디버깅용: 최종 영상 리스트 로그 (5개만)
+        console.log('🏁 [useUcraVideos] 최종 영상 리스트 (처음 5개):');
+        filteredVideos.slice(0, 5).forEach((video, index) => {
+          console.log(`🎥 ${index + 1}.`, {
+            title: video.title?.substring(0, 30) + '...',
+            videoId: video.videoId,
+            channel: video.channelTitle || video.channel,
+            duration: video.durationDisplay || video.duration,
+            type: video.type,
+            ucraViewCount: video.ucraViewCount,
+            roomName: video.roomName
+          });
+        });
+
+        // 📊 실시간으로 총 시청 횟수 계산 적용
+        console.log('📊 [useUcraVideos] 실시간 총 시청 횟수 계산 시작...');
+        const videosWithTotalCounts = await calculateTotalViewCounts(filteredVideos);
+        console.log('✅ [useUcraVideos] 총 시청 횟수 계산 완료');
+
+        // 업데이트된 영상 리스트로 상태 설정
+        setUcraVideos(videosWithTotalCounts);
+        setLoadingUcraVideos(false);
+        setError(null);
       } catch (err) {
         console.error('❌ [useUcraVideos] Error fetching videos:', err);
         setError('영상을 불러오는 중 오류가 발생했습니다.');

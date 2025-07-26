@@ -270,7 +270,7 @@ export const ViewerList = ({ onMessageClick }) => {
                               {video.title || '제목 없음'}
                             </p>
                             <p className="text-xs text-gray-500 mt-1">
-                              {video.channelTitle || '채널명 없음'} • {video.durationDisplay || '시간 미확인'}
+                              {video.durationDisplay || '시간 미확인'}
                             </p>
                           </div>
                           <button

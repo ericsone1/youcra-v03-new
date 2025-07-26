@@ -218,7 +218,7 @@ export const ExpandedPlayerUI = ({
               {video.title}
             </h3>
             <p className="text-xs text-gray-600 font-medium">
-              {video.channelTitle || video.channel || '채널명'}
+              {video.durationDisplay || '시간 미확인'}
             </p>
           </div>
         </div>

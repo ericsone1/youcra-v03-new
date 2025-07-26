@@ -208,10 +208,10 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
                         {video.title || '제목 없음'}
                       </h3>
                       
-                      {/* 채널명 */}
+                      {/* 영상 길이 */}
                       <div className="flex items-center mb-1">
                         <p className="text-xs text-gray-600 font-medium">
-                          {video.channelTitle || video.channel || '채널명 없음'}
+                          {video.durationDisplay || '시간 미확인'}
                         </p>
                       </div>
                       
@@ -284,10 +284,10 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
                     {video.title || '제목 없음'}
                   </h3>
                   
-                  {/* 채널명 */}
+                  {/* 영상 길이 */}
                   <div className="flex items-center mb-2">
-                    <p className="text-sm text-gray-600 font-medium hover:text-gray-900 cursor-pointer">
-                      {video.channelTitle || video.channel || '채널명 없음'}
+                    <p className="text-sm text-gray-600 font-medium">
+                      {video.durationDisplay || '시간 미확인'}
                     </p>
                   </div>
                   
@@ -343,7 +343,7 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
                   {/* 정보 */}
                   <div className="flex-1 min-w-0">
                     <h3 className="text-sm font-semibold text-gray-800 line-clamp-2 mb-1 leading-snug">{video.title}</h3>
-                    <p className="text-xs text-gray-600 mb-2">{video.channelTitle || video.channel || '채널명 없음'}</p>
+                    <p className="text-xs text-gray-600 mb-2">{video.durationDisplay || '시간 미확인'}</p>
                     <div className="flex items-center gap-2">
                       <CountdownButton videoId={videoId} onTimeUp={handleTimeUp} />
                       <span className="text-xs text-gray-500">시청 {watchCount}회</span>
@@ -646,7 +646,7 @@ export const WatchVideoList = ({
               
               {/* 하단: 부가정보 */}
               <div className="flex items-center justify-between text-xs text-gray-500 pt-2 border-t border-gray-100">
-                <span className="truncate">{video.channelTitle}</span>
+                <span className="truncate">{video.durationDisplay || '시간 미확인'}</span>
                 <div className="flex items-center gap-2 text-xs text-gray-400 ml-2">
                   <span>유크라 플레이 {video.ucraViewCount?.toLocaleString() || '0'}회</span>
                   <span>•</span>

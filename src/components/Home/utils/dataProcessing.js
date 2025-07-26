@@ -198,9 +198,16 @@ export function computeUniqueVideos(videos = []) {
   const uniqueMap = new Map();
   videos.forEach(video => {
     const key = video?.id || video?.videoId;
-    if (!key) return; // id가 없으면 건너뜀
+    if (!key) return;
     if (!uniqueMap.has(key)) {
       uniqueMap.set(key, video);
+    } else {
+      const existing = uniqueMap.get(key);
+      const existingCount = existing?.ucraViewCount || 0;
+      const newCount = video?.ucraViewCount || 0;
+      if (newCount > existingCount) {
+        uniqueMap.set(key, video);
+      }
     }
   });
   return Array.from(uniqueMap.values());

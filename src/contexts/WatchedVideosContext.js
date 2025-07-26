@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { collection, doc, onSnapshot, serverTimestamp, setDoc, getDocs, query, where, updateDoc } from 'firebase/firestore';
+import { collection, doc, onSnapshot, serverTimestamp, setDoc, getDocs, query, where, updateDoc, increment } from 'firebase/firestore';
 import { useAuth } from '../hooks/useAuth';
 import { db } from '../firebase';
 
@@ -120,59 +120,44 @@ export const WatchedVideosProvider = ({ children }) => {
   // 유크라 조회수 업데이트 함수
   const updateUcraViewCount = async (videoId) => {
     if (!videoId) return;
-    
     try {
-      console.log('📊 [WatchedVideosContext] 유크라 조회수 업데이트 시작:', videoId);
-      
-      // 1. 모든 채팅방에서 해당 영상 찾기
-      const roomsQuery = query(collection(db, "chatRooms"));
-      const roomsSnapshot = await getDocs(roomsQuery);
-      
+      console.log('📊 [WatchedVideosContext] 유크라 조회수 업데이트 시작 (ALL DOCS):', videoId);
+
+      // 1. 모든 채팅방의 영상 문서 업데이트
+      const roomsSnapshot = await getDocs(collection(db, 'chatRooms'));
       for (const roomDoc of roomsSnapshot.docs) {
         const videosQuery = query(
-          collection(db, "chatRooms", roomDoc.id, "videos"),
-          where("videoId", "==", videoId)
+          collection(db, 'chatRooms', roomDoc.id, 'videos'),
+          where('videoId', '==', videoId)
         );
         const videosSnapshot = await getDocs(videosQuery);
-        
-        if (!videosSnapshot.empty) {
-          const videoDoc = videosSnapshot.docs[0];
-          const videoData = videoDoc.data();
-          const currentCount = videoData.ucraViewCount || 0;
-          const newCount = currentCount + 1;
-          
-          // Firestore 업데이트
-          await updateDoc(doc(db, "chatRooms", roomDoc.id, "videos", videoDoc.id), {
-            ucraViewCount: newCount,
-            lastViewedAt: serverTimestamp()
-          });
-          
-          console.log(`✅ [WatchedVideosContext] 유크라 조회수 업데이트 완료: ${videoId} (${currentCount} → ${newCount})`);
-          return; // 첫 번째로 찾은 영상만 업데이트
+        for (const videoDoc of videosSnapshot.docs) {
+          try {
+            await updateDoc(doc(db, 'chatRooms', roomDoc.id, 'videos', videoDoc.id), {
+              ucraViewCount: increment(1),
+              lastViewedAt: serverTimestamp(),
+            });
+          } catch (err) {
+            console.error('❌ [WatchedVideosContext] 채팅방 영상 조회수 업데이트 실패:', err);
+          }
         }
       }
-      
-      // 2. 루트 videos 컬렉션에서도 찾기
-      const rootVideosQuery = query(
-        collection(db, "videos"),
-        where("videoId", "==", videoId)
-      );
+
+      // 2. 루트 videos 컬렉션 영상 문서 업데이트
+      const rootVideosQuery = query(collection(db, 'videos'), where('videoId', '==', videoId));
       const rootVideosSnapshot = await getDocs(rootVideosQuery);
-      
-      if (!rootVideosSnapshot.empty) {
-        const videoDoc = rootVideosSnapshot.docs[0];
-        const videoData = videoDoc.data();
-        const currentCount = videoData.ucraViewCount || 0;
-        const newCount = currentCount + 1;
-        
-        // Firestore 업데이트
-        await updateDoc(doc(db, "videos", videoDoc.id), {
-          ucraViewCount: newCount,
-          lastViewedAt: serverTimestamp()
-        });
-        
-        console.log(`✅ [WatchedVideosContext] 루트 영상 유크라 조회수 업데이트 완료: ${videoId} (${currentCount} → ${newCount})`);
+      for (const videoDoc of rootVideosSnapshot.docs) {
+        try {
+          await updateDoc(doc(db, 'videos', videoDoc.id), {
+            ucraViewCount: increment(1),
+            lastViewedAt: serverTimestamp(),
+          });
+        } catch (err) {
+          console.error('❌ [WatchedVideosContext] 루트 영상 조회수 업데이트 실패:', err);
+        }
       }
+
+      console.log('✅ [WatchedVideosContext] 유크라 조회수 전체 업데이트 완료');
     } catch (error) {
       console.error('❌ [WatchedVideosContext] 유크라 조회수 업데이트 실패:', error);
     }

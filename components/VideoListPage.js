@@ -67,7 +67,7 @@ function VideoListPage() {
             <div className="flex-1 min-w-0">
               <div className="font-bold text-base truncate">{video.title}</div>
               <div className="text-xs text-gray-500">{video.channel}</div>
-              <div className="text-xs text-gray-400">등록자: {video.registeredBy}</div>
+              <div className="text-xs text-gray-400">{video.durationDisplay || '시간 미확인'}</div>
             </div>
             {certifiedIds.includes(video.id) ? (
               <span className="bg-green-500 text-white text-xs px-2 py-1 rounded font-bold">시청 완료</span>

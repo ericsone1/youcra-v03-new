@@ -453,7 +453,7 @@ function GlobalVideoPlayer() {
                   {currentVideo.title}
                 </h3>
                 <p className="text-xs text-gray-600 font-medium">
-                  {currentVideo.channelTitle || currentVideo.channel || '채널명'}
+                  {currentVideo.durationDisplay || '시간 미확인'}
                 </p>
               </div>
             </div>
