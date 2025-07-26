@@ -20,13 +20,28 @@ function formatDuration(duration) {
     return duration;
   }
   
-  // 숫자로 변환
-  const seconds = parseInt(duration);
-  if (!seconds || isNaN(seconds) || seconds <= 0) return '시간 미확인';
+  // ISO 8601 포맷 처리 (PT5M8S 등)
+  if (typeof duration === 'string' && duration.startsWith('PT')) {
+    const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+    if (match) {
+      const hours = parseInt(match[1] || 0);
+      const minutes = parseInt(match[2] || 0);
+      const seconds = parseInt(match[3] || 0);
+      
+      if (hours > 0) {
+        return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      }
+      return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+  }
   
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
+  // 숫자로 변환
+  const secondsNum = parseInt(duration);
+  if (!secondsNum || isNaN(secondsNum) || secondsNum <= 0) return '시간 미확인';
+  
+  const h = Math.floor(secondsNum / 3600);
+  const m = Math.floor((secondsNum % 3600) / 60);
+  const s = Math.floor(secondsNum % 60);
   
   if (h > 0) {
     return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
@@ -52,10 +67,25 @@ function formatDate(date) {
   } else if (date instanceof Date) {
     d = date;
   }
-  if (!d || isNaN(d)) return '날짜 미확인';
+  if (!d || isNaN(d)) {
+    console.log('🐛 [formatDate] 날짜 파싱 실패:', { date, type: typeof date });
+    return '날짜 미확인';
+  }
   
   const now = new Date();
   const diffSec = Math.floor((now - d) / 1000);
+  
+  // 디버깅: 1년 전으로 표시되는 경우 로그 출력
+  if (diffSec > 365 * 24 * 60 * 60) {
+    console.log('🐛 [formatDate] 1년 이상 차이 발견:', {
+      원본날짜: date,
+      파싱된날짜: d.toISOString(),
+      현재시간: now.toISOString(),
+      차이초: diffSec,
+      차이일: Math.floor(diffSec / (24 * 60 * 60))
+    });
+  }
+  
   if (diffSec < 60) return '방금 전';
   const diffMin = Math.floor(diffSec / 60);
   if (diffMin < 60) return `${diffMin}분 전`;

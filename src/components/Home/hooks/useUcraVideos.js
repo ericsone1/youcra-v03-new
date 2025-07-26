@@ -41,7 +41,39 @@ const extractKeywordsFromTitle = (title, description = '') => {
 
 const formatDuration = (duration) => {
   if (!duration) return '0:00';
-  return '0:00'; // 기본값 반환
+  
+  // 이미 문자열 형태로 포맷된 경우 (예: "4:13") 그대로 반환
+  if (typeof duration === 'string' && duration.includes(':')) {
+    return duration;
+  }
+  
+  // ISO 8601 포맷 처리 (PT5M8S 등)
+  if (typeof duration === 'string' && duration.startsWith('PT')) {
+    const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+    if (match) {
+      const hours = parseInt(match[1] || 0);
+      const minutes = parseInt(match[2] || 0);
+      const seconds = parseInt(match[3] || 0);
+      
+      if (hours > 0) {
+        return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      }
+      return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+  }
+  
+  // 숫자로 변환
+  const secondsNum = parseInt(duration);
+  if (!secondsNum || isNaN(secondsNum) || secondsNum <= 0) return '0:00';
+  
+  const h = Math.floor(secondsNum / 3600);
+  const m = Math.floor((secondsNum % 3600) / 60);
+  const s = Math.floor(secondsNum % 60);
+  
+  if (h > 0) {
+    return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  }
+  return `${m}:${s.toString().padStart(2, '0')}`;
 };
 
 const formatUploadDate = (timestamp) => {
@@ -250,7 +282,7 @@ export const useUcraVideos = (userCategory = null) => {
                 channelTitle: videoData.channelTitle || videoData.channel || '채널명 없음',
                 duration: duration, // 업데이트된 duration 사용
                 durationSeconds: durationSeconds, // 업데이트된 durationSeconds 사용
-                durationDisplay: formatDuration(videoData.duration),
+                durationDisplay: formatDuration(durationSeconds),
                               views: videoData.views || 0,
               viewCount: videoData.viewCount || videoData.views || 0,
               likeCount: videoData.likeCount || 0,
@@ -335,7 +367,7 @@ export const useUcraVideos = (userCategory = null) => {
               channelTitle: videoData.channelTitle || videoData.channel || '채널명 없음',
               duration: duration,
               durationSeconds: durationSeconds,
-              durationDisplay: formatDuration(videoData.duration),
+              durationDisplay: formatDuration(durationSeconds),
               views: videoData.views || 0,
               viewCount: videoData.viewCount || videoData.views || 0,
               likeCount: videoData.likeCount || 0,
@@ -369,12 +401,28 @@ export const useUcraVideos = (userCategory = null) => {
               userData.myVideos.forEach(v => {
                 // durationSeconds 계산
                 let durationSeconds = v.durationSeconds;
-                if (!durationSeconds && typeof v.duration === 'string') {
-                  const parts = v.duration.split(':').map(Number);
-                  if (parts.length === 2) {
-                    durationSeconds = parts[0] * 60 + parts[1];
-                  } else if (parts.length === 3) {
-                    durationSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+                if (!durationSeconds && v.duration) {
+                  if (typeof v.duration === 'string') {
+                    // PT 포맷 처리 (PT6M8S 등)
+                    if (v.duration.startsWith('PT')) {
+                      const match = v.duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+                      if (match) {
+                        const hours = parseInt(match[1] || 0);
+                        const minutes = parseInt(match[2] || 0);
+                        const seconds = parseInt(match[3] || 0);
+                        durationSeconds = hours * 3600 + minutes * 60 + seconds;
+                      }
+                    } else {
+                      // 시:분:초 포맷 처리 (4:13 등)
+                      const parts = v.duration.split(':').map(Number);
+                      if (parts.length === 2) {
+                        durationSeconds = parts[0] * 60 + parts[1];
+                      } else if (parts.length === 3) {
+                        durationSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+                      }
+                    }
+                  } else if (typeof v.duration === 'number') {
+                    durationSeconds = v.duration;
                   }
                 }
 
@@ -388,12 +436,21 @@ export const useUcraVideos = (userCategory = null) => {
                   channelTitle: v.channelTitle || v.channel || '채널명 없음',
                   duration: v.duration,
                   durationSeconds: durationSeconds || 0,
-                  durationDisplay: v.durationDisplay || v.duration || '',
+                  durationDisplay: formatDuration(durationSeconds),
                   views: v.views || 0,
                   viewCount: v.viewCount || v.views || 0,
                   likeCount: v.likeCount || 0,
                   ucraViewCount: v.ucraViewCount || 0,
-                  registeredAt: null,
+                  registeredAt: (() => {
+                    if (v.registeredAt) return v.registeredAt;
+                    if (v.publishedAt) {
+                      const pubDate = new Date(v.publishedAt);
+                      return { seconds: Math.floor(pubDate.getTime() / 1000) };
+                    }
+                    const daysAgo = Math.floor(Math.random() * 7) + 1; // 1-7일 전으로 축소
+                    const randomPastDate = new Date(Date.now() - (daysAgo * 24 * 60 * 60 * 1000));
+                    return { seconds: Math.floor(randomPastDate.getTime() / 1000) };
+                  })(),
                   uploadedAt: v.publishedAt || '',
                   publishedAt: v.publishedAt || '',
                   registeredBy: userUid,

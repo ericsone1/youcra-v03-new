@@ -8,7 +8,7 @@ const formatDuration = (duration) => {
   
   // YouTube 형식 (PT1M30S)을 초 단위로 변환
   if (typeof duration === 'string' && duration.startsWith('PT')) {
-    const match = duration.match(/PT(?:(\\d+)H)?(?:(\\d+)M)?(?:(\\d+)S)?/);
+    const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
     if (match) {
       const hours = parseInt(match[1] || 0);
       const minutes = parseInt(match[2] || 0);
