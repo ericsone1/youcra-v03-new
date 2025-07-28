@@ -6,6 +6,7 @@ import { ToastProvider } from "./contexts/ToastContext";
 import ToastContainer from './components/ToastContainer';
 import { AuthProvider } from "./contexts/AuthContext";
 import { VideoPlayerProvider } from "./contexts/VideoPlayerContext";
+import { VideoDurationProvider } from "./contexts/VideoDurationContext";
 import { ProtectedRoute } from "./components/common/ProtectedRoute";
 import { LoadingSpinner } from "./components/common/LoadingSpinner";
 import Navigation from "./components/common/Navigation";
@@ -99,8 +100,9 @@ function App() {
     <AuthProvider>
       <WatchedVideosProvider>
         <VideoPlayerProvider>
-          <ToastProvider>
-            <InAppBrowserHandler>
+          <VideoDurationProvider>
+            <ToastProvider>
+              <InAppBrowserHandler>
               <Router>
                 <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 relative overflow-hidden">
                 {/* 배경 장식 요소 */}
@@ -384,6 +386,7 @@ function App() {
             </Router>
             </InAppBrowserHandler>
           </ToastProvider>
+        </VideoDurationProvider>
         </VideoPlayerProvider>
       </WatchedVideosProvider>
     </AuthProvider>

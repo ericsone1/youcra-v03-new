@@ -4,7 +4,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useVideoPlayer } from '../../contexts/VideoPlayerContext';
 import { useWatchedVideos } from '../../contexts/WatchedVideosContext';
+import { useSetVideoDuration } from '../../contexts/VideoDurationContext';
 import { CERT_STAGES, handleCertificationComplete, handleVideoStateChange } from './VideoPlayerUtils';
+import { formatDuration } from '../../services/videoDurationService';
 
 // 비디오 플레이어 상태 관리 훅
 export const useVideoPlayerState = (video, videoQueue, currentIndex) => {
@@ -102,8 +104,11 @@ export const useVideoEventHandlers = (
   setWatchInterval,
   setCertificationTimer,
   setShowCertificationDelay,
-  showCountdown
+  showCountdown,
+  videoId
 ) => {
+  const { setDuration } = useSetVideoDuration();
+  
   const handleReady = (event) => {
     console.log('[YouTube Player Ready]', event);
     
@@ -113,6 +118,15 @@ export const useVideoEventHandlers = (
         if (duration && duration > 0) {
           console.log('[YouTube Duration]', duration);
           setActualDuration(duration);
+          
+          // Context에 duration 저장
+          if (videoId) {
+            setDuration(videoId, {
+              formatted: formatDuration(duration),
+              seconds: duration,
+              raw: duration
+            });
+          }
         } else {
           setTimeout(tryGetDuration, 1000);
         }

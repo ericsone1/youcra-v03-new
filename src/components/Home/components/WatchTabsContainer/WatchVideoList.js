@@ -12,15 +12,31 @@ import {
 import { FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import ChannelNameWithBadge from '../../../ChannelNameWithBadge';
 import { useVideoPlayer } from '../../../../contexts/VideoPlayerContext';
+// import { useVideoDuration } from '../../../../contexts/VideoDurationContext';
 
 // 영상 길이(초)를 시:분:초 또는 분:초로 변환
 function formatDuration(duration) {
   // 이미 문자열 형태로 포맷된 경우 (예: "4:13") 그대로 반환
-  if (typeof duration === 'string' && duration.includes(':')) {
+  if (typeof duration === 'string' && duration.includes(':') && !duration.includes('PT')) {
     return duration;
   }
   
-  // 숫자로 변환
+  // YouTube API ISO 8601 형식 처리 (예: "PT6M8S", "PT2M56S")
+  if (typeof duration === 'string' && duration.startsWith('PT')) {
+    const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+    if (match) {
+      const hours = parseInt(match[1]) || 0;
+      const minutes = parseInt(match[2]) || 0;
+      const seconds = parseInt(match[3]) || 0;
+      
+      if (hours > 0) {
+        return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+      }
+      return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    }
+  }
+  
+  // 숫자로 변환 (초 단위)
   const seconds = parseInt(duration);
   if (!seconds || isNaN(seconds) || seconds <= 0) return '시간 미확인';
   
@@ -411,6 +427,9 @@ export const WatchVideoList = ({
   const { ucraVideos, loadingUcraVideos, error } = useUcraVideos();
   const { watchedMap, canRewatch, getTimeUntilRewatch } = useWatchedVideos();
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  
+  // Context에서 duration 가져오기 (임시 비활성화)
+  // const getVideoDuration = useVideoDuration;
 
   // 🚨 props 디버깅
   console.log('🚨 [WatchVideoList] 받은 props:', {
@@ -496,20 +515,36 @@ export const WatchVideoList = ({
     sampleTypes: displayVideos.slice(0, 3).map(v => ({ title: v.title?.substring(0, 20), type: v.type, durationSeconds: v.durationSeconds }))
   });
 
-  // 정렬 적용 (조회수 정렬은 Firestore 값만 사용)
+  // 유크라 기준 정렬 적용
+  console.log(`🔄 [정렬] ${sortKey} 기준으로 정렬 시작`);
   displayVideos = [...displayVideos].sort((a, b) => {
     if (sortKey === 'duration') {
+      // 영상 길이순 (짧은 것부터)
       const aDuration = (typeof a.durationSeconds === 'number' ? a.durationSeconds : a.duration) || 0;
       const bDuration = (typeof b.durationSeconds === 'number' ? b.durationSeconds : b.duration) || 0;
+      console.log(`📏 [영상길이] ${a.title?.substring(0, 15)}: ${aDuration}초, ${b.title?.substring(0, 15)}: ${bDuration}초`);
       return aDuration - bDuration;
     } else if (sortKey === 'views') {
-      return (b.viewCount || b.views || 0) - (a.viewCount || a.views || 0);
+      // 유크라 조회수순 (높은 것부터)
+      const aViews = a.ucraViewCount || 0;
+      const bViews = b.ucraViewCount || 0;
+      console.log(`👀 [유크라조회수] ${a.title?.substring(0, 15)}: ${aViews}회, ${b.title?.substring(0, 15)}: ${bViews}회`);
+      return bViews - aViews;
     } else {
-      const aTime = a.registeredAt?.seconds || 0;
-      const bTime = b.registeredAt?.seconds || 0;
+      // 최신순 (유크라 등록일 기준)
+      const aTime = a.registeredAt?.seconds || a.registeredAt?.getTime?.() || 0;
+      const bTime = b.registeredAt?.seconds || b.registeredAt?.getTime?.() || 0;
+      console.log(`📅 [등록일] ${a.title?.substring(0, 15)}: ${aTime}, ${b.title?.substring(0, 15)}: ${bTime}`);
       return bTime - aTime;
     }
   });
+  
+  console.log(`✅ [정렬] ${sortKey} 기준 정렬 완료, 상위 3개:`, displayVideos.slice(0, 3).map(v => ({
+    title: v.title?.substring(0, 20),
+    duration: sortKey === 'duration' ? `${v.durationSeconds}초` : '',
+    views: sortKey === 'views' ? `${v.ucraViewCount}회` : '',
+    registered: sortKey === 'latest' ? v.registeredAt?.seconds || v.registeredAt?.getTime?.() : ''
+  })));
 
   // 🔀 재시청 가능/불가에 따라 잠긴 영상은 항상 맨 아래로 이동
   const activeVideos = [];
@@ -646,7 +681,17 @@ export const WatchVideoList = ({
               
               {/* 하단: 부가정보 */}
               <div className="flex items-center justify-between text-xs text-gray-500 pt-2 border-t border-gray-100">
-                <span className="truncate">{video.durationDisplay || '시간 미확인'}</span>
+                <span className="truncate">{(() => {
+                  // 디버깅: 실제 duration 값들 확인
+                  const finalDisplay = video.durationDisplay || formatDuration(video.durationSeconds) || '시간 미확인';
+                  console.log(`⏱️ [Duration Display] ${video.title?.substring(0, 15)}:`, {
+                    durationDisplay: video.durationDisplay,
+                    durationSeconds: video.durationSeconds,
+                    duration: video.duration,
+                    finalDisplay: finalDisplay
+                  });
+                  return finalDisplay;
+                })()}</span>
                 <div className="flex items-center gap-2 text-xs text-gray-400 ml-2">
                   <span>유크라 플레이 {video.ucraViewCount?.toLocaleString() || '0'}회</span>
                   <span>•</span>

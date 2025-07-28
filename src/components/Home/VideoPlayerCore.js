@@ -102,7 +102,8 @@ export default function VideoPlayerCore({
     setWatchInterval,
     setCertificationTimer,
     setShowCertificationDelay,
-    showCountdown
+    showCountdown,
+    video?.videoId
   );
 
   // 영상 큐 관리
