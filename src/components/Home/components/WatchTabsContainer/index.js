@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { WatchVideoList } from './WatchVideoList';
-import { ViewerList } from './ViewerList';
+import ViewerList from './ViewerList';
 import { TabButtons } from './TabButtons';
 import { useAuth } from '../../../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
