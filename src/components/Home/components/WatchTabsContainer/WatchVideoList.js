@@ -431,21 +431,10 @@ export const WatchVideoList = ({
   // Context에서 duration 가져오기 (임시 비활성화)
   // const getVideoDuration = useVideoDuration;
 
-  // 🚨 props 디버깅
-  console.log('🚨 [WatchVideoList] 받은 props:', {
-    videoFilter: videoFilter,
-    sortKey: sortKey,
-    propsDebug: { videoFilter, sortKey }
-  });
-
-  // 🚨 useUcraVideos 상태 디버깅
-  console.log('🚨 [WatchVideoList] useUcraVideos 상태:', {
-    ucraVideos: ucraVideos,
-    ucraVideosLength: ucraVideos?.length || 0,
-    loadingUcraVideos: loadingUcraVideos,
-    error: error,
-    isArray: Array.isArray(ucraVideos)
-  });
+  // props 검증 (최소화)
+  if (!ucraVideos && !loadingUcraVideos) {
+    console.warn('⚠️ [WatchVideoList] ucraVideos 데이터 없음');
+  }
 
   // 🔄 useUcraVideos에서 이미 모든 사용자의 영상을 가져오므로 selectedVideos는 무시
   // useUcraVideos에는 이미 다음이 포함됨:
@@ -516,35 +505,29 @@ export const WatchVideoList = ({
   });
 
   // 유크라 기준 정렬 적용
-  console.log(`🔄 [정렬] ${sortKey} 기준으로 정렬 시작`);
   displayVideos = [...displayVideos].sort((a, b) => {
     if (sortKey === 'duration') {
       // 영상 길이순 (짧은 것부터)
       const aDuration = (typeof a.durationSeconds === 'number' ? a.durationSeconds : a.duration) || 0;
       const bDuration = (typeof b.durationSeconds === 'number' ? b.durationSeconds : b.duration) || 0;
-      console.log(`📏 [영상길이] ${a.title?.substring(0, 15)}: ${aDuration}초, ${b.title?.substring(0, 15)}: ${bDuration}초`);
       return aDuration - bDuration;
     } else if (sortKey === 'views') {
       // 유크라 조회수순 (높은 것부터)
       const aViews = a.ucraViewCount || 0;
       const bViews = b.ucraViewCount || 0;
-      console.log(`👀 [유크라조회수] ${a.title?.substring(0, 15)}: ${aViews}회, ${b.title?.substring(0, 15)}: ${bViews}회`);
       return bViews - aViews;
     } else {
       // 최신순 (유크라 등록일 기준)
       const aTime = a.registeredAt?.seconds || a.registeredAt?.getTime?.() || 0;
       const bTime = b.registeredAt?.seconds || b.registeredAt?.getTime?.() || 0;
-      console.log(`📅 [등록일] ${a.title?.substring(0, 15)}: ${aTime}, ${b.title?.substring(0, 15)}: ${bTime}`);
       return bTime - aTime;
     }
   });
   
-  console.log(`✅ [정렬] ${sortKey} 기준 정렬 완료, 상위 3개:`, displayVideos.slice(0, 3).map(v => ({
-    title: v.title?.substring(0, 20),
-    duration: sortKey === 'duration' ? `${v.durationSeconds}초` : '',
-    views: sortKey === 'views' ? `${v.ucraViewCount}회` : '',
-    registered: sortKey === 'latest' ? v.registeredAt?.seconds || v.registeredAt?.getTime?.() : ''
-  })));
+  // 정렬 결과 요약 (개발환경에서만)
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`✅ [정렬완료] ${sortKey} 기준, 총 ${displayVideos.length}개 영상`);
+  }
 
   // 🔀 재시청 가능/불가에 따라 잠긴 영상은 항상 맨 아래로 이동
   const activeVideos = [];
@@ -602,14 +585,10 @@ export const WatchVideoList = ({
           const videoId = video.videoId || video.id;
           const canWatchNow = canRewatch(videoId);
           
-          // 디버깅: 쇼츠 분류 확인
-          console.log(`🎬 [영상] 쇼츠 분류:`, {
-            title: video.title,
-            type: video.type,
-            durationSeconds: video.durationSeconds,
-            isShortVideo: video.type === 'short',
-            durationCheck: video.durationSeconds >= 181 ? '롱폼(181초 이상)' : '쇼츠(181초 미만)'
-          });
+          // 쇼츠 분류 확인 (개발환경에서만 샘플링)
+          if (process.env.NODE_ENV === 'development' && Math.random() < 0.1) {
+            console.log(`🎬 [영상샘플] ${video.title?.substring(0, 15)}: ${video.type} (${video.durationSeconds}초)`);
+          }
           
           return (
             <div
@@ -682,14 +661,13 @@ export const WatchVideoList = ({
               {/* 하단: 부가정보 */}
               <div className="flex items-center justify-between text-xs text-gray-500 pt-2 border-t border-gray-100">
                 <span className="truncate">{(() => {
-                  // 디버깅: 실제 duration 값들 확인
                   const finalDisplay = video.durationDisplay || formatDuration(video.durationSeconds) || '시간 미확인';
-                  console.log(`⏱️ [Duration Display] ${video.title?.substring(0, 15)}:`, {
-                    durationDisplay: video.durationDisplay,
-                    durationSeconds: video.durationSeconds,
-                    duration: video.duration,
-                    finalDisplay: finalDisplay
-                  });
+                  
+                  // 디버깅: 가끔씩만 샘플링 로그
+                  if (process.env.NODE_ENV === 'development' && Math.random() < 0.05) {
+                    console.log(`⏱️ [Duration] ${video.title?.substring(0, 15)}: ${finalDisplay}`);
+                  }
+                  
                   return finalDisplay;
                 })()}</span>
                 <div className="flex items-center gap-2 text-xs text-gray-400 ml-2">

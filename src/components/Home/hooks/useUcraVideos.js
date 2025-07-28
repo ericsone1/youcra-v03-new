@@ -11,7 +11,6 @@ import { filterVideosByRecommendedCategories } from '../utils/dataProcessing';
 const fetchYoutubeVideoInfo = async (videoId) => {
   try {
     const API_KEY = process.env.REACT_APP_YOUTUBE_API_KEY;
-    console.log(`🔑 API_KEY: ${videoId} - ${API_KEY ? '있음' : '없음'}`);
     
     if (!API_KEY) {
       console.warn(`❌ API_KEY 없음: ${videoId}`);
@@ -19,10 +18,7 @@ const fetchYoutubeVideoInfo = async (videoId) => {
     }
     
     const url = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails,snippet&id=${videoId}&key=${API_KEY}`;
-    console.log(`🌐 API 호출: ${videoId}`);
-    
     const response = await fetch(url);
-    console.log(`📡 응답: ${videoId} - ${response.status}`);
     
     if (!response.ok) {
       console.error(`❌ HTTP 에러: ${videoId} - ${response.status}`);
@@ -37,7 +33,6 @@ const fetchYoutubeVideoInfo = async (videoId) => {
     }
     
     if (data.items && data.items.length > 0) {
-      console.log(`✅ 성공: ${videoId} - duration: ${data.items[0].contentDetails?.duration}`);
       return data.items[0];
     }
     
@@ -59,16 +54,12 @@ const extractKeywordsFromTitle = (title, description = '') => {
 };
 
 const formatDuration = (duration) => {
-  console.log('🔍 [formatDuration] 입력값:', duration, '타입:', typeof duration);
-  
   if (!duration) {
-    console.log('❌ [formatDuration] duration이 없음');
     return '0:00';
   }
   
   // YouTube API ISO 8601 형식 처리 (예: "PT6M8S", "PT2M56S")
   if (typeof duration === 'string' && duration.startsWith('PT')) {
-    console.log('📹 [formatDuration] YouTube API 형식 감지:', duration);
     const match = duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
     if (match) {
       const hours = parseInt(match[1]) || 0;
@@ -77,16 +68,13 @@ const formatDuration = (duration) => {
       const result = hours > 0 
         ? `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
         : `${minutes}:${seconds.toString().padStart(2, '0')}`;
-      console.log('✅ [formatDuration] 변환 결과:', result);
       return result;
     }
   }
   
   // 숫자로 변환 (초 단위)
   const seconds = parseInt(duration);
-  console.log('🔢 [formatDuration] 숫자 변환:', seconds);
   if (!seconds || isNaN(seconds) || seconds <= 0) {
-    console.log('❌ [formatDuration] 유효하지 않은 숫자');
     return '0:00';
   }
   
@@ -97,7 +85,6 @@ const formatDuration = (duration) => {
     ? `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
     : `${m}:${s.toString().padStart(2, '0')}`;
   
-  console.log('✅ [formatDuration] 최종 결과:', result);
   return result;
 };
 
@@ -262,8 +249,8 @@ export const useUcraVideos = (userCategory = null) => {
               
               console.log(`🔍 영상 확인: ${videoData.videoId} - duration: ${videoData.duration}`);
               
-              // 항상 YouTube API에서 최신 duration 가져오기
-              if (true) {
+              // duration이 없을 때만 YouTube API에서 가져오기
+              if (!videoData.duration || videoData.duration === 0) {
                 try {
                   const youtubeInfo = await fetchYoutubeVideoInfo(videoData.videoId);
                   
@@ -385,8 +372,8 @@ export const useUcraVideos = (userCategory = null) => {
             
             console.log(`🔍 루트 영상: ${videoData.videoId} - duration: ${videoData.duration}`);
             
-            // 항상 YouTube API에서 최신 duration 가져오기
-            if (true) {
+            // duration이 없을 때만 YouTube API에서 가져오기
+            if (!videoData.duration || videoData.duration === 0) {
               try {
                 const youtubeInfo = await fetchYoutubeVideoInfo(videoData.videoId);
                 
@@ -480,12 +467,10 @@ export const useUcraVideos = (userCategory = null) => {
               userData.myVideos.forEach(v => {
                 // durationSeconds 계산
                 let durationSeconds = v.durationSeconds;
-                console.log(`🔍 [myVideos] ${v.videoId || v.id} - 초기 durationSeconds:`, durationSeconds, 'duration:', v.duration);
                 
                 if (!durationSeconds && v.duration) {
                   if (typeof v.duration === 'number') {
                     durationSeconds = v.duration;
-                    console.log(`✅ [myVideos] 숫자 변환: ${v.videoId || v.id} - ${durationSeconds}초`);
                   } else if (typeof v.duration === 'string') {
                     // ISO 8601 형식 처리 (예: "PT6M8S", "PT2M56S")
                     if (v.duration.startsWith('PT')) {
@@ -495,29 +480,18 @@ export const useUcraVideos = (userCategory = null) => {
                         const minutes = parseInt(match[2] || 0);
                         const seconds = parseInt(match[3] || 0);
                         durationSeconds = hours * 3600 + minutes * 60 + seconds;
-                        console.log(`✅ [myVideos] ISO 변환: ${v.videoId || v.id} - ${durationSeconds}초 (${hours}h ${minutes}m ${seconds}s)`);
-                      } else {
-                        console.warn(`⚠️ [myVideos] ISO 파싱 실패: ${v.videoId || v.id} - ${v.duration}`);
                       }
                     } else if (v.duration.includes(':')) {
                       // "1:30" 형식 처리
                       const parts = v.duration.split(':').map(Number);
                       if (parts.length === 2) {
                         durationSeconds = parts[0] * 60 + parts[1];
-                        console.log(`✅ [myVideos] MM:SS 변환: ${v.videoId || v.id} - ${durationSeconds}초`);
                       } else if (parts.length === 3) {
                         durationSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
-                        console.log(`✅ [myVideos] HH:MM:SS 변환: ${v.videoId || v.id} - ${durationSeconds}초`);
-                      } else {
-                        console.warn(`⚠️ [myVideos] 시간 형식 파싱 실패: ${v.videoId || v.id} - ${v.duration}`);
                       }
-                    } else {
-                      console.warn(`⚠️ [myVideos] 알 수 없는 duration 형식: ${v.videoId || v.id} - ${v.duration}`);
                     }
                   }
                 }
-                
-                console.log(`📊 [myVideos] 최종 결과: ${v.videoId || v.id} - durationSeconds: ${durationSeconds}`);
 
                 allVideos.push({
                   id: v.id || v.videoId,
