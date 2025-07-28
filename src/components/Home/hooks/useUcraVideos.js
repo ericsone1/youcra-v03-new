@@ -508,7 +508,39 @@ export const useUcraVideos = (userCategory = null) => {
                   viewCount: v.viewCount || v.views || 0,
                   likeCount: v.likeCount || 0,
                   ucraViewCount: v.ucraViewCount || 0,
-                  registeredAt: v.registeredAt || v.publishedAt || new Date(),
+                  registeredAt: (() => {
+                    // myVideos의 유크라 추가 시점 처리
+                    if (v.registeredAt) {
+                      // Firebase Timestamp인 경우 (유크라 추가 시점)
+                      if (v.registeredAt.seconds) {
+                        return v.registeredAt;
+                      }
+                      // Date 객체인 경우
+                      if (v.registeredAt instanceof Date) {
+                        return { seconds: v.registeredAt.getTime() / 1000 };
+                      }
+                      // 숫자(timestamp)인 경우
+                      if (typeof v.registeredAt === 'number') {
+                        return { seconds: v.registeredAt / 1000 };
+                      }
+                    }
+                    
+                    // 기존 myVideos (registeredAt이 없는 경우) - fallback 로직 개선
+                    console.warn(`⚠️ [myVideos] "${v.title?.substring(0, 20)}" - registeredAt 없음, fallback 날짜 계산 시도`);
+                    // 1) publishedAt / uploadedAt 필드 시도
+                    const pubDateStr = v.publishedAt || v.uploadedAt;
+                    if (pubDateStr) {
+                      const parsed = new Date(pubDateStr);
+                      if (!isNaN(parsed)) {
+                        console.log(`📅 [myVideos] "${v.title?.substring(0, 20)}" - publishedAt 사용: ${parsed.toLocaleString()}`);
+                        return { seconds: Math.floor(parsed.getTime() / 1000) };
+                      }
+                    }
+                    // 2) 마지막으로 현재 시점 사용 (최후 수단)
+                    const now = new Date();
+                    console.log(`📅 [myVideos] "${v.title?.substring(0, 20)}" - fallback 현재시점 사용: ${now.toLocaleString()}`);
+                    return { seconds: Math.floor(now.getTime() / 1000) };
+                  })(),
                   uploadedAt: v.publishedAt || '',
                   publishedAt: v.publishedAt || '',
                   registeredBy: userUid,
@@ -601,15 +633,46 @@ export const useUcraVideos = (userCategory = null) => {
           최종노출영상: videos.length
         });
 
-        // 🚨 카테고리 필터링 완전 제거 - 모든 영상 표시
-        console.log('🚨 [useUcraVideos] 카테고리 필터링 제거 - 모든 영상 표시');
+        // 🎯 홈탭 전용: 모든 영상 표시 (프로필, 맞시청방 포함)
+        console.log('🎯 [useUcraVideos] 홈탭 전용 - 모든 영상 표시');
+        
+        // 🔍 필터링 전 roomName 확인
+        const roomNames = [...new Set(videos.map(v => v.roomName))];
+        console.log('🏷️ [roomName 종류]:', roomNames);
+        console.log('📋 [상위 3개 영상의 roomName]:', videos.slice(0, 3).map(v => ({
+          title: v.title?.substring(0, 20),
+          roomName: v.roomName
+        })));
+        
+        // 모든 영상을 홈탭에서 표시 (필터링 없음)
         let filteredVideos = videos;
+        console.log(`📊 [필터링] 전체: ${videos.length}개 → 홈탭 표시: ${filteredVideos.length}개`);
         // useUcraVideos에서는 기본 정렬만 (컴포넌트에서 재정렬)
         console.log('🔄 [기본정렬] 등록일 기준 최신순 정렬');
         filteredVideos.sort((a, b) => {
-          const aTime = a.registeredAt?.seconds || a.registeredAt?.getTime?.() || 0;
-          const bTime = b.registeredAt?.seconds || b.registeredAt?.getTime?.() || 0;
-          return bTime - aTime;
+          const getTimestamp = (registeredAt) => {
+            if (!registeredAt) return 0;
+            if (registeredAt.seconds) return registeredAt.seconds * 1000; // Firebase Timestamp → 밀리초
+            if (registeredAt instanceof Date) return registeredAt.getTime(); // Date → 밀리초
+            if (typeof registeredAt === 'number') return registeredAt; // 이미 밀리초라고 가정
+            return 0;
+          };
+          
+          const aTime = getTimestamp(a.registeredAt);
+          const bTime = getTimestamp(b.registeredAt);
+          
+          // 정렬 디버깅 (상위 몇 개만)
+          if (Math.random() < 0.05) {
+            console.log(`🔄 [정렬비교] "${a.title?.substring(0, 15)}" (${aTime}) vs "${b.title?.substring(0, 15)}" (${bTime})`);
+            console.log(`📅 [실제날짜] A: ${aTime ? new Date(aTime).toLocaleString() : '없음'} | B: ${bTime ? new Date(bTime).toLocaleString() : '없음'}`);
+          }
+          
+          // 0인 값들은 맨 뒤로 보내기
+          if (aTime === 0 && bTime === 0) return 0;
+          if (aTime === 0) return 1;  // a를 뒤로
+          if (bTime === 0) return -1; // b를 뒤로
+          
+          return bTime - aTime; // 일반적인 최신순 정렬 (최신이 위로)
         });
 
         console.log('📊 [useUcraVideos] 상위 5개 영상 데이터:', filteredVideos.slice(0, 5).map(v => ({

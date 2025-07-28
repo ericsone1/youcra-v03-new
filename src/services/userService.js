@@ -20,6 +20,20 @@ export async function getUserProfile(userId) {
 // 프로필 업데이트
 export async function updateUserProfile(userId, profileData) {
   const docRef = doc(db, "users", userId);
+  
+  // myVideos가 포함된 경우, 유크라 추가 시점 정보 추가
+  if (profileData.myVideos && Array.isArray(profileData.myVideos)) {
+    const now = new Date();
+    profileData.myVideos = profileData.myVideos.map(video => ({
+      ...video,
+      // 이미 registeredAt이 있는 경우는 유지, 없는 경우만 현재 시점 추가
+      registeredAt: video.registeredAt || {
+        seconds: Math.floor(now.getTime() / 1000),
+        nanoseconds: (now.getTime() % 1000) * 1000000
+      }
+    }));
+  }
+  
   await setDoc(docRef, profileData, { merge: true });
 }
 

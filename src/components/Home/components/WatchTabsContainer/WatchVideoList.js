@@ -51,6 +51,8 @@ function formatDuration(duration) {
 }
 
 function formatDate(date) {
+  console.log('🔍 [formatDate 입력]:', { date, type: typeof date, hasSeconds: date?.seconds });
+  
   if (!date) return '날짜 미확인';
   
   // ISO 문자열 또는 Timestamp 객체를 Date로 변환
@@ -65,6 +67,7 @@ function formatDate(date) {
     if (isNaN(d)) return date; // 파싱 실패시 원본 반환
   } else if (date.seconds) {
     d = new Date(date.seconds * 1000);
+    console.log('🔍 [Firebase Timestamp 변환]:', { seconds: date.seconds, converted: d.toLocaleString() });
   } else if (date instanceof Date) {
     d = date;
   }
@@ -72,6 +75,16 @@ function formatDate(date) {
   
   const now = new Date();
   const diffSec = Math.floor((now - d) / 1000);
+  
+  console.log('🔍 [시간 차이 계산]:', { 
+    now: now.toLocaleString(), 
+    registered: d.toLocaleString(), 
+    diffSec, 
+    diffMin: Math.floor(diffSec / 60),
+    diffHour: Math.floor(diffSec / 3600),
+    diffDay: Math.floor(diffSec / 86400)
+  });
+  
   if (diffSec < 60) return '방금 전';
   const diffMin = Math.floor(diffSec / 60);
   if (diffMin < 60) return `${diffMin}분 전`;
@@ -311,7 +324,24 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
                   <div className="flex items-center text-sm text-gray-500">
                     <span>유크라 플레이 {(video.ucraViewCount || 0).toLocaleString()}회</span>
                     <span className="mx-2">•</span>
-                    <span>{formatDate(video.publishedAt || video.uploadedAt)}</span>
+                    <span>{(() => {
+                      // 디버깅: 실제 registeredAt 값 확인 (모든 영상)
+                      console.log(`📅 [날짜표시] "${video.title?.substring(0, 15)}":`, {
+                        registeredAt: video.registeredAt,
+                        type: typeof video.registeredAt,
+                        hasSeconds: !!video.registeredAt?.seconds,
+                        seconds: video.registeredAt?.seconds,
+                        milliseconds: video.registeredAt?.getTime ? video.registeredAt.getTime() : null,
+                        실제날짜: video.registeredAt?.seconds ? 
+                          new Date(video.registeredAt.seconds * 1000).toLocaleString() : 
+                          (video.registeredAt?.getTime ? new Date(video.registeredAt.getTime()).toLocaleString() : '없음'),
+                        roomName: video.roomName,
+                        videoId: video.videoId
+                                              });
+                        const formattedResult = formatDate(video.registeredAt);
+                        console.log(`🕐 [formatDate 결과] "${video.title?.substring(0, 15)}": "${formattedResult}"`);
+                        return formattedResult;
+                    })()}</span>
                   </div>
                 </div>
 
@@ -505,6 +535,7 @@ export const WatchVideoList = ({
   });
 
   // 유크라 기준 정렬 적용
+  console.log(`🔄 [정렬시작] sortKey: "${sortKey}", 영상수: ${displayVideos.length}`);
   displayVideos = [...displayVideos].sort((a, b) => {
     if (sortKey === 'duration') {
       // 영상 길이순 (짧은 것부터)
@@ -518,15 +549,46 @@ export const WatchVideoList = ({
       return bViews - aViews;
     } else {
       // 최신순 (유크라 등록일 기준)
-      const aTime = a.registeredAt?.seconds || a.registeredAt?.getTime?.() || 0;
-      const bTime = b.registeredAt?.seconds || b.registeredAt?.getTime?.() || 0;
-      return bTime - aTime;
+      const getTimestamp = (registeredAt) => {
+        if (!registeredAt) return 0;
+        if (registeredAt.seconds) return registeredAt.seconds * 1000; // Firebase Timestamp → 밀리초
+        if (registeredAt instanceof Date) return registeredAt.getTime(); // Date → 밀리초
+        if (typeof registeredAt === 'number') return registeredAt; // 이미 밀리초라고 가정
+        return 0;
+      };
+      
+      const aTime = getTimestamp(a.registeredAt);
+      const bTime = getTimestamp(b.registeredAt);
+      
+      // 디버깅: 정렬 비교 로그 (더 자주 출력)
+      if (Math.random() < 0.1) {
+        console.log(`📅 [정렬비교] "${a.title?.substring(0, 15)}" (${aTime}) vs "${b.title?.substring(0, 15)}" (${bTime})`);
+        console.log(`📅 [등록일상세] A: ${JSON.stringify(a.registeredAt)} | B: ${JSON.stringify(b.registeredAt)}`);
+      }
+      
+      // 0인 값들은 맨 뒤로 보내기
+      if (aTime === 0 && bTime === 0) return 0;
+      if (aTime === 0) return 1;  // a를 뒤로
+      if (bTime === 0) return -1; // b를 뒤로
+      
+      return bTime - aTime; // 일반적인 최신순 정렬
     }
   });
   
   // 정렬 결과 요약 (개발환경에서만)
   if (process.env.NODE_ENV === 'development') {
     console.log(`✅ [정렬완료] ${sortKey} 기준, 총 ${displayVideos.length}개 영상`);
+    
+    if (sortKey === 'latest' || sortKey === 'duration') {
+      console.log(`📊 [${sortKey} 결과] 상위 10개 영상:`, displayVideos.slice(0, 10).map((v, idx) => ({
+        순서: idx + 1,
+        title: v.title?.substring(0, 25),
+        registeredAt: v.registeredAt,
+        timeValue: v.registeredAt?.seconds || v.registeredAt?.getTime?.() || 0,
+        roomName: v.roomName,
+        날짜표시: v.registeredAt?.seconds ? new Date(v.registeredAt.seconds * 1000).toLocaleString() : '등록일없음'
+      })));
+    }
   }
 
   // 🔀 재시청 가능/불가에 따라 잠긴 영상은 항상 맨 아래로 이동
@@ -673,7 +735,7 @@ export const WatchVideoList = ({
                 <div className="flex items-center gap-2 text-xs text-gray-400 ml-2">
                   <span>유크라 플레이 {video.ucraViewCount?.toLocaleString() || '0'}회</span>
                   <span>•</span>
-                  <span className="whitespace-nowrap">{formatDate(video.publishedAt || video.uploadedAt)}</span>
+                  <span className="whitespace-nowrap">{formatDate(video.registeredAt)}</span>
                 </div>
               </div>
             </div>

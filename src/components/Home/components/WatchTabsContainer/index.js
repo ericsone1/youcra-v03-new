@@ -76,7 +76,7 @@ export const WatchTabsContainer = (props) => {
   } = props;
   const { currentUser } = useAuth();
   const navigate = useNavigate();
-  const [sortKey, setSortKey] = useState('duration');
+  const [sortKey, setSortKey] = useState('latest');
 
   return (
     <motion.div

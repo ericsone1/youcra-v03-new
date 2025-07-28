@@ -14,6 +14,7 @@ import PerformanceMonitor from "./components/common/PerformanceMonitor";
 import { WatchedVideosProvider } from './contexts/WatchedVideosContext';
 import InAppBrowserHandler from './components/common/InAppBrowserHandler';
 import { checkLatestVideos } from './utils/firebaseDebug';
+import { migrateMyVideos } from './utils/myVideosMigration';
 
 // 공유 링크 처리 컴포넌트
 const SharedLinkHandler = () => {
@@ -42,6 +43,7 @@ const SharedLinkHandler = () => {
     // 개발환경에서 Firebase 디버깅 함수를 전역으로 설정
     if (process.env.NODE_ENV === 'development') {
       window.checkLatestVideos = checkLatestVideos;
+      window.migrateMyVideos = migrateMyVideos;
     }
   }, [location, navigate]);
   
