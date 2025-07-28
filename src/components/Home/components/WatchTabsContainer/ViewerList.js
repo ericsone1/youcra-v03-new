@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useMyVideoViewers } from '../../hooks/useMyVideoViewers';
 import { useVideoPlayer } from '../../../../contexts/VideoPlayerContext';
@@ -9,6 +9,13 @@ export default function ViewerList() {
   const { handleVideoSelect, updateVideoList } = useVideoPlayer();
   const { upsertWatched, watchedMap, canRewatch, getWatchInfo } = useWatchedVideos();
   const [selectedViewer, setSelectedViewer] = useState(null);
+  const [showLoading, setShowLoading] = useState(true);
+
+  // 무조건 최소 5초간 로딩 화면 표시
+  useEffect(() => {
+    const timer = setTimeout(() => setShowLoading(false), 5000);
+    return () => clearTimeout(timer);
+  }, []);
 
 
 
@@ -38,8 +45,8 @@ export default function ViewerList() {
     }
   };
 
-  // 로딩 상태 - 가장 먼저 체크
-  if (loading) {
+  // 무조건 최소 5초간 로딩 화면 표시 (사용자 경험 개선)
+  if (showLoading) {
     return (
       <div className="flex flex-col items-center justify-center py-16 space-y-4">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>

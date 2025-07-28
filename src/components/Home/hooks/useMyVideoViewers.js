@@ -13,6 +13,11 @@ export function useMyVideoViewers() {
   const [loading, setLoading] = useState(true);
   const [viewers, setViewers] = useState([]);
 
+  // 초기 로딩 상태 보장
+  useEffect(() => {
+    setLoading(true);
+  }, []);
+
 
 
   useEffect(() => {
@@ -23,6 +28,7 @@ export function useMyVideoViewers() {
     }
 
     if (loadingUcraVideos || !ucraVideos) {
+      setLoading(true); // 로딩 중일 때 명시적으로 로딩 상태 유지
       return;
     }
 
