@@ -38,41 +38,19 @@ export default function ViewerList() {
     }
   };
 
-  // 로딩 상태 - 가장 먼저 체크
-  if (loading) {
+  // 로딩 중이거나 아직 뷰어 데이터가 없으면 스피너 표시
+  if (loading || viewers.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 space-y-4">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
         <div className="text-center">
-          <p className="text-lg font-medium text-gray-800">영상 시청자 리스트 로딩중...</p>
+          <p className="text-lg font-medium text-gray-800">시청자 정보를 불러오는 중...</p>
           <p className="text-sm text-gray-500 mt-1">잠시만 기다려주세요</p>
         </div>
       </div>
     );
   }
-
-  // 시청자 없음
-  if (viewers.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 space-y-4">
-        <div className="text-6xl mb-4">👥</div>
-        <h3 className="text-xl font-semibold text-gray-800">아직 시청자가 없습니다</h3>
-        <p className="text-gray-500 text-center">
-          내 영상을 시청한 사용자가 있으면 여기에 표시됩니다
-        </p>
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mt-6 max-w-md">
-          <p className="text-sm text-yellow-800">
-            💡 <strong>시청자를 늘리는 방법:</strong>
-          </p>
-          <ul className="text-sm text-yellow-700 mt-2 space-y-1">
-            <li>• 흥미로운 영상을 더 많이 등록하기</li>
-            <li>• 다른 사용자들의 영상 시청하기</li>
-            <li>• 채팅방에서 영상 공유하기</li>
-          </ul>
-        </div>
-      </div>
-    );
-  }
+  // 기존 '시청자 없음' 화면은 제거하여 항상 스피너 유지
 
   // 시청자 리스트 표시
   return (
