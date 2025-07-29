@@ -38,27 +38,14 @@ export default function ViewerList() {
     }
   };
 
-  // 로딩 중일 때만 스피너 표시
-  if (loading) {
+  // 로딩 중이거나 시청자가 없을 때는 계속 로딩 표시
+  if (loading || viewers.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 space-y-4">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
         <div className="text-center">
           <p className="text-lg font-medium text-gray-800">시청자 정보를 불러오는 중...</p>
           <p className="text-sm text-gray-500 mt-1">잠시만 기다려주세요</p>
-        </div>
-      </div>
-    );
-  }
-
-  // 시청자가 없을 때 안내 메시지
-  if (viewers.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 space-y-4">
-        <div className="text-6xl">👥</div>
-        <div className="text-center">
-          <p className="text-lg font-medium text-gray-800">아직 시청자가 없습니다</p>
-          <p className="text-sm text-gray-500 mt-1">영상이 공유되면 시청자 정보가 표시됩니다</p>
         </div>
       </div>
     );

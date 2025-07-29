@@ -5,6 +5,8 @@ import { FaBolt, FaYoutube, FaPlay, FaFire, FaMinus, FaSpinner, FaExpand } from 
 import { MdClose } from 'react-icons/md';
 import YouTubePlayerSection from './Home/YouTubePlayerSection';
 import { useWatchedVideos } from '../contexts/WatchedVideosContext';
+import { useWatchTime } from '../hooks/useWatchTime';
+import TokenNotification from './common/TokenNotification';
 import { auth } from '../firebase';
 
 function GlobalVideoPlayer() {
@@ -27,6 +29,23 @@ function GlobalVideoPlayer() {
 
   // Watched videos context
   const { incrementWatchCount, setCertified, getWatchInfo } = useWatchedVideos();
+
+  // 토큰 알림 상태
+  const [tokenNotification, setTokenNotification] = useState(null);
+
+  // 토큰 획득 콜백
+  const handleTokenEarned = (tokenData) => {
+    console.log('🪙 [GlobalVideoPlayer] 토큰 획득!', tokenData);
+    setTokenNotification(tokenData);
+    
+    // 3초 후 알림 닫기
+    setTimeout(() => {
+      setTokenNotification(null);
+    }, 3000);
+  };
+
+  // 시청 시간 추적 및 토큰 적립
+  const { flushWatchTime } = useWatchTime(selectedVideoId, isPlaying, handleTokenEarned);
 
   console.log('🎮 GlobalVideoPlayer 렌더링:', { 
     selectedVideoId, 
@@ -225,6 +244,9 @@ function GlobalVideoPlayer() {
   const handleYoutubeEnd = async () => {
     setIsPlaying(false);
 
+    // 시청 시간 저장 (토큰 적립)
+    flushWatchTime();
+
     // 다음 영상으로 넘어가는 중임을 UI에 표시
     setIsTransitioning(true);
 
@@ -281,8 +303,13 @@ function GlobalVideoPlayer() {
     setWatchSeconds(0);
   }, [selectedVideoId]); // 영상 ID만 의존성으로 설정
 
-  // 플레이어 닫기
-  const closePlayer = () => {
+  // 플레이어 닫기 (시청 시간 저장)
+  const handleClose = () => {
+    console.log('🔄 플레이어 닫기');
+    
+    // 시청 시간 저장 (토큰 적립)
+    flushWatchTime();
+    
     handleVideoSelect(null);
     resetPlayerState();
   };
@@ -380,14 +407,11 @@ function GlobalVideoPlayer() {
           {/* 최소화 상태에서도 항상 보이는 닫기 버튼 */}
           <button
             className="absolute -top-2 -right-2 w-7 h-7 bg-gray-800 hover:bg-red-600 text-white rounded-full text-sm flex items-center justify-center shadow-lg transition-all duration-200 z-10"
-            onClick={(e) => {
-              e.stopPropagation();
-              closePlayer();
-            }}
+            onClick={handleClose}
             onTouchEnd={(e) => {
               e.stopPropagation();
               e.preventDefault();
-              closePlayer();
+              handleClose();
             }}
             style={{ touchAction: 'manipulation' }}
             title="플레이어 닫기"
@@ -418,10 +442,7 @@ function GlobalVideoPlayer() {
                 <FaMinus className="text-gray-500 text-sm" />
               </button>
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  closePlayer();
-                }}
+                onClick={handleClose}
                 className="p-1.5 rounded-lg hover:bg-red-100 transition-colors"
                 title="닫기"
               >
@@ -530,6 +551,7 @@ function GlobalVideoPlayer() {
           </div>
         </div>
       )}
+      {tokenNotification && <TokenNotification tokenData={tokenNotification} />}
     </div>,
     document.body
   );
