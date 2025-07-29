@@ -9,6 +9,7 @@ import { CategoryInputBox } from './components/CategoryInputBox';
 import { MyVideoListWithSelection } from './components/MyVideoListWithSelection';
 import { LoginStep } from './components/LoginStep';
 import { WatchTabsContainer } from './components/WatchTabsContainer';
+import TokenStatsCard from '../MyChannel/TokenStatsCard';
 // import { WatchRateSummary } from './components/WatchRateSummary';
 import { stepVariants } from './HomeUtils';
 
@@ -71,9 +72,9 @@ export const HomeSteps = ({
           />
         </motion.div>
         
-        {/* 2단계: 카테고리 등록 - 제목 없이 */}
-        <AnimatePresence mode="wait">
-          {channelRegistered && (
+        {/* 2단계: 카테고리 선택 - 채널 등록 완료 후 표시 */}
+        {channelRegistered && (
+          <AnimatePresence mode="wait">
             <motion.div
               key="category-step"
               variants={stepVariants}
@@ -82,19 +83,22 @@ export const HomeSteps = ({
               exit="exit"
               custom={1}
             >
+              {/* 토큰 카드 - 채널 등록 후 바로 표시 */}
+              {currentUser && (
+                <div className="mb-4">
+                  <TokenStatsCard />
+                </div>
+              )}
+              
               <CategoryInputBox
                 selectedCategories={selectedCategories}
                 onCategoriesChange={handleCategoriesChange}
-                onComplete={() => { 
-                  // 이 함수는 CategoryInputBox 내부에서 처리됨
-                }}
+                onStepComplete={() => setCategoryCollapsed(true)}
                 collapsed={categoryCollapsed}
-                onExpand={() => setCategoryCollapsed(false)}
-                onCollapse={() => setCategoryCollapsed(true)}
               />
             </motion.div>
-          )}
-        </AnimatePresence>
+          </AnimatePresence>
+        )}
 
         {/* 3단계: 노출 영상 선택 - 제목 없이 */}
         <AnimatePresence mode="wait">
