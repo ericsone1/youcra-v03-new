@@ -109,7 +109,7 @@ export const HomeSteps = ({
                 channelInfo={channelInfo}
                 selectedCategories={selectedCategories}
                 selectedVideos={selectedVideos}
-                onVideoSelection={handleVideoSelection}
+                onVideosChange={handleVideoSelection}
                 onComplete={handleVideoSelectionComplete}
                 collapsed={videoSelectionCollapsed}
                 onExpand={() => setVideoSelectionCollapsed(false)}
