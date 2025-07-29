@@ -83,12 +83,6 @@ export const HomeSteps = ({
               exit="exit"
               custom={1}
             >
-              {/* 토큰 카드 - 채널 등록 후 바로 표시 */}
-              {currentUser && (
-                <div className="mb-4">
-                  <TokenStatsCard />
-                </div>
-              )}
               
               <CategoryInputBox
                 selectedCategories={selectedCategories}
@@ -101,8 +95,8 @@ export const HomeSteps = ({
         )}
 
         {/* 3단계: 노출 영상 선택 - 제목 없이 */}
-        <AnimatePresence mode="wait">
-          {categoryStepDone && (
+        {categoryStepDone && (
+          <AnimatePresence mode="wait">
             <motion.div
               key="video-selection-step"
               variants={stepVariants}
@@ -113,19 +107,24 @@ export const HomeSteps = ({
             >
               <MyVideoListWithSelection
                 channelInfo={channelInfo}
+                selectedCategories={selectedCategories}
                 selectedVideos={selectedVideos}
-                onVideosChange={handleVideoSelection}
-                onComplete={() => handleVideoSelectionComplete(selectedVideos)}
+                onVideoSelection={handleVideoSelection}
+                onComplete={handleVideoSelectionComplete}
                 collapsed={videoSelectionCollapsed}
                 onExpand={() => setVideoSelectionCollapsed(false)}
-                currentUser={currentUser}
-                onRequireLogin={() => {
-                  // 이 함수는 MyVideoListWithSelection 내부에서 처리됨
-                }}
+                onCollapse={() => setVideoSelectionCollapsed(true)}
               />
+              
+              {/* 토큰 카드 - 영상 선택 완료 후 표시 */}
+              {videoSelectionDone && currentUser && (
+                <div className="mt-4">
+                  <TokenStatsCard />
+                </div>
+              )}
             </motion.div>
-          )}
-        </AnimatePresence>
+          </AnimatePresence>
+        )}
         
         {/* 4단계: 로그인 - 영상 선택 완료 후 로그인 필요 시 표시 */}
         <AnimatePresence mode="wait">
