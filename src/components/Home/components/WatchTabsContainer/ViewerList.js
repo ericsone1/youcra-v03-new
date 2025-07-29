@@ -38,8 +38,8 @@ export default function ViewerList() {
     }
   };
 
-  // 로딩 중이거나 아직 뷰어 데이터가 없으면 스피너 표시
-  if (loading || viewers.length === 0) {
+  // 로딩 중일 때만 스피너 표시
+  if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-16 space-y-4">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
@@ -50,7 +50,19 @@ export default function ViewerList() {
       </div>
     );
   }
-  // 기존 '시청자 없음' 화면은 제거하여 항상 스피너 유지
+
+  // 시청자가 없을 때 안내 메시지
+  if (viewers.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 space-y-4">
+        <div className="text-6xl">👥</div>
+        <div className="text-center">
+          <p className="text-lg font-medium text-gray-800">아직 시청자가 없습니다</p>
+          <p className="text-sm text-gray-500 mt-1">영상이 공유되면 시청자 정보가 표시됩니다</p>
+        </div>
+      </div>
+    );
+  }
 
   // 시청자 리스트 표시
   return (
