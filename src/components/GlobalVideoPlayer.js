@@ -47,24 +47,6 @@ function GlobalVideoPlayer() {
   // 시청 시간 추적 및 토큰 적립
   const { flushWatchTime } = useWatchTime(selectedVideoId, isPlaying, handleTokenEarned);
 
-  console.log('🎮 GlobalVideoPlayer 렌더링:', { 
-    selectedVideoId, 
-    playerLoading,
-    isPlaying,
-    videoDuration,
-    timestamp: new Date().toLocaleTimeString()
-  });
-  
-  // selectedVideoId 변경 감지
-  useEffect(() => {
-    console.log('🔄 GlobalVideoPlayer - selectedVideoId 변경됨:', {
-      selectedVideoId,
-      playerLoading,
-      isPlaying,
-      timestamp: new Date().toLocaleTimeString()
-    });
-  }, [selectedVideoId]);
-
   // 위치 / 최소화 드래그 상태 (HomeVideoPlayer 방식)
   const [minimized, setMinimized] = useState(false);
   // 다음 영상으로 넘어가는 중 상태
@@ -78,6 +60,29 @@ function GlobalVideoPlayer() {
       ? { x: window.innerWidth - 100, y: window.innerHeight - 100 }
       : { x: (window.innerWidth - 400) / 2, y: (window.innerHeight - 350) / 2 };
   });
+  
+  // 자동 재생 실패 상태 추가
+  const [autoplayFailed, setAutoplayFailed] = useState(false);
+
+  console.log('🎮 GlobalVideoPlayer 렌더링:', { 
+    selectedVideoId, 
+    playerLoading,
+    isPlaying,
+    videoDuration,
+    autoplayFailed,
+    브라우저: navigator.userAgent.split(' ').pop(), // 간단한 브라우저 정보
+    timestamp: new Date().toLocaleTimeString()
+  });
+  
+  // selectedVideoId 변경 감지
+  useEffect(() => {
+    console.log('🔄 GlobalVideoPlayer - selectedVideoId 변경됨:', {
+      selectedVideoId,
+      playerLoading,
+      isPlaying,
+      timestamp: new Date().toLocaleTimeString()
+    });
+  }, [selectedVideoId]);
 
   const dragRef = useRef();
 
@@ -227,6 +232,48 @@ function GlobalVideoPlayer() {
     playerRef.current = event.target;
     setPlayerLoading(false);
     setVideoDuration(event.target.getDuration());
+    
+    // 환경 정보 로깅 (문제 진단용)
+    console.log('🎬 플레이어 준비 완료 - 환경 정보:', {
+      브라우저: navigator.userAgent,
+      모바일: /Mobi|Android/i.test(navigator.userAgent),
+      iOS: /iPad|iPhone|iPod/.test(navigator.userAgent),
+      크롬: /Chrome/.test(navigator.userAgent),
+      사파리: /Safari/.test(navigator.userAgent) && !/Chrome/.test(navigator.userAgent),
+      현재시간: new Date().toLocaleTimeString()
+    });
+    
+    // 모바일/데스크톱에 따른 다른 전략 적용
+    const isMobile = /Mobi|Android|iPad|iPhone|iPod/i.test(navigator.userAgent);
+    
+    if (isMobile) {
+      // 모바일: 더 보수적인 접근
+      console.log('📱 모바일 환경 감지 - 보수적 자동재생 시도');
+      setTimeout(() => {
+        try {
+          // 모바일에서는 음소거 상태에서 시작
+          event.target.playVideo();
+          console.log('📱 모바일 자동 재생 시도');
+        } catch (error) {
+          console.warn('⚠️ 모바일 자동 재생 실패:', error);
+          setAutoplayFailed(true);
+        }
+      }, 1000); // 1초 지연
+    } else {
+      // 데스크톱: 기존 방식
+      console.log('🖥️ 데스크톱 환경 - 일반 자동재생 시도');
+      try {
+        // 먼저 음소거 해제
+        event.target.unMute();
+        // 그 다음 재생 시작
+        event.target.playVideo();
+        console.log('🖥️ 데스크톱 자동 재생 시작');
+      } catch (error) {
+        console.warn('⚠️ 데스크톱 자동 재생 실패:', error);
+        setAutoplayFailed(true);
+      }
+    }
+    
     // 새 영상이 준비되면 카운터를 1초부터 시작
     setWatchSeconds(1);
     // 전환 메시지 해제
@@ -234,14 +281,62 @@ function GlobalVideoPlayer() {
   };
   
   const handleYoutubeStateChange = (event) => {
-    if (event.data === 1) {
+    const state = event.data;
+    console.log('🎮 YouTube 상태 변경:', state, {
+      브라우저: navigator.userAgent,
+      현재시간: new Date().toLocaleTimeString(),
+      영상ID: selectedVideoId
+    });
+    
+    // YouTube 플레이어 상태:
+    // -1 (unstarted), 0 (ended), 1 (playing), 2 (paused), 3 (buffering), 5 (video cued)
+    
+    if (state === 1) {
+      // 재생 중
       setIsPlaying(true);
-    } else {
+      setAutoplayFailed(false); // 재생 성공 시 실패 상태 해제
+      console.log('▶️ 영상 재생 시작');
+    } else if (state === 2) {
+      // 일시정지
       setIsPlaying(false);
+      console.log('⏸️ 영상 일시정지');
+    } else if (state === 0) {
+      // 재생 종료
+      setIsPlaying(false);
+      console.log('⏹️ 영상 재생 종료');
+    } else if (state === 3) {
+      // 버퍼링 중
+      console.log('🔄 영상 버퍼링 중');
+    } else if (state === 5) {
+      // 영상 준비됨 (재생 대기)
+      console.log('📺 영상 준비됨');
+      // 준비된 상태에서 자동 재생 시도 (지연 추가)
+      setTimeout(() => {
+        try {
+          if (playerRef.current) {
+            playerRef.current.playVideo();
+            console.log('🔄 상태5에서 재생 시도');
+          }
+        } catch (error) {
+          console.warn('⚠️ 상태5에서 자동 재생 시도 실패:', error);
+          setAutoplayFailed(true);
+        }
+      }, 500); // 0.5초 지연
+    } else if (state === -1) {
+      // 시작되지 않음 - 자동재생이 차단된 상태일 가능성
+      console.log('⚠️ 영상이 시작되지 않음 (자동재생 차단 가능성)');
+      setTimeout(() => {
+        // 3초 후에도 재생이 시작되지 않으면 실패로 간주
+        if (!isPlaying) {
+          setAutoplayFailed(true);
+          console.log('❌ 자동재생 실패로 판단');
+        }
+      }, 3000);
     }
   };
 
   const handleYoutubeEnd = async () => {
+    console.log('🎬 영상 종료 감지');
     setIsPlaying(false);
 
     // 시청 시간 저장 (토큰 적립)
@@ -258,30 +353,34 @@ function GlobalVideoPlayer() {
           incrementWatchCount(finishedVideoId),
           setCertified(finishedVideoId, true, 'main')
         ]);
+        console.log('✅ 시청 완료 처리 완료');
       } catch (e) {
-        console.error('watchCount 업데이트 실패', e);
+        console.error('❌ watchCount 업데이트 실패', e);
       }
     }
 
-    // 자동 다음 영상 이동 로직
-    if (videoList && videoList.length > 0) {
-      const nextIdx = currentIndex + 1;
-      // 다음 영상이 있으면 재생, 없으면 플레이어 종료
-      if (nextIdx < videoList.length) {
-        console.log('🎬 영상 종료 → 다음 영상으로 이동', { nextIdx });
-        initializePlayer(currentRoomId || 'home', videoList, nextIdx);
+    // 자동 다음 영상 이동 로직 (지연 시간 증가)
+    setTimeout(() => {
+      if (videoList && videoList.length > 0) {
+        const nextIdx = currentIndex + 1;
+        // 다음 영상이 있으면 재생, 없으면 플레이어 종료
+        if (nextIdx < videoList.length) {
+          console.log('🎬 영상 종료 → 다음 영상으로 이동', { nextIdx, totalVideos: videoList.length });
+          initializePlayer(currentRoomId || 'home', videoList, nextIdx);
+        } else {
+          console.log('🏁 마지막 영상 시청 완료 → 플레이어 종료');
+          handleVideoSelect(null);
+          resetPlayerState();
+          setIsTransitioning(false);
+        }
       } else {
-        console.log('🏁 마지막 영상 시청 완료 → 플레이어 종료');
+        // 리스트가 없으면 단일 영상이었으므로 종료
+        console.log('📺 단일 영상 시청 완료 → 플레이어 종료');
         handleVideoSelect(null);
         resetPlayerState();
         setIsTransitioning(false);
       }
-    } else {
-      // 리스트가 없으면 단일 영상이었으므로 종료
-      handleVideoSelect(null);
-      resetPlayerState();
-      setIsTransitioning(false);
-    }
+    }, 3000); // 3초 지연으로 변경 (기존 2초에서 증가)
   };
 
   // ⏱️ 시청 시간 추적
@@ -301,6 +400,7 @@ function GlobalVideoPlayer() {
   // 영상이 바뀔 때 시청 시간 초기화 (영상 ID가 바뀔 때만)
   useEffect(() => {
     setWatchSeconds(0);
+    setAutoplayFailed(false); // 자동 재생 실패 상태도 초기화
   }, [selectedVideoId]); // 영상 ID만 의존성으로 설정
 
   // 플레이어 닫기 (시청 시간 저장)
@@ -318,6 +418,22 @@ function GlobalVideoPlayer() {
   const openInYoutube = () => {
     if (selectedVideoId) {
       window.open(`https://www.youtube.com/watch?v=${selectedVideoId}`, '_blank');
+    }
+  };
+
+  // 수동 재생 버튼 핸들러
+  const handleManualPlay = () => {
+    if (playerRef.current) {
+      try {
+        // 먼저 음소거 해제
+        playerRef.current.unMute();
+        // 그 다음 재생 시작
+        playerRef.current.playVideo();
+        setAutoplayFailed(false);
+        console.log('▶️ 수동 재생 시작');
+      } catch (error) {
+        console.error('❌ 수동 재생 실패:', error);
+      }
     }
   };
 
@@ -460,6 +576,45 @@ function GlobalVideoPlayer() {
               onStateChange={handleYoutubeStateChange}
               onEnd={handleYoutubeEnd}
             />
+            
+            {/* 자동 재생 실패 시 안내 */}
+            {autoplayFailed && (
+              <div className="absolute inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+                <div className="bg-white rounded-lg p-6 text-center max-w-sm mx-4 shadow-lg">
+                  <div className="text-xl font-bold text-gray-800 mb-3">
+                    🚫 자동 재생이 차단되었습니다
+                  </div>
+                  <div className="text-sm text-gray-600 mb-4 leading-relaxed">
+                    브라우저 정책으로 인해 자동 재생이 차단되었습니다.<br/>
+                    <strong>아래 버튼을 클릭</strong>하여 수동으로 재생해주세요.
+                  </div>
+                  
+                  {/* 환경별 안내 메시지 */}
+                  <div className="text-xs text-blue-600 mb-4 bg-blue-50 p-2 rounded">
+                    {/Mobi|Android|iPad|iPhone|iPod/i.test(navigator.userAgent) ? (
+                      <span>📱 모바일에서는 데이터 절약을 위해 자동재생이 제한될 수 있습니다.</span>
+                    ) : (
+                      <span>🖥️ 브라우저 설정에서 자동재생을 허용하면 다음부터 자동으로 재생됩니다.</span>
+                    )}
+                  </div>
+                  
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleManualPlay}
+                      className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg transition-colors"
+                    >
+                      ▶️ 재생하기
+                    </button>
+                    <button
+                      onClick={() => setAutoplayFailed(false)}
+                      className="px-3 py-3 bg-gray-300 hover:bg-gray-400 text-gray-700 rounded-lg text-sm transition-colors"
+                    >
+                      ❌
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 영상 정보 섹션 */}
