@@ -1,4 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { isIOS } from '../../utils/browserDetector';
+import IOSOverlay from '../common/IOSOverlay';
 import { motion } from 'framer-motion';
 import YouTube from 'react-youtube';
 import { useNavigate } from 'react-router-dom';
@@ -32,6 +34,36 @@ function VideoPlayer({
 }) {
   const navigate = useNavigate();
 
+  const isIOSDevice = isIOS();
+  const [showIOSOverlay, setShowIOSOverlay] = useState(isIOSDevice);
+  const [ytPlayer, setYtPlayer] = useState(null);
+
+  const handleReady = (e) => {
+    const p = e.target;
+    setYtPlayer(p);
+    if (isIOSDevice) {
+      try { p.mute(); } catch {}
+    }
+    if (onYoutubeReady) onYoutubeReady(e);
+  };
+
+  useEffect(() => {
+    if (!isIOSDevice || !showIOSOverlay) return;
+
+    const onFirstTouch = () => {
+      if (ytPlayer) {
+        try {
+          ytPlayer.unMute();
+          ytPlayer.playVideo();
+        } catch {}
+      }
+      setShowIOSOverlay(false);
+    };
+
+    window.addEventListener('touchstart', onFirstTouch, { once: true });
+    return () => window.removeEventListener('touchstart', onFirstTouch);
+  }, [isIOSDevice, showIOSOverlay, ytPlayer]);
+
   // duration 파싱
   const totalSeconds = parseDuration(video.duration);
   const progress = (watchSeconds / totalSeconds) * 100;
@@ -48,7 +80,7 @@ function VideoPlayer({
         <YouTube
           key={video.id}
           videoId={video.id}
-          onReady={onYoutubeReady}
+          onReady={handleReady}
           onStateChange={onYoutubeStateChange}
           onEnd={onYoutubeEnd}
           opts={{
@@ -61,6 +93,7 @@ function VideoPlayer({
               rel: 0, // 관련 동영상 숨김
               enablejsapi: 1,
               playsinline: 1, // 모바일에서 인라인 재생
+              mute: isIOSDevice ? 1 : 0,
               fs: 1, // 전체화면 활성화
               disablekb: 0, // 키보드 컨트롤 활성화
               start: 0 // 처음부터 재생
@@ -68,6 +101,7 @@ function VideoPlayer({
           }}
         />
       </div>
+      {showIOSOverlay && <IOSOverlay onFirstTouch={() => {}} />}
       
       <div className="mt-2 flex flex-col gap-2">
         <div className="flex items-center justify-between text-sm">
