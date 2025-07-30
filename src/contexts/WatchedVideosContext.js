@@ -257,6 +257,7 @@ export const WatchedVideosProvider = ({ children }) => {
     getTimeUntilRewatch,
     getRecentlyWatchedVideos,
     getWatchedVideos,
+    upsertWatched, // 누락된 함수 추가
   };
 
   return (

@@ -253,24 +253,60 @@ function GlobalVideoPlayer() {
         try {
           // 모바일에서는 음소거 상태에서 시작
           event.target.playVideo();
-          console.log('📱 모바일 자동 재생 시도');
+          console.log('📱 모바일 자동 재생 시도 (음소거 상태)');
+          
+          // 재생이 시작되면 잠시 후 음소거 해제 시도 (모바일은 더 보수적으로)
+          setTimeout(() => {
+            try {
+              if (event.target.isMuted()) {
+                event.target.unMute();
+                console.log('🔊 모바일 음소거 해제 시도');
+              }
+            } catch (unmuteError) {
+              console.warn('⚠️ 모바일 음소거 해제 실패 (나중에 자동으로 해제됨):', unmuteError);
+            }
+          }, 2000); // 모바일은 2초 후 음소거 해제 시도
+          
         } catch (error) {
           console.warn('⚠️ 모바일 자동 재생 실패:', error);
-          setAutoplayFailed(true);
+          // 즉시 실패로 판단하지 않고 잠시 후 다시 확인
+          setTimeout(() => {
+            if (!isPlaying) {
+              setAutoplayFailed(true);
+              console.log('❌ 모바일 자동재생 최종 실패');
+            }
+          }, 2000);
         }
       }, 1000); // 1초 지연
     } else {
       // 데스크톱: 기존 방식
       console.log('🖥️ 데스크톱 환경 - 일반 자동재생 시도');
       try {
-        // 먼저 음소거 해제
-        event.target.unMute();
-        // 그 다음 재생 시작
+        // 음소거 상태에서 먼저 재생 시작 (브라우저 정책 우회)
         event.target.playVideo();
-        console.log('🖥️ 데스크톱 자동 재생 시작');
+        console.log('🖥️ 데스크톱 자동 재생 시작 (음소거 상태)');
+        
+        // 재생이 시작되면 잠시 후 음소거 해제 시도
+        setTimeout(() => {
+          try {
+            if (event.target.isMuted()) {
+              event.target.unMute();
+              console.log('🔊 데스크톱 음소거 해제 시도');
+            }
+          } catch (unmuteError) {
+            console.warn('⚠️ 음소거 해제 실패 (나중에 자동으로 해제됨):', unmuteError);
+          }
+        }, 1000); // 1초 후 음소거 해제 시도
+        
       } catch (error) {
         console.warn('⚠️ 데스크톱 자동 재생 실패:', error);
-        setAutoplayFailed(true);
+        // 즉시 실패로 판단하지 않고 잠시 후 다시 확인
+        setTimeout(() => {
+          if (!isPlaying) {
+            setAutoplayFailed(true);
+            console.log('❌ 데스크톱 자동재생 최종 실패');
+          }
+        }, 2000);
       }
     }
     
@@ -295,7 +331,18 @@ function GlobalVideoPlayer() {
       // 재생 중
       setIsPlaying(true);
       setAutoplayFailed(false); // 재생 성공 시 실패 상태 해제
-      console.log('▶️ 영상 재생 시작');
+      
+      // 재생이 시작되면 음소거를 자동으로 해제
+      if (playerRef.current && playerRef.current.isMuted()) {
+        try {
+          playerRef.current.unMute();
+          console.log('🔊 재생 시작과 함께 음소거 자동 해제');
+        } catch (error) {
+          console.warn('⚠️ 음소거 해제 실패:', error);
+        }
+      }
+      
+      console.log('▶️ 영상 재생 시작 - autoplayFailed 해제');
     } else if (state === 2) {
       // 일시정지
       setIsPlaying(false);
@@ -325,13 +372,16 @@ function GlobalVideoPlayer() {
     } else if (state === -1) {
       // 시작되지 않음 - 자동재생이 차단된 상태일 가능성
       console.log('⚠️ 영상이 시작되지 않음 (자동재생 차단 가능성)');
+      // 너무 성급하게 실패로 판단하지 않도록 조건을 더 엄격하게 설정
       setTimeout(() => {
-        // 3초 후에도 재생이 시작되지 않으면 실패로 간주
-        if (!isPlaying) {
+        // 5초 후에도 재생이 시작되지 않고, 플레이어 상태가 여전히 -1이면 실패로 간주
+        if (!isPlaying && playerRef.current && playerRef.current.getPlayerState() === -1) {
           setAutoplayFailed(true);
-          console.log('❌ 자동재생 실패로 판단');
+          console.log('❌ 자동재생 실패로 판단 (5초 후에도 상태 -1)');
+        } else {
+          console.log('✅ 자동재생 정상 작동 중 (상태 변경됨)');
         }
-      }, 3000);
+      }, 5000); // 3초 → 5초로 변경
     }
   };
 
@@ -403,6 +453,18 @@ function GlobalVideoPlayer() {
     setAutoplayFailed(false); // 자동 재생 실패 상태도 초기화
   }, [selectedVideoId]); // 영상 ID만 의존성으로 설정
 
+  // autoplayFailed 상태가 true가 되면 10초 후 자동으로 닫기
+  useEffect(() => {
+    if (autoplayFailed) {
+      const timer = setTimeout(() => {
+        setAutoplayFailed(false);
+        console.log('🔄 자동재생 실패 팝업 자동 닫힘 (10초 후)');
+      }, 10000); // 10초 후 자동 닫기
+      
+      return () => clearTimeout(timer);
+    }
+  }, [autoplayFailed]);
+
   // 플레이어 닫기 (시청 시간 저장)
   const handleClose = () => {
     console.log('🔄 플레이어 닫기');
@@ -425,10 +487,20 @@ function GlobalVideoPlayer() {
   const handleManualPlay = () => {
     if (playerRef.current) {
       try {
-        // 먼저 음소거 해제
-        playerRef.current.unMute();
-        // 그 다음 재생 시작
+        // 먼저 재생 시작
         playerRef.current.playVideo();
+        // 그 다음 음소거 해제
+        setTimeout(() => {
+          try {
+            if (playerRef.current.isMuted()) {
+              playerRef.current.unMute();
+              console.log('🔊 수동 재생 후 음소거 해제');
+            }
+          } catch (unmuteError) {
+            console.warn('⚠️ 수동 재생 후 음소거 해제 실패:', unmuteError);
+          }
+        }, 500); // 0.5초 후 음소거 해제
+        
         setAutoplayFailed(false);
         console.log('▶️ 수동 재생 시작');
       } catch (error) {

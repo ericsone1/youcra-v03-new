@@ -146,13 +146,53 @@ export const useHomeHandlers = ({
     playerRef.current = event.target;
     setVideoDuration(event.target.getDuration());
     setPlayerLoading(false);
+    
+    // 환경별 자동재생 및 음소거 해제 시도
+    const isMobile = /Mobi|Android|iPad|iPhone|iPod/i.test(navigator.userAgent);
+    
+    console.log('🎬 [useHomeHandlers] YouTube 플레이어 준비 완료');
+    
+    try {
+      // 음소거 상태에서 재생 시작
+      event.target.playVideo();
+      console.log('🎬 [useHomeHandlers] 자동 재생 시도');
+      
+      // 환경별 음소거 해제 시도
+      const unmuteDelay = isMobile ? 2000 : 1000;
+      setTimeout(() => {
+        try {
+          if (event.target.isMuted()) {
+            event.target.unMute();
+            console.log('🔊 [useHomeHandlers] 음소거 해제 시도');
+          }
+        } catch (unmuteError) {
+          console.warn('⚠️ [useHomeHandlers] 음소거 해제 실패:', unmuteError);
+        }
+      }, unmuteDelay);
+      
+    } catch (error) {
+      console.warn('⚠️ [useHomeHandlers] 자동 재생 실패:', error);
+    }
   };
 
   const handleYoutubeStateChange = (event) => {
-    if (event.data === 1) {
+    const state = event.data;
+    
+    if (state === 1) {
       // 재생 중
       setIsPlaying(true);
-    } else if (event.data === 0) {
+      
+      // 재생이 시작되면 음소거를 자동으로 해제
+      if (playerRef.current && playerRef.current.isMuted()) {
+        try {
+          playerRef.current.unMute();
+          console.log('🔊 [useHomeHandlers] 재생 시작과 함께 음소거 자동 해제');
+        } catch (error) {
+          console.warn('⚠️ [useHomeHandlers] 음소거 해제 실패:', error);
+        }
+      }
+      
+    } else if (state === 0) {
       // 종료
       setVideoCompleted(true);
       setVideoEnded(true);

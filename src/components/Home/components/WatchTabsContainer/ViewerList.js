@@ -1,14 +1,31 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useMyVideoViewers } from '../../hooks/useMyVideoViewers';
 import { useVideoPlayer } from '../../../../contexts/VideoPlayerContext';
 import { useWatchedVideos } from '../../../../contexts/WatchedVideosContext';
+import { useUcraVideos } from '../../hooks/useUcraVideos';
 
 export default function ViewerList() {
   const { loading, viewers } = useMyVideoViewers();
-  const { handleVideoSelect, updateVideoList } = useVideoPlayer();
+  const { handleVideoSelect, updateVideoList, initializePlayer } = useVideoPlayer();
   const { upsertWatched, watchedMap, canRewatch, getWatchInfo } = useWatchedVideos();
+  const { ucraVideos } = useUcraVideos(); // "내가 시청할 영상" 데이터 추가
   const [selectedViewer, setSelectedViewer] = useState(null);
+  const [forceUpdate, setForceUpdate] = useState(0);
+
+  // watchedMap이 변경될 때마다 컴포넌트를 리렌더링
+  useEffect(() => {
+    setForceUpdate(prev => prev + 1);
+  }, [watchedMap]);
+
+  // 시청자의 영상 중에서 "내가 시청할 영상" 리스트에 있는 것들만 필터링
+  const getFilteredViewerVideos = (viewerVideos) => {
+    return viewerVideos.filter(viewerVideo => 
+      ucraVideos.some(ucraVideo => 
+        ucraVideo.videoId === viewerVideo.videoId || ucraVideo.id === viewerVideo.videoId
+      )
+    );
+  };
 
 
 
@@ -24,14 +41,38 @@ export default function ViewerList() {
     }
   };
 
-  const handleVideoPlay = async (playerVideo) => {
+  const handleVideoPlay = async (playerVideo, allVideos) => {
     try {
-      // VideoPlayerContext의 videoList에 영상 추가
-      updateVideoList([playerVideo]);
+      console.log('🎬 [ViewerList] 영상 재생 시작:', {
+        selectedVideo: playerVideo.title,
+        videoId: playerVideo.videoId,
+        allVideosCount: allVideos?.length || 1
+      });
       
-      // 플레이어 열기
-      handleVideoSelect(playerVideo.videoId);
-
+      // 영상 리스트와 현재 영상 인덱스로 플레이어 초기화
+      const videoList = allVideos || [playerVideo];
+      const currentIndex = allVideos 
+        ? allVideos.findIndex(v => (v.videoId || v.id) === playerVideo.videoId)
+        : 0;
+      
+      console.log('🎯 [ViewerList] initializePlayer 호출:', {
+        roomId: 'viewer-videos',
+        videoListLength: videoList.length,
+        currentIndex
+      });
+      
+      // 시청 시작 기록 (재시청 가능한 경우에만)
+      const watchInfo = getWatchInfo(playerVideo.videoId);
+      if (!watchInfo.hasWatched || canRewatch(playerVideo.videoId)) {
+        console.log('📝 [ViewerList] 시청 시작 기록:', playerVideo.videoId);
+        upsertWatched(playerVideo.videoId, {
+          startedAt: new Date().toISOString(),
+          context: 'viewer-list'
+        });
+      }
+      
+      // initializePlayer를 사용하여 자동재생 리스트 설정
+      initializePlayer('viewer-videos', videoList, currentIndex);
 
     } catch (error) {
       console.error('❌ [ViewerList] 영상 재생 오류:', error);
@@ -118,20 +159,38 @@ export default function ViewerList() {
             >
 
 
-              {/* 시청자가 업로드한 영상들 */}
-              {viewer.uploadedVideos && viewer.uploadedVideos.length > 0 && (
-                <div>
-                  <h4 className="font-medium text-gray-800 mb-2">
-                    {viewer.user.displayName || '이 사용자'}가 업로드한 영상
-                  </h4>
-                  <div className="space-y-2">
-                    {viewer.uploadedVideos.map((video, idx) => {
+              {/* 시청자가 업로드한 영상들 (내가 시청할 영상 리스트에 있는 것만) */}
+              {(() => {
+                const filteredVideos = getFilteredViewerVideos(viewer.uploadedVideos || []);
+                
+                if (filteredVideos.length === 0) {
+                  return (
+                    <div className="text-center py-4 text-gray-500">
+                      <p className="text-sm">이 시청자의 영상 중 시청 가능한 영상이 없습니다.</p>
+                      <p className="text-xs mt-1">전체 영상: {viewer.uploadedVideos?.length || 0}개</p>
+                    </div>
+                  );
+                }
+                
+                return (
+                  <div>
+                    <h4 className="font-medium text-gray-800 mb-2">
+                      {viewer.user.displayName || '이 사용자'}가 업로드한 영상 
+                      <span className="text-sm text-blue-600 font-normal">
+                        (시청 가능: {filteredVideos.length}개 / 전체: {viewer.uploadedVideos?.length || 0}개)
+                      </span>
+                    </h4>
+                    <div className="space-y-2">
+                      {filteredVideos.map((video, idx) => {
                       const watchStatus = getVideoWatchStatus(video.videoId);
                       const playerVideo = {
                         videoId: video.videoId,
+                        id: video.videoId, // id 속성 추가 (VideoPlayerContext에서 필요)
                         title: video.title,
                         channel: video.channel || '채널명 없음',
+                        channelTitle: video.channelTitle || viewer.user.displayName || '채널명 없음',
                         duration: video.durationDisplay || video.duration,
+                        durationDisplay: video.durationDisplay || video.duration,
                         thumbnail: `https://img.youtube.com/vi/${video.videoId}/mqdefault.jpg`,
                         description: video.description || '',
                         ucraViewCount: video.ucraViewCount || 0
@@ -156,7 +215,31 @@ export default function ViewerList() {
                             </p>
                           </div>
                           <button
-                            onClick={() => handleVideoPlay(playerVideo)}
+                            onClick={() => {
+                              // 시청 가능한 영상들만 playerVideo 형태로 변환
+                              const allFilteredVideos = getFilteredViewerVideos(viewer.uploadedVideos || []).map(v => ({
+                                videoId: v.videoId,
+                                id: v.videoId, // id 속성 추가 (중요!)
+                                title: v.title,
+                                channelTitle: v.channelTitle || viewer.user.displayName,
+                                channel: v.channel || '채널명 없음',
+                                duration: v.duration,
+                                durationDisplay: v.durationDisplay,
+                                thumbnail: `https://img.youtube.com/vi/${v.videoId}/mqdefault.jpg`,
+                                description: v.description || '',
+                                ucraViewCount: v.ucraViewCount || 0
+                              }));
+                              
+                              console.log('🎬 [ViewerList] 시청하기 클릭 (필터링됨):', {
+                                selectedVideo: playerVideo.title,
+                                selectedVideoId: playerVideo.videoId,
+                                totalVideos: viewer.uploadedVideos?.length || 0,
+                                filteredVideosCount: allFilteredVideos.length,
+                                filteredVideos: allFilteredVideos
+                              });
+                              
+                              handleVideoPlay(playerVideo, allFilteredVideos);
+                            }}
                             disabled={watchStatus.status === 'watched'}
                             className={`px-3 py-1 text-xs text-white rounded-full transition-colors ${watchStatus.className}`}
                           >
@@ -164,10 +247,11 @@ export default function ViewerList() {
                           </button>
                         </div>
                       );
-                    })}
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </motion.div>
           )}
         </div>
