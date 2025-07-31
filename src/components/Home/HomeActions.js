@@ -4,11 +4,39 @@
 import { useAuth } from '../../contexts/AuthContext';
 import { useVideoPlayer } from '../../contexts/VideoPlayerContext';
 import { useToast } from '../common/Toast';
+import { useWatchedVideos } from '../../contexts/WatchedVideosContext';
 
 export const useHomeActions = () => {
   const { currentUser } = useAuth();
   const { initializePlayer } = useVideoPlayer();
   const { showToast } = useToast();
+  const { setCertified } = useWatchedVideos();
+
+  // 시청 상태 관리 (로컬 상태)
+  const watchedVideos = new Set(); // 시청 완료된 영상 ID들
+
+  // 시청 완료 처리 함수
+  const handleWatchComplete = (videoId) => {
+    console.log('✅ [HomeActions] 시청 완료 처리:', videoId);
+    
+    // 로컬 상태에 추가
+    watchedVideos.add(videoId);
+    
+    // Firestore에 시청 완료 저장
+    setCertified(videoId, true, 'manual');
+    
+    showToast('✅ 시청 완료로 처리되었습니다!', 'success');
+    
+    // 페이지 새로고침으로 리스트 업데이트
+    setTimeout(() => {
+      window.location.reload();
+    }, 1000);
+  };
+
+  // 시청 상태 확인 함수
+  const isWatched = (videoId) => {
+    return watchedVideos.has(videoId);
+  };
 
   // 채널 삭제 시 모든 상태 초기화
   const handleChannelDeleteWithReset = async (
@@ -139,12 +167,9 @@ export const useHomeActions = () => {
     }
   };
 
-  // 시청하기 버튼 클릭 시 처리 (팝업 플레이어 열기)
+  // 시청하기 버튼 클릭 시 처리 (YouTube 팝업창 열기 + 시청 완료 버튼으로 변경)
   const handleWatchClick = (video, idx, videos) => {
     console.log('🎬 시청하기 버튼 클릭됨!', video);
-    console.log('🔢 전달된 인덱스:', idx);
-    console.log('📋 전달된 videos 배열:', videos);
-    console.log('🎯 videos[idx] 객체:', videos[idx]);
     
     // 영상 ID 추출
     const videoId = video.videoId || video.id || video.youtubeId;
@@ -156,19 +181,29 @@ export const useHomeActions = () => {
       return;
     }
     
-    // videos[idx]와 video가 같은 객체인지 확인
-    if (videos && videos[idx]) {
-      console.log('🔗 video와 videos[idx] 비교:', {
-        video_id: video.videoId || video.id,
-        videos_idx_id: videos[idx].videoId || videos[idx].id,
-        same: (video.videoId || video.id) === (videos[idx].videoId || videos[idx].id)
-      });
+    // 이미 시청 완료된 영상인지 확인
+    if (isWatched(videoId)) {
+      console.log('✅ 이미 시청 완료된 영상');
+      showToast('✅ 이미 시청 완료된 영상입니다.', 'info');
+      return;
     }
     
-    // 영상 큐와 인덱스 기반으로 팝업 플레이어 열기
-    console.log('🚀 initializePlayer 호출 직전:', { videoId, idx, videosLength: videos?.length });
-    initializePlayer('home', videos, idx);
-    console.log('✅ initializePlayer 호출 완료');
+    // YouTube 팝업창 열기
+    const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+    console.log('🚀 YouTube 팝업창 열기:', youtubeUrl);
+    
+    const popup = window.open(youtubeUrl, 'youtube_view', 'width=800,height=600,scrollbars=yes,resizable=yes');
+    
+    if (popup) {
+      console.log('✅ YouTube 팝업창 열기 성공');
+      showToast('📺 YouTube에서 영상을 시청하세요! 시청 완료 후 "시청완료(수동)" 버튼을 눌러주세요.', 'success');
+      
+      // 시청 완료 버튼으로 변경하기 위해 이벤트 전파
+      // 이 부분은 컴포넌트에서 처리해야 함
+    } else {
+      console.warn('⚠️ 팝업창이 차단되었습니다. 수동으로 YouTube에 접속해주세요.');
+      showToast('⚠️ 팝업창이 차단되었습니다. 수동으로 YouTube에 접속해주세요.', 'warning');
+    }
   };
 
   // 메시지 클릭 핸들러
@@ -183,5 +218,7 @@ export const useHomeActions = () => {
     handleVideoClick,
     handleWatchClick,
     handleMessageClick,
+    handleWatchComplete,
+    isWatched,
   };
 }; 

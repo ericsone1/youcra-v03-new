@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import VideoPlayer from './VideoPlayer';
+import YouTubeViewNotification from './components/YouTubeViewNotification';
 
 // 영상 길이 포맷팅 함수
 const formatDuration = (duration) => {
@@ -43,6 +44,8 @@ function VideoCard({
   onLikeToggle,
   onFanCertification
 }) {
+  const [showYouTubeNotification, setShowYouTubeNotification] = useState(false);
+  const [lastWatchedVideoId, setLastWatchedVideoId] = useState(null);
   const likeCountDisplay = Number(video.statistics.likeCount || 0).toLocaleString();
   const viewCountDisplay = Number(video.statistics.viewCount || 0).toLocaleString();
   const watchingCount = video.watchCount || 0;
@@ -161,12 +164,32 @@ function VideoCard({
             likeCount={likeCount}
             onYoutubeReady={onYoutubeReady}
             onYoutubeStateChange={onYoutubeStateChange}
-            onYoutubeEnd={onYoutubeEnd}
+            onYoutubeEnd={(e) => {
+              // 기존 onYoutubeEnd 호출
+              if (onYoutubeEnd) {
+                onYoutubeEnd(e);
+              }
+              
+              // YouTube 팝업창을 위한 상태 설정
+              setLastWatchedVideoId(video.id);
+              setShowYouTubeNotification(true);
+            }}
             onLikeToggle={onLikeToggle}
             onFanCertification={onFanCertification}
           />
         )}
       </AnimatePresence>
+      
+      {/* YouTube 팝업창 차단 안내 */}
+      {showYouTubeNotification && lastWatchedVideoId && (
+        <YouTubeViewNotification
+          videoId={lastWatchedVideoId}
+          onClose={() => {
+            setShowYouTubeNotification(false);
+            setLastWatchedVideoId(null);
+          }}
+        />
+      )}
     </motion.div>
   );
 }

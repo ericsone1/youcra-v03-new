@@ -113,6 +113,21 @@ export const WatchedVideosProvider = ({ children }) => {
       
       // 유크라 조회수 업데이트
       await updateUcraViewCount(videoId);
+      
+      // YouTube 조회수 반영을 위한 팝업창 열기
+      setTimeout(() => {
+        const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+        console.log('🔄 [WatchedVideosContext] YouTube 팝업창 열기:', youtubeUrl);
+        
+        // 팝업창으로 YouTube 영상 열기
+        const popup = window.open(youtubeUrl, 'youtube_view', 'width=800,height=600,scrollbars=yes,resizable=yes');
+        
+        if (popup) {
+          console.log('✅ [WatchedVideosContext] YouTube 팝업창 열기 성공');
+        } else {
+          console.warn('⚠️ [WatchedVideosContext] 팝업창이 차단되었습니다. 수동으로 YouTube에 접속해주세요.');
+        }
+      }, 1000); // 1초 후 팝업창 열기
     }
     
     await upsertWatched(videoId, updateData);

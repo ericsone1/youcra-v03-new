@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { WatchVideoList } from './WatchVideoList';
 import ViewerList from './ViewerList';
@@ -12,7 +12,6 @@ import { VideoListRenderer } from './WatchVideoList';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth, db } from '../../../../firebase';
 import { doc, setDoc } from 'firebase/firestore';
-import { useState } from 'react';
 
 // 재시청 리스트 컴포넌트
 const WatchRewatchList = () => {
@@ -68,11 +67,12 @@ export const WatchTabsContainer = (props) => {
     onTabChange,
     videoFilter,
     onFilterChange,
-    selectedCategories,
     onTokenEarned,
     onWatchClick,
     getWatchCount,
-    selectedVideos
+    selectedCategories,
+    selectedVideos,
+    onWatchComplete = () => {} // 시청 완료 콜백 추가
   } = props;
   const { currentUser } = useAuth();
   const navigate = useNavigate();
@@ -152,6 +152,7 @@ export const WatchTabsContainer = (props) => {
                 selectedCategories={selectedCategories}
                 selectedVideos={selectedVideos}
                 getWatchCount={getWatchCount}
+                onWatchComplete={onWatchComplete}
               />
             </motion.div>
           ) : (

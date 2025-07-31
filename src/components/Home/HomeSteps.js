@@ -51,7 +51,10 @@ export const HomeSteps = ({
   
   // 카테고리 접기/펼치기 핸들러
   setCategoryCollapsed,
-  setVideoSelectionCollapsed
+  setVideoSelectionCollapsed,
+  
+  // 시청 완료 핸들러
+  onWatchComplete = () => {}
 }) => {
   return (
     <div className="min-h-screen overflow-y-auto hide-scrollbar pb-40 pt-4">
@@ -182,6 +185,7 @@ export const HomeSteps = ({
                   onWatchClick={handleWatchClick}
                   onMessageClick={handleMessageClick}
                   getWatchCount={getWatchCount}
+                  onWatchComplete={onWatchComplete}
                 />
               </div>
             </motion.div>

@@ -93,6 +93,7 @@ export const HomeContainer = () => {
     handleVideoClick,
     handleWatchClick,
     handleMessageClick,
+    handleWatchComplete,
   } = useHomeActions();
 
   // 로그인 상태 체크
@@ -233,6 +234,9 @@ export const HomeContainer = () => {
         // 접기/펼치기 핸들러
         setCategoryCollapsed={setCategoryCollapsed}
         setVideoSelectionCollapsed={setVideoSelectionCollapsed}
+        
+        // 시청 완료 핸들러
+        onWatchComplete={handleWatchComplete}
       />
       
       {/* Toast 알림 컨테이너 */}
