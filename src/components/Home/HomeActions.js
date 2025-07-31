@@ -186,21 +186,37 @@ export const useHomeActions = () => {
       return;
     }
     
-    // YouTube 팝업창 열기
+    // YouTube URL 생성
     const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
-    console.log('🚀 YouTube 팝업창 열기:', youtubeUrl);
+    console.log('🚀 YouTube URL 생성:', youtubeUrl);
     
-    const popup = window.open(youtubeUrl, 'youtube_view', 'width=800,height=600,scrollbars=yes,resizable=yes');
+    // 모바일 환경 감지
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     
-    if (popup) {
-      console.log('✅ YouTube 팝업창 열기 성공');
-      showToast('📺 YouTube에서 영상을 시청하세요! 시청 완료 후 "시청완료(수동)" 버튼을 눌러주세요.', 'success');
+    if (isMobile) {
+      // 모바일에서는 작은 팝업창으로 열기
+      console.log('📱 모바일 환경 감지 - 작은 팝업창으로 열기');
+      const popup = window.open(youtubeUrl, 'youtube_mobile', 'width=400,height=300,scrollbars=yes,resizable=yes');
       
-      // 시청 완료 버튼으로 변경하기 위해 이벤트 전파
-      // 이 부분은 컴포넌트에서 처리해야 함
+      if (popup) {
+        console.log('✅ 모바일에서 작은 팝업창 열기 성공');
+        showToast('📺 YouTube에서 영상을 시청하세요! 시청 완료 후 "시청완료(수동)" 버튼을 눌러주세요.', 'success');
+      } else {
+        console.warn('⚠️ 모바일에서 팝업창 열기 실패');
+        showToast('⚠️ 팝업창이 차단되었습니다. 수동으로 YouTube에 접속해주세요.', 'warning');
+      }
     } else {
-      console.warn('⚠️ 팝업창이 차단되었습니다. 수동으로 YouTube에 접속해주세요.');
-      showToast('⚠️ 팝업창이 차단되었습니다. 수동으로 YouTube에 접속해주세요.', 'warning');
+      // 데스크톱에서는 팝업창으로 열기
+      console.log('🖥️ 데스크톱 환경 - 팝업창으로 열기');
+      const popup = window.open(youtubeUrl, 'youtube_view', 'width=800,height=600,scrollbars=yes,resizable=yes');
+      
+      if (popup) {
+        console.log('✅ 데스크톱에서 팝업창 열기 성공');
+        showToast('📺 YouTube에서 영상을 시청하세요! 시청 완료 후 "시청완료(수동)" 버튼을 눌러주세요.', 'success');
+      } else {
+        console.warn('⚠️ 데스크톱에서 팝업창 열기 실패');
+        showToast('⚠️ 팝업창이 차단되었습니다. 수동으로 YouTube에 접속해주세요.', 'warning');
+      }
     }
   };
 
