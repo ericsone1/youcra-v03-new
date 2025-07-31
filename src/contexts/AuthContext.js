@@ -1,10 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { 
   onAuthStateChanged, 
-  signOut, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  updateProfile 
+  signOut
 } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
@@ -22,7 +19,6 @@ export function useAuth() {
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true); // 초기 로딩 상태
-  const [authMethod, setAuthMethod] = useState(null);
   const [sharedRoomId, setSharedRoomId] = useState(null); // 공유된 방 ID 저장
 
   // 공유된 방 정보 저장
@@ -74,27 +70,25 @@ export function AuthProvider({ children }) {
           email: firebaseUser.email,
           displayName: displayName,
           photoURL: photoURL,
-          isTemporaryUser: false,
           isEmailUser: true
         });
         setAuthMethod('firebase');
         localStorage.removeItem('isLoggedOut');
         localStorage.removeItem('tempUser');
       } else {
-        // Firebase 사용자 없음 - 임시 사용자 체크
-        const isLoggedOut = localStorage.getItem('isLoggedOut') === 'true';
-        const savedUser = localStorage.getItem('tempUser');
+        // Firebase 사용자 없음 - 로그아웃 상태
+        // 기존 임시 사용자 데이터 정리
+        localStorage.removeItem('tempUser');
+        localStorage.removeItem('isLoggedOut');
         
-        if (!isLoggedOut && savedUser) {
-          // 기존 임시 사용자 복원
-          const tempUser = JSON.parse(savedUser);
-          setCurrentUser(tempUser);
-          setAuthMethod('temporary');
-        } else {
-          // 완전한 로그아웃 상태
-          setCurrentUser(null);
-          setAuthMethod(null);
-        }
+        // 홈탭 관련 localStorage(ucra_*) 정리
+        Object.keys(localStorage).forEach((key) => {
+          if (key.startsWith('ucra_') || key.startsWith('video_')) {
+            localStorage.removeItem(key);
+          }
+        });
+        
+        setCurrentUser(null);
       }
       setLoading(false);
     });
@@ -102,7 +96,7 @@ export function AuthProvider({ children }) {
     return () => unsubscribe();
   }, []);
 
-  // 로그아웃 (Firebase Auth + 임시 인증 지원)
+  // Firebase 구글 로그아웃
   const logout = async () => {
     try {
       // 사용자 확인 메시지
@@ -111,27 +105,17 @@ export function AuthProvider({ children }) {
         return;
       }
 
-      // Firebase 사용자인 경우 Firebase 로그아웃
-      if (authMethod === 'firebase') {
-        await signOut(auth);
-      }
+      // Firebase 로그아웃
+      await signOut(auth);
 
-      // 로그아웃 상태 저장 및 임시 사용자 정보 제거
-      localStorage.setItem('isLoggedOut', 'true');
-      localStorage.removeItem('tempUser');
-
-      // 홈탭 관련 localStorage(ucra_*) 모두 초기화
-      Object.keys(localStorage).forEach((key) => {
-        if (key.startsWith('ucra_')) {
-          localStorage.removeItem(key);
-        }
-      });
+      // 모든 로컬 데이터 정리
+      localStorage.clear();
+      sessionStorage.clear();
 
       // 상태 업데이트
       setCurrentUser(null);
-      setAuthMethod(null);
       
-      // 부드러운 페이지 전환 (새로고침 대신 홈으로 이동)
+      // 홈으로 이동
       window.location.href = '/';
     } catch (error) {
       console.error('로그아웃 실패:', error);
@@ -139,67 +123,12 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // 이메일 로그인 함수
-  const emailLogin = async (email, password) => {
-    try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      // onAuthStateChanged가 자동으로 currentUser 업데이트
-      return userCredential.user;
-    } catch (error) {
-      console.error('이메일 로그인 실패:', error);
-      throw error;
-    }
-  };
 
-  // 이메일 회원가입 함수
-  const emailSignup = async (email, password, displayName) => {
-    try {
-      // 계정 생성
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      
-      // 프로필 업데이트 (닉네임 설정)
-      if (displayName) {
-        await updateProfile(userCredential.user, {
-          displayName: displayName
-        });
-      }
-      
-      // onAuthStateChanged가 자동으로 currentUser 업데이트
-      return userCredential.user;
-    } catch (error) {
-      console.error('이메일 회원가입 실패:', error);
-      throw error;
-    }
-  };
-
-  // 임시 로그인 함수 (개선된 버전)
-  const tempLogin = () => {
-    // 새로운 임시 사용자 생성
-    const newUser = {
-      uid: 'temp_user_' + Date.now(),
-      email: 'temp@youcra.com',
-      displayName: '유크라 사용자',
-      photoURL: null,
-      isTemporaryUser: true,
-      loginTime: new Date().toISOString()
-    };
-
-    // localStorage 업데이트
-    localStorage.removeItem('isLoggedOut');
-    localStorage.setItem('tempUser', JSON.stringify(newUser));
-    
-    // 상태 업데이트
-    setCurrentUser(newUser);
-    setAuthMethod('temporary');
-  };
 
   const value = {
     currentUser,
     loading,
-    authMethod,
     logout,
-    emailLogin,
-    emailSignup,
     isAuthenticated: !!currentUser, // currentUser가 있으면 true, 없으면 false
     sharedRoomId,
     setSharedRoom,

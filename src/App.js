@@ -60,7 +60,7 @@ const LocationDisplay = () => {
 // 컴포넌트 지연 로딩
 import Home from "./components/Home";
 // const Home = React.lazy(() => import("./components/Home"));
-const Login = React.lazy(() => import("./components/Login"));
+const LoginPage = React.lazy(() => import("./components/LoginPage"));
 const MyChannel = React.lazy(() => import("./components/MyChannel"));
 const MyBlog = React.lazy(() => import("./components/MyBlog"));
 const TestBlog = React.lazy(() => import("./components/TestBlog"));
@@ -140,7 +140,7 @@ function App() {
                     <Routes>
                       {/* 공개 라우트 */}
                       <Route path="/" element={<Home />} />
-                      <Route path="/login" element={<Login />} />
+                      <Route path="/login" element={<LoginPage />} />
                       <Route path="/test" element={<div style={{padding: '50px', textAlign: 'center', background: 'red', color: 'white', fontSize: '20px'}}>🎉 테스트 성공! 라우팅 작동 중!</div>} />
                       <Route path="/inapp-test" element={<InAppBrowserTest />} />
                       

@@ -156,11 +156,6 @@ const ProfileSection = ({
       <div className={`${isOverlay ? 'text-white text-opacity-90' : 'text-gray-500'} text-xs sm:text-sm mb-2 text-center`}>
         <div className="break-all">{profile.email || user?.email}</div>
         <div className="mt-1">
-          {user?.isTemporaryUser && (
-            <span className={`text-xs px-2 py-1 rounded-full ${isOverlay ? 'bg-yellow-500 bg-opacity-20 text-yellow-200' : 'bg-yellow-100 text-yellow-700'}`}>
-              임시 계정
-            </span>
-          )}
           {user?.isEmailUser && (
             <span className={`text-xs px-2 py-1 rounded-full ${isOverlay ? 'bg-green-500 bg-opacity-20 text-green-200' : 'bg-green-100 text-green-700'}`}>
               인증된 계정

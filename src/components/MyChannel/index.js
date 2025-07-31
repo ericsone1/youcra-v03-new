@@ -112,22 +112,8 @@ function MyChannel() {
             </div>
           )}
 
-          {/* 로그인 / 회원가입 / 구글 로그인 버튼 */}
+          {/* 구글 로그인 버튼 */}
           <div className="space-y-4">
-            <Link
-              to="/login"
-              className="block w-full bg-blue-500 text-white py-3 px-6 rounded-lg font-bold hover:bg-blue-600 transition-all duration-200 shadow-md"
-            >
-              📧 이메일로 로그인
-            </Link>
-
-            <Link
-              to="/login?mode=signup"
-              className="block w-full bg-green-500 text-white py-3 px-6 rounded-lg font-bold hover:bg-green-600 transition-all duration-200 shadow-md"
-            >
-              ✨ 회원가입
-            </Link>
-
             <button
               type="button"
               onClick={handleGoogleLogin}
