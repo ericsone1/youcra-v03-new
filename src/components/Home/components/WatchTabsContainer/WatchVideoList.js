@@ -152,12 +152,17 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
   const handleWatchComplete = (videoId) => {
     console.log('✅ [VideoListRenderer] 시청 완료 처리:', videoId);
     setLocalWatchedVideos(prev => new Set([...prev, videoId]));
+    
+    // localStorage에 시청 완료 상태 저장
+    localStorage.setItem(`watched_${videoId}`, 'true');
+    
     onWatchComplete(videoId);
   };
 
   // 시청 상태 확인
   const isWatched = (videoId) => {
-    return localWatchedVideos.has(videoId) || watchedVideos.has(videoId);
+    // localStorage에서 시청 완료 상태 확인
+    return localStorage.getItem(`watched_${videoId}`) === 'true' || localWatchedVideos.has(videoId) || watchedVideos.has(videoId);
   };
 
   // 시청 중인 상태 확인

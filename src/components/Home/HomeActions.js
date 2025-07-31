@@ -12,30 +12,28 @@ export const useHomeActions = () => {
   const { showToast } = useToast();
   const { setCertified } = useWatchedVideos();
 
-  // 시청 상태 관리 (로컬 상태)
-  const watchedVideos = new Set(); // 시청 완료된 영상 ID들
-
   // 시청 완료 처리 함수
   const handleWatchComplete = (videoId) => {
     console.log('✅ [HomeActions] 시청 완료 처리:', videoId);
     
-    // 로컬 상태에 추가
-    watchedVideos.add(videoId);
+    // localStorage에 시청 완료 상태 저장
+    localStorage.setItem(`watched_${videoId}`, 'true');
     
     // Firestore에 시청 완료 저장
     setCertified(videoId, true, 'manual');
     
     showToast('✅ 시청 완료로 처리되었습니다!', 'success');
     
-    // 페이지 새로고침으로 리스트 업데이트
-    setTimeout(() => {
-      window.location.reload();
-    }, 1000);
+    // 페이지 새로고침 대신 React 상태로 업데이트
+    // setTimeout(() => {
+    //   window.location.reload();
+    // }, 1000);
   };
 
   // 시청 상태 확인 함수
   const isWatched = (videoId) => {
-    return watchedVideos.has(videoId);
+    // localStorage에서 시청 완료 상태 확인만 사용
+    return localStorage.getItem(`watched_${videoId}`) === 'true';
   };
 
   // 채널 삭제 시 모든 상태 초기화
