@@ -152,6 +152,80 @@ export const calculateTokensFromTime = (totalSeconds) => {
 };
 
 /**
+ * 영상 길이 기반 토큰 차감 (조회수 증가 시)
+ * @param {string} videoId - YouTube 영상 ID
+ * @param {string} ownerUid - 영상 소유자 UID
+ * @param {number} durationSeconds - 영상 길이 (초)
+ */
+export const deductTokenForView = async (videoId, ownerUid, durationSeconds) => {
+  try {
+    console.log(`🪙 [tokenService] 조회수 증가 시 토큰 차감 시작:`, {
+      videoId,
+      ownerUid,
+      durationSeconds,
+      durationMinutes: Math.floor(durationSeconds / 60)
+    });
+
+    // 영상 길이를 분으로 변환
+    const durationMinutes = durationSeconds / 60;
+    
+    // 토큰 차감량 계산 (10분 = 1토큰)
+    const tokensToDeduct = durationMinutes / 10;
+    
+    console.log(`📊 [tokenService] 토큰 차감 계산:`, {
+      durationMinutes: durationMinutes.toFixed(2),
+      tokensToDeduct: tokensToDeduct.toFixed(2)
+    });
+
+    // 소유자의 토큰에서 차감
+    const statsRef = doc(db, 'users', ownerUid, 'stats', 'watchStats');
+    
+    return await runTransaction(db, async (transaction) => {
+      const statsSnap = await transaction.get(statsRef);
+      
+      if (!statsSnap.exists()) {
+        console.warn(`⚠️ [tokenService] ${ownerUid}의 토큰 정보가 없습니다`);
+        return { success: false, reason: 'no_token_info' };
+      }
+      
+      const currentStats = statsSnap.data();
+      
+      if (currentStats.availableTokens < tokensToDeduct) {
+        console.warn(`⚠️ [tokenService] 토큰 부족: 보유 ${currentStats.availableTokens}, 필요 ${tokensToDeduct.toFixed(2)}`);
+        return { success: false, reason: 'insufficient_tokens' };
+      }
+      
+      // 토큰 차감
+      const updatedStats = {
+        ...currentStats,
+        spentTokens: currentStats.spentTokens + tokensToDeduct,
+        availableTokens: currentStats.availableTokens - tokensToDeduct,
+        lastUpdated: new Date()
+      };
+      
+      transaction.set(statsRef, updatedStats);
+      
+      console.log(`✅ [tokenService] 토큰 차감 완료:`, {
+        ownerUid,
+        videoId,
+        deducted: tokensToDeduct.toFixed(2),
+        remaining: updatedStats.availableTokens.toFixed(2)
+      });
+      
+      return {
+        success: true,
+        tokensDeducted: tokensToDeduct,
+        remainingTokens: updatedStats.availableTokens
+      };
+    });
+    
+  } catch (error) {
+    console.error('❌ [tokenService] 조회수 토큰 차감 실패:', error);
+    throw error;
+  }
+};
+
+/**
  * 영상 노출 시 토큰 차감
  */
 export const consumeVideoToken = async (videoDocId) => {

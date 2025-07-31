@@ -72,7 +72,7 @@ export function AuthProvider({ children }) {
           photoURL: photoURL,
           isEmailUser: true
         });
-        setAuthMethod('firebase');
+
         localStorage.removeItem('isLoggedOut');
         localStorage.removeItem('tempUser');
       } else {

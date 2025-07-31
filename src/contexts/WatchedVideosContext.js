@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { collection, doc, onSnapshot, serverTimestamp, setDoc, getDocs, query, where, updateDoc, increment } from 'firebase/firestore';
 import { useAuth } from '../hooks/useAuth';
 import { db } from '../firebase';
+import { deductTokenForView } from '../services/tokenService';
 
 const WatchedVideosContext = createContext();
 
@@ -117,11 +118,16 @@ export const WatchedVideosProvider = ({ children }) => {
     await upsertWatched(videoId, updateData);
   };
 
-  // 유크라 조회수 업데이트 함수
+  // 유크라 조회수 업데이트 함수 (토큰 차감 포함)
   const updateUcraViewCount = async (videoId) => {
     if (!videoId) return;
     try {
       console.log('📊 [WatchedVideosContext] 유크라 조회수 업데이트 시작 (ALL DOCS):', videoId);
+
+      // 영상 정보와 소유자 정보 수집
+      let videoInfo = null;
+      let ownerUid = null;
+      let durationSeconds = 0;
 
       // 1. 모든 채팅방의 영상 문서 업데이트
       const roomsSnapshot = await getDocs(collection(db, 'chatRooms'));
@@ -133,6 +139,22 @@ export const WatchedVideosProvider = ({ children }) => {
         const videosSnapshot = await getDocs(videosQuery);
         for (const videoDoc of videosSnapshot.docs) {
           try {
+            const videoData = videoDoc.data();
+            
+            // 첫 번째 영상에서 정보 수집
+            if (!videoInfo) {
+              videoInfo = videoData;
+              ownerUid = videoData.registeredBy || videoData.ownerUid;
+              durationSeconds = videoData.durationSeconds || 0;
+              
+              console.log('📋 [WatchedVideosContext] 영상 정보 수집:', {
+                videoId,
+                ownerUid,
+                durationSeconds,
+                durationMinutes: Math.floor(durationSeconds / 60)
+              });
+            }
+            
             await updateDoc(doc(db, 'chatRooms', roomDoc.id, 'videos', videoDoc.id), {
               ucraViewCount: increment(1),
               lastViewedAt: serverTimestamp(),
@@ -148,6 +170,15 @@ export const WatchedVideosProvider = ({ children }) => {
       const rootVideosSnapshot = await getDocs(rootVideosQuery);
       for (const videoDoc of rootVideosSnapshot.docs) {
         try {
+          const videoData = videoDoc.data();
+          
+          // 정보가 없으면 루트에서 수집
+          if (!videoInfo) {
+            videoInfo = videoData;
+            ownerUid = videoData.registeredBy || videoData.ownerUid;
+            durationSeconds = videoData.durationSeconds || 0;
+          }
+          
           await updateDoc(doc(db, 'videos', videoDoc.id), {
             ucraViewCount: increment(1),
             lastViewedAt: serverTimestamp(),
@@ -155,6 +186,36 @@ export const WatchedVideosProvider = ({ children }) => {
         } catch (err) {
           console.error('❌ [WatchedVideosContext] 루트 영상 조회수 업데이트 실패:', err);
         }
+      }
+
+      // 3. 토큰 차감 (소유자가 있고 영상 길이가 있는 경우)
+      if (ownerUid && durationSeconds > 0) {
+        try {
+          const tokenResult = await deductTokenForView(videoId, ownerUid, durationSeconds);
+          
+          if (tokenResult.success) {
+            console.log('✅ [WatchedVideosContext] 토큰 차감 성공:', {
+              videoId,
+              ownerUid,
+              deducted: tokenResult.tokensDeducted.toFixed(2),
+              remaining: tokenResult.remainingTokens.toFixed(2)
+            });
+          } else {
+            console.warn('⚠️ [WatchedVideosContext] 토큰 차감 실패:', {
+              videoId,
+              ownerUid,
+              reason: tokenResult.reason
+            });
+          }
+        } catch (error) {
+          console.error('❌ [WatchedVideosContext] 토큰 차감 중 오류:', error);
+        }
+      } else {
+        console.warn('⚠️ [WatchedVideosContext] 토큰 차감 생략:', {
+          videoId,
+          ownerUid: !!ownerUid,
+          durationSeconds
+        });
       }
 
       console.log('✅ [WatchedVideosContext] 유크라 조회수 전체 업데이트 완료');
