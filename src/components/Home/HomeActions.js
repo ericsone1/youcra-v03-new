@@ -10,7 +10,7 @@ export const useHomeActions = () => {
   const { currentUser } = useAuth();
   const { initializePlayer } = useVideoPlayer();
   const { showToast } = useToast();
-  const { setCertified } = useWatchedVideos();
+  const { setCertified, canRewatch } = useWatchedVideos();
 
   // 시청 완료 처리 함수
   const handleWatchComplete = (videoId) => {
@@ -179,9 +179,9 @@ export const useHomeActions = () => {
       return;
     }
     
-    // 이미 시청 완료된 영상인지 확인
-    if (isWatched(videoId)) {
-      console.log('✅ 이미 시청 완료된 영상');
+    // 이미 시청 완료된 영상인지 확인 (재시청 가능한 경우 제외)
+    if (isWatched(videoId) && !canRewatch(videoId)) {
+      console.log('✅ 이미 시청 완료된 영상 (재시청 불가)');
       showToast('✅ 이미 시청 완료된 영상입니다.', 'info');
       return;
     }

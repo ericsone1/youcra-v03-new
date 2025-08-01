@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaChevronLeft, FaChevronRight } from 'react-icons/fa';
-import { FaPlay, FaCheck } from 'react-icons/fa';
+import { FaPlay, FaCheck, FaClock } from 'react-icons/fa';
 import { useAuth } from '../../../../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { useUcraVideos } from '../../hooks/useUcraVideos';
@@ -145,7 +145,7 @@ const CountdownButton = ({ videoId, onTimeUp }) => {
 
 // 영상 리스트 렌더러 (공통, 페이지네이션 추가)
 const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos = [], getWatchCount = () => 0, onWatchComplete = () => {}, watchedVideos = new Set() }) => {
-  const { watchedMap, canRewatch, getTimeUntilRewatch } = useWatchedVideos();
+  const { watchedMap, canRewatch, getTimeUntilRewatch, setCertified } = useWatchedVideos();
   const [localWatchedVideos, setLocalWatchedVideos] = useState(new Set());
 
   // 시청 완료 처리
@@ -155,6 +155,9 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
     
     // localStorage에 시청 완료 상태 저장
     localStorage.setItem(`watched_${videoId}`, 'true');
+    
+    // 1시간 타이머 시작을 위해 setCertified 호출
+    setCertified(videoId, true, 'manual');
     
     onWatchComplete(videoId);
   };
@@ -174,8 +177,9 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
   const handleWatchClick = (video, idx, videos) => {
     const videoId = video.videoId || video.id;
     
-    if (isWatched(videoId)) {
-      console.log('✅ 이미 시청 완료된 영상');
+    // 재시청 가능한 경우에는 시청 완료 상태를 무시하고 진행
+    if (isWatched(videoId) && !canRewatch(videoId)) {
+      console.log('✅ 이미 시청 완료된 영상 (재시청 불가)');
       return;
     }
 
@@ -254,22 +258,36 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
 
                 {/* 시청하기 버튼 */}
                 <div className="flex-shrink-0">
-                  {isWatched(video.id) ? (
-                    <button
-                      className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white text-sm rounded-lg font-semibold transition-all duration-200 shadow-md"
-                      disabled
-                    >
-                      <FaCheck className="inline mr-1" />
-                      시청완료
-                    </button>
-                  ) : isWatching(video.id) ? (
+                  {isWatching(video.id) ? (
+                    // 시청 중인 경우 (재시청 포함)
                     <button
                       onClick={() => handleCompleteClick(video.id)}
                       className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm rounded-lg font-semibold transition-all duration-200 shadow-md"
                     >
                       시청완료(수동)
                     </button>
+                  ) : isWatched(video.id) ? (
+                    canRewatch(video.id) ? (
+                      // 시청완료되었지만 1시간이 지나서 재시청 가능한 경우
+                      <button
+                        className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg font-semibold transition-all duration-200 shadow-md"
+                        onClick={e => { e.stopPropagation(); handleWatchClick(video, idx, recommendedVideos); }}
+                      >
+                        <FaPlay className="inline mr-1" />
+                        재시청하기
+                      </button>
+                    ) : (
+                      // 시청완료되었고 1시간이 지나지 않아 재시청 불가능한 경우
+                      <button
+                        className="px-4 py-2 bg-gray-400 text-white text-sm rounded-lg font-semibold transition-all duration-200 shadow-md"
+                        disabled
+                      >
+                        <FaClock className="inline mr-1" />
+                        {getTimeUntilRewatch(video.id)}분 후 재시청
+                      </button>
+                    )
                   ) : (
+                    // 처음 시청하는 경우
                     <button
                       className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white text-sm rounded-lg font-semibold transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 whitespace-normal"
                       onClick={e => { e.stopPropagation(); handleWatchClick(video, idx, recommendedVideos); }}
@@ -361,22 +379,36 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
 
                 {/* 시청하기 버튼 */}
                 <div className="flex-shrink-0">
-                  {isWatched(videoId) ? (
-                    <button
-                      className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white text-sm rounded-lg font-semibold transition-all duration-200 shadow-md"
-                      disabled
-                    >
-                      <FaCheck className="inline mr-1" />
-                      시청완료
-                    </button>
-                  ) : isWatching(videoId) ? (
+                  {isWatching(videoId) ? (
+                    // 시청 중인 경우 (재시청 포함)
                     <button
                       onClick={() => handleCompleteClick(videoId)}
                       className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm rounded-lg font-semibold transition-all duration-200 shadow-md"
                     >
                       시청완료(수동)
                     </button>
+                  ) : isWatched(videoId) ? (
+                    canRewatch(videoId) ? (
+                      // 시청완료되었지만 1시간이 지나서 재시청 가능한 경우
+                      <button
+                        className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg font-semibold transition-all duration-200 shadow-md"
+                        onClick={e => { e.stopPropagation(); handleWatchClick(video, idx, videos); }}
+                      >
+                        <FaPlay className="inline mr-1" />
+                        재시청하기
+                      </button>
+                    ) : (
+                      // 시청완료되었고 1시간이 지나지 않아 재시청 불가능한 경우
+                      <button
+                        className="px-4 py-2 bg-gray-400 text-white text-sm rounded-lg font-semibold transition-all duration-200 shadow-md"
+                        disabled
+                      >
+                        <FaClock className="inline mr-1" />
+                        {getTimeUntilRewatch(videoId)}분 후 재시청
+                      </button>
+                    )
                   ) : (
+                    // 처음 시청하는 경우
                     <button
                       className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white text-sm rounded-lg font-semibold transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 whitespace-normal"
                       onClick={e => { e.stopPropagation(); handleWatchClick(video, idx, videos); }}
@@ -409,7 +441,7 @@ export const WatchVideoList = ({
 }) => {
   const { currentUser } = useAuth();
   const { ucraVideos, loadingUcraVideos, error } = useUcraVideos();
-  const { watchedMap, canRewatch, getTimeUntilRewatch } = useWatchedVideos();
+  const { watchedMap, canRewatch, getTimeUntilRewatch, setCertified } = useWatchedVideos();
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   
   // Context에서 duration 가져오기 (임시 비활성화)
@@ -557,6 +589,8 @@ export const WatchVideoList = ({
   // 시청 완료 처리 함수
   const handleWatchComplete = (videoId) => {
     console.log('✅ [WatchVideoList] 시청 완료 처리:', videoId);
+    // 1시간 타이머 시작을 위해 setCertified 호출
+    setCertified(videoId, true, 'manual');
     onWatchComplete(videoId);
     setRefreshTrigger(prev => prev + 1);
   };
