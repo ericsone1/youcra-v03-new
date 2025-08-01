@@ -147,6 +147,16 @@ const CountdownButton = ({ videoId, onTimeUp }) => {
 const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos = [], getWatchCount = () => 0, onWatchComplete = () => {}, watchedVideos = new Set() }) => {
   const { watchedMap, canRewatch, getTimeUntilRewatch, setCertified } = useWatchedVideos();
   const [localWatchedVideos, setLocalWatchedVideos] = useState(new Set());
+  const [timerUpdate, setTimerUpdate] = useState(0); // 실시간 타이머 업데이트용
+
+  // 실시간 타이머 업데이트 (10초마다)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTimerUpdate(prev => prev + 1);
+    }, 10000); // 10초마다 업데이트
+
+    return () => clearInterval(interval);
+  }, []);
 
   // 시청 완료 처리
   const handleWatchComplete = (videoId) => {

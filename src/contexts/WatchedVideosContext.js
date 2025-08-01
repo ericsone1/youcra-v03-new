@@ -258,7 +258,7 @@ export const WatchedVideosProvider = ({ children }) => {
       return 0; // 시청한 적 없으면 0분
     }
     
-    const oneHourInMs = 60 * 60 * 1000;
+    const oneHourInMs = 60 * 60 * 1000; // 1시간
     const timePassed = Date.now() - info.watchedAt;
     const remainingMs = oneHourInMs - timePassed;
     
