@@ -3,6 +3,7 @@ import { collection, doc, onSnapshot, serverTimestamp, setDoc, getDocs, query, w
 import { useAuth } from '../hooks/useAuth';
 import { db } from '../firebase';
 import { deductTokenForView } from '../services/tokenService';
+import { addWatchRecord } from '../services/videoStatsService';
 
 const WatchedVideosContext = createContext();
 
@@ -97,6 +98,17 @@ export const WatchedVideosProvider = ({ children }) => {
     const prev = watchedMap[videoId]?.watchCount || 0;
     const newCount = prev + 1;
     console.log('🔢 [WatchedVideosContext] 시청 횟수 증가:', { videoId, prev, newCount });
+    
+    // 집계 서비스에 시청 기록 추가
+    if (currentUser?.uid) {
+      try {
+        await addWatchRecord(videoId, currentUser.uid, { watchCount: newCount });
+        console.log('✅ [WatchedVideosContext] 집계 서비스 업데이트 완료');
+      } catch (error) {
+        console.error('❌ [WatchedVideosContext] 집계 서비스 업데이트 실패:', error);
+      }
+    }
+    
     await upsertWatched(videoId, { watchCount: newCount });
   };
 

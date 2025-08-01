@@ -173,13 +173,39 @@ export const MyVideoListWithSelection = ({ channelInfo, selectedVideos, onVideos
     
     // 로그인된 상태라면 Firestore에 저장
     console.log('💾 Firestore에 영상 저장 중...');
-    for (const video of selectedVideos) {
-      await addDoc(collection(db, "videos"), {
-        ...video,
-        registeredAt: serverTimestamp(),
-      });
+    try {
+      for (const video of selectedVideos) {
+        // 루트 videos 컬렉션에 저장
+        const videoDoc = await addDoc(collection(db, "videos"), {
+          ...video,
+          registeredBy: currentUser.uid,
+          uploaderUid: currentUser.uid,
+          uploaderName: currentUser.displayName || "익명",
+          uploaderEmail: currentUser.email || "",
+          registeredAt: serverTimestamp(),
+        });
+        
+        // 사용자의 개인 myVideos 컬렉션에도 저장
+        try {
+          await addDoc(collection(db, "users", currentUser.uid, "myVideos"), {
+            ...video,
+            videoId: video.videoId,
+            registeredBy: currentUser.uid,
+            uploaderUid: currentUser.uid,
+            uploaderName: currentUser.displayName || "익명",
+            uploaderEmail: currentUser.email || "",
+            registeredAt: serverTimestamp(),
+            // 루트 videos 컬렉션의 문서 ID도 저장
+            rootVideoId: videoDoc.id
+          });
+        } catch (error) {
+          console.warn("⚠️ 사용자 myVideos 컬렉션 저장 실패:", error);
+        }
+      }
+      console.log('✅ Firestore 저장 완료');
+    } catch (error) {
+      console.error('❌ Firestore 저장 실패:', error);
     }
-    console.log('✅ Firestore 저장 완료');
   };
 
   if (loading) {

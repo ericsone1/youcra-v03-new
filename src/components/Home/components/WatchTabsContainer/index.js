@@ -40,8 +40,14 @@ const WatchRewatchList = () => {
     return !isMyVideo;
   });
   
-  // 중복 제거
-  const uniqueVideos = computeUniqueVideos(filteredVideos);
+  // 🚨 임시로 중복 제거 비활성화
+  // const uniqueVideos = computeUniqueVideos(filteredVideos);
+  const uniqueVideos = filteredVideos; // 중복 제거 없이 모든 영상 사용
+  console.log('🔍 [WatchTabsContainer] 중복 제거 비활성화:', {
+    필터링후: filteredVideos.length,
+    중복제거후: uniqueVideos.length,
+    제거된개수: 0
+  });
   // 시청 완료된 영상만 필터링 (전체/숏폼/롱폼 구분 제거)
   let displayVideos = uniqueVideos.filter(v => certifiedVideoIds.includes(v.videoId));
   

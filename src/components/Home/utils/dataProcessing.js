@@ -196,19 +196,55 @@ export function filterVideosByRecommendedCategories(videos, recommendedCategorie
 // 영상 목록에서 videoId(id) 기준으로 중복을 제거한 새 배열 반환
 export function computeUniqueVideos(videos = []) {
   const uniqueMap = new Map();
+  
   videos.forEach(video => {
-    const key = video?.id || video?.videoId;
-    if (!key) return;
-    if (!uniqueMap.has(key)) {
-      uniqueMap.set(key, video);
+    const videoId = video?.videoId || video?.id;
+    if (!videoId) return;
+    
+    // 등록자 정보가 없는 경우 기본값 사용
+    const registeredBy = video?.registeredBy || video?.uploaderUid || video?.createdBy || 'unknown';
+    const context = video?.roomName || video?.source || 'main';
+    
+    // 등록자 정보가 없으면 더 관대한 중복 제거
+    if (registeredBy === 'unknown') {
+      // 등록자 정보가 없으면 videoId + 컨텍스트만으로 중복 제거
+      const uniqueKey = `${videoId}_${context}`;
+      
+      if (!uniqueMap.has(uniqueKey)) {
+        uniqueMap.set(uniqueKey, video);
+      } else {
+        // 같은 키가 있으면 viewCount가 높은 것만 유지
+        const existing = uniqueMap.get(uniqueKey);
+        const existingCount = existing?.ucraViewCount || 0;
+        const newCount = video?.ucraViewCount || 0;
+        if (newCount > existingCount) {
+          uniqueMap.set(uniqueKey, video);
+        }
+      }
     } else {
-      const existing = uniqueMap.get(key);
-      const existingCount = existing?.ucraViewCount || 0;
-      const newCount = video?.ucraViewCount || 0;
-      if (newCount > existingCount) {
-        uniqueMap.set(key, video);
+      // 등록자 정보가 있으면 기존 로직 사용
+      const uniqueKey = `${videoId}_${registeredBy}_${context}`;
+      
+      if (!uniqueMap.has(uniqueKey)) {
+        uniqueMap.set(uniqueKey, video);
+      } else {
+        const existing = uniqueMap.get(uniqueKey);
+        const existingCount = existing?.ucraViewCount || 0;
+        const newCount = video?.ucraViewCount || 0;
+        if (newCount > existingCount) {
+          uniqueMap.set(uniqueKey, video);
+        }
       }
     }
   });
-  return Array.from(uniqueMap.values());
+  
+  const result = Array.from(uniqueMap.values());
+  console.log('🔍 [computeUniqueVideos] 중복 제거 결과:', {
+    원본개수: videos.length,
+    중복제거후: result.length,
+    제거된개수: videos.length - result.length,
+    등록자정보없음: videos.filter(v => !v.registeredBy && !v.uploaderUid && !v.createdBy).length
+  });
+  
+  return result;
 } 

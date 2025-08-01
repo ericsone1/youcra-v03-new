@@ -1,35 +1,59 @@
 import { useEffect, useState } from 'react';
-import { collection, getDocs, query, limit } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, doc, getDoc } from 'firebase/firestore';
 import { db } from '../../../firebase';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useUcraVideos } from './useUcraVideos';
+import { getMultipleVideoStats } from '../../../services/videoStatsService';
 
 /**
- * 내가 등록한 영상의 실제 시청자들을 가져오는 훅
+ * 내가 등록한 영상의 실제 시청자들을 가져오는 훅 (최적화 버전)
  */
 export function useMyVideoViewers() {
+  console.log('🚀 [useMyVideoViewers] 훅 시작');
+  
   const { currentUser } = useAuth();
   const { ucraVideos, loading: loadingUcraVideos } = useUcraVideos();
   const [loading, setLoading] = useState(true);
   const [viewers, setViewers] = useState([]);
+  const [isInitialized, setIsInitialized] = useState(false);
+
+
+
+  console.log('📊 [useMyVideoViewers] 초기 상태:', {
+    hasCurrentUser: !!currentUser,
+    currentUserUid: currentUser?.uid,
+    loadingUcraVideos,
+    isInitialized,
+    ucraVideosLength: ucraVideos.length
+  });
 
   useEffect(() => {
+    console.log('🔄 [useMyVideoViewers] useEffect 실행');
+    console.log('🔍 [useMyVideoViewers] 조건 확인:', {
+      hasCurrentUser: !!currentUser,
+      currentUserUid: currentUser?.uid,
+      loadingUcraVideos,
+      isInitialized,
+      ucraVideosLength: ucraVideos.length
+    });
+
     if (!currentUser) {
-      setViewers([]);
-      setLoading(false);
+      console.log('❌ [useMyVideoViewers] 현재 사용자 없음 - 실행 중단');
       return;
     }
 
     if (loadingUcraVideos) {
+      console.log('⏳ [useMyVideoViewers] ucraVideos 로딩 중 - 실행 중단');
       return;
     }
 
-    async function fetchRealViewers() {
+    // 🚨 임시로 초기화 상태 무시하고 항상 실행
+    console.log('✅ [useMyVideoViewers] 모든 조건 통과 - 실행 시작 (초기화 상태 무시)');
+
+    async function fetchViewersFromStats() {
       try {
         setLoading(true);
-        console.log('🔍 [useMyVideoViewers] 실제 시청자 데이터 로드 시작');
-        console.log('👤 [useMyVideoViewers] 현재 사용자 UID:', currentUser.uid);
-        console.log('🎥 [useMyVideoViewers] 전체 ucraVideos 수:', ucraVideos.length);
+        console.log('🚀 [useMyVideoViewers] 시청자 데이터 로드 시작');
         
         // 내가 등록한 영상들 찾기
         const myVideoList = ucraVideos.filter(v => {
@@ -37,132 +61,166 @@ export function useMyVideoViewers() {
                             v.uploaderUid === currentUser.uid ||
                             v.createdBy === currentUser.uid ||
                             v.channelId === currentUser.channelId ||
-                            v.authorId === currentUser.uid;
+                            v.authorId === currentUser.uid ||
+                            v.uploader === currentUser.displayName ||
+                            v.channel === currentUser.displayName ||
+                            v.registeredByEmail === currentUser.email ||
+                            v.registeredByUid === currentUser.uid;
+          
+          if (isMyVideo) {
+            console.log('✅ [useMyVideoViewers] 내 영상 발견:', {
+              title: v.title?.substring(0, 30),
+              videoId: v.videoId || v.id,
+              registeredBy: v.registeredBy,
+              uploaderUid: v.uploaderUid,
+              currentUserUid: currentUser.uid
+            });
+          }
+          
           return isMyVideo;
         });
         
-        console.log(`👤 [useMyVideoViewers] 내가 등록한 영상 수: ${myVideoList.length}`);
+        console.log('👤 [useMyVideoViewers] 내가 등록한 영상 수:', myVideoList.length);
+        console.log('👤 [useMyVideoViewers] 현재 사용자 UID:', currentUser.uid);
         
         if (myVideoList.length === 0) {
-          console.log('📭 [useMyVideoViewers] 등록한 영상이 없어 시청자 없음');
+          console.log('📭 [useMyVideoViewers] 등록한 영상이 없음');
           setViewers([]);
           setLoading(false);
+          setIsInitialized(true);
           return;
         }
 
-        const myVideoIds = myVideoList.map(v => v.videoId || v.id);
-        console.log('🎯 [useMyVideoViewers] 추적할 영상 IDs:', myVideoIds);
-
-        // 사용자 목록 가져오기 (최대 30명)
-        const usersQuery = query(collection(db, 'users'), limit(30));
-        const usersSnap = await getDocs(usersQuery);
-        
-        console.log(`👥 [useMyVideoViewers] 검사할 사용자 수: ${usersSnap.docs.length}`);
-
-        const viewerPromises = usersSnap.docs.map(async (userDoc) => {
-          const userId = userDoc.id;
-          if (userId === currentUser.uid) return null; // 자신 제외
-
-          try {
-            // 시청 기록 가져오기
-            const watchedSnap = await getDocs(collection(db, 'users', userId, 'watchedVideos'));
-            
-            const watchedMyVideos = [];
-            watchedSnap.docs.forEach(watchDoc => {
-              const watchedVideoId = watchDoc.id;
-              
-              if (myVideoIds.includes(watchedVideoId)) {
-                const myVideo = myVideoList.find(v => (v.videoId || v.id) === watchedVideoId);
-                if (myVideo) {
-                  const watchData = watchDoc.data();
-                  watchedMyVideos.push({
-                    ...myVideo,
-                    watchCount: watchData?.watchCount || 1,
-                    watchedAt: watchData?.watchedAt || watchData?.lastWatchedAt?.toMillis?.() || Date.now(),
-                    certified: watchData?.certified || false,
-                    watchedFrom: watchData?.watchedFrom || 'unknown'
-                  });
-                  console.log(`✅ [useMyVideoViewers] ${userId}가 내 영상 ${myVideo.title?.substring(0, 20)} 시청`);
-                }
-              }
-            });
-
-            if (watchedMyVideos.length > 0) {
-              const userProfile = userDoc.data();
-              
-              // 시청자의 업로드 영상 찾기
-              const userUploadedVideos = ucraVideos.filter(v => 
-                v.registeredBy === userId || 
-                v.uploaderUid === userId ||
-                v.createdBy === userId
-              ).slice(0, 3); // 최대 3개만
-
-              console.log(`🎉 [useMyVideoViewers] ${userId}는 내 영상 ${watchedMyVideos.length}개 시청한 실제 시청자!`);
-
-              return {
-                user: {
-                  uid: userId,
-                  displayName: userProfile?.displayName || userProfile?.name || `사용자${userId.slice(-4)}`,
-                  email: userProfile?.email || '',
-                  photoURL: userProfile?.photoURL || userProfile?.profileImage || '/default-profile.png',
-                  ...userProfile
-                },
-                watchedMyVideos: watchedMyVideos.sort((a, b) => b.watchedAt - a.watchedAt), // 최근 시청 순
-                uploadedVideos: userUploadedVideos,
-                isOnline: Math.random() > 0.3 // 70% 확률로 온라인 (실제 온라인 상태는 복잡하므로 랜덤)
-              };
+        const myVideoIds = myVideoList.map(v => {
+          // 다양한 필드에서 videoId 추출 시도
+          const videoId = v.videoId || v.id || v.youtubeId || v.youtube_id || v.video_id;
+          console.log('🎯 [useMyVideoViewers] 영상 ID 추출:', {
+            title: v.title?.substring(0, 20),
+            videoId,
+            originalFields: {
+              videoId: v.videoId,
+              id: v.id,
+              youtubeId: v.youtubeId,
+              youtube_id: v.youtube_id,
+              video_id: v.video_id
             }
-            return null;
-          } catch (error) {
-            console.warn(`⚠️ [useMyVideoViewers] ${userId} 처리 중 오류:`, error);
-            return null;
-          }
+          });
+          return videoId;
+        }).filter(id => id); // null/undefined 제거
+        console.log('🎯 [useMyVideoViewers] 내 영상 IDs:', myVideoIds);
+        
+        // 집계 컬렉션에서 내 영상의 통계 조회
+        const statsMap = await getMultipleVideoStats(myVideoIds);
+        console.log('📊 [useMyVideoViewers] 집계 통계 결과:', Object.keys(statsMap).length, '개');
+        
+        // 시청자가 있는 영상들만 필터링
+        const videosWithViewers = Object.entries(statsMap)
+          .filter(([videoId, stats]) => stats.totalViews > 0)
+          .map(([videoId, stats]) => {
+            const video = myVideoList.find(v => (v.videoId || v.id) === videoId);
+            return {
+              video,
+              stats,
+              viewers: stats.viewers || []
+            };
+          });
+
+        console.log('👥 [useMyVideoViewers] 시청자가 있는 영상 수:', videosWithViewers.length);
+
+        if (videosWithViewers.length === 0) {
+          console.log('📭 [useMyVideoViewers] 시청자가 있는 영상이 없음');
+          setViewers([]);
+          setLoading(false);
+          setIsInitialized(true);
+          return;
+        }
+
+        // 시청자 정보 수집
+        const viewerIds = new Set();
+        videosWithViewers.forEach(({ viewers }) => {
+          viewers.forEach(viewerId => {
+            if (viewerId !== currentUser.uid) {
+              viewerIds.add(viewerId);
+            }
+          });
         });
 
-        // 모든 사용자 처리 완료 대기
-        const results = await Promise.all(viewerPromises);
-        const realViewers = results.filter(viewer => viewer !== null);
+        console.log('👥 [useMyVideoViewers] 고유 시청자 수:', viewerIds.size);
+        console.log('👥 [useMyVideoViewers] 시청자 IDs:', Array.from(viewerIds));
 
-        console.log(`✅ [useMyVideoViewers] 실제 시청자 ${realViewers.length}명 발견`);
-        
-        // 실제 시청자가 없으면 샘플 데이터로 폴백
-        if (realViewers.length === 0) {
-          console.log('📝 [useMyVideoViewers] 실제 시청자가 없어 샘플 데이터 생성');
+        // 시청자 프로필 정보 조회
+        const viewerProfiles = [];
+        for (const viewerId of viewerIds) {
+          try {
+            // 사용자 문서 직접 조회
+            const userDocRef = doc(db, 'users', viewerId);
+            const userDocSnap = await getDoc(userDocRef);
+            
+            if (userDocSnap.exists()) {
+              const userData = userDocSnap.data();
+              viewerProfiles.push({
+                uid: viewerId,
+                displayName: userData?.displayName || userData?.name || `사용자${viewerId.slice(-4)}`,
+                email: userData?.email || '',
+                photoURL: userData?.photoURL || userData?.profileImage || '/default-profile.png',
+                ...userData
+              });
+              console.log(`✅ [useMyVideoViewers] 시청자 ${viewerId} 프로필 조회 성공:`, userData?.displayName || userData?.name);
+            } else {
+              console.warn(`⚠️ [useMyVideoViewers] 시청자 ${viewerId} 문서가 존재하지 않음`);
+            }
+          } catch (error) {
+            console.warn(`⚠️ [useMyVideoViewers] 시청자 ${viewerId} 프로필 조회 실패:`, error);
+          }
+        }
+
+        console.log('👤 [useMyVideoViewers] 시청자 프로필 수:', viewerProfiles.length);
+
+        // 시청자별 시청 영상 정보 구성
+        const viewersWithDetails = await Promise.all(viewerProfiles.map(async viewer => {
+          console.log(`\n🔍 [useMyVideoViewers] 시청자 ${viewer.displayName} (${viewer.uid}) 처리 시작`);
           
-          const sampleViewers = myVideoList.slice(0, 2).map((video, index) => ({
-            user: {
-              uid: `sample_viewer_${index}`,
-              displayName: `샘플시청자${index + 1}`,
-              email: `sample${index}@example.com`,
-              photoURL: '/default-profile.png'
-            },
-            watchedMyVideos: [{
+          const watchedMyVideos = videosWithViewers
+            .filter(({ viewers }) => viewers.includes(viewer.uid))
+            .map(({ video, stats }) => ({
               ...video,
-              watchCount: Math.floor(Math.random() * 3) + 1,
-              watchedAt: Date.now() - Math.floor(Math.random() * 24 * 60 * 60 * 1000),
+              watchCount: stats.totalViews,
+              watchedAt: stats.lastUpdated?.toMillis?.() || Date.now(),
               certified: true,
               watchedFrom: 'main'
-            }],
-            uploadedVideos: [],
-            isOnline: true
-          }));
-          
-          setViewers(sampleViewers);
-        } else {
-          setViewers(realViewers);
-        }
-        
+            }))
+            .sort((a, b) => b.watchedAt - a.watchedAt);
+            
+          console.log(`📺 [useMyVideoViewers] ${viewer.displayName}이 본 내 영상 수:`, watchedMyVideos.length);
+
+          return {
+            user: viewer,
+            watchedMyVideos,
+            isOnline: Math.random() > 0.3
+          };
+        }));
+
+        console.log('✅ [useMyVideoViewers] 최종 시청자 수:', viewersWithDetails.length);
+        setViewers(viewersWithDetails);
         setLoading(false);
+        setIsInitialized(true);
 
       } catch (error) {
-        console.error('❌ [useMyVideoViewers] 실제 시청자 데이터 로드 실패:', error);
+        console.error('❌ [useMyVideoViewers] 시청자 데이터 로드 실패:', error);
         setViewers([]);
         setLoading(false);
+        setIsInitialized(true);
       }
     }
 
-    fetchRealViewers();
-  }, [currentUser, ucraVideos, loadingUcraVideos]);
+    fetchViewersFromStats();
+  }, [currentUser, ucraVideos, loadingUcraVideos, isInitialized]);
 
-  return { loading, viewers };
+  // 강제 새로고침 함수
+  const refreshViewers = () => {
+    setIsInitialized(false);
+    setLoading(true);
+  };
+
+  return { loading, viewers, refreshViewers };
 } 

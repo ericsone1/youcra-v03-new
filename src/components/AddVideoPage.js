@@ -81,27 +81,60 @@ function AddVideoPage() {
     console.log("영상 등록 함수 실행됨!");
     if (!videoMeta) return;
     setVideoLoading(true);
-    if (roomId) {
-      // 채팅방에서 등록 시
-      await addDoc(collection(db, "chatRooms", roomId, "videos"), {
+    
+    const currentUser = auth.currentUser;
+    const userId = currentUser?.uid || "anonymous";
+    
+    try {
+      if (roomId) {
+        // 채팅방에서 등록 시
+        await addDoc(collection(db, "chatRooms", roomId, "videos"), {
+          ...videoMeta,
+          registeredBy: userId,
+          registeredAt: serverTimestamp(),
+        });
+      }
+      
+      // 홈탭/전체 영상 등록 (roomId와 무관하게 항상 저장)
+      const videoDoc = await addDoc(collection(db, "videos"), {
         ...videoMeta,
-        registeredBy: auth.currentUser?.uid || "anonymous",
+        uploaderUid: userId,
+        uploaderName: currentUser?.displayName || "익명",
+        uploaderEmail: currentUser?.email || "",
+        registeredBy: userId,
         registeredAt: serverTimestamp(),
       });
+      
+      // 사용자의 개인 myVideos 컬렉션에도 저장
+      if (currentUser) {
+        try {
+          await addDoc(collection(db, "users", userId, "myVideos"), {
+            ...videoMeta,
+            videoId: videoMeta.videoId,
+            registeredBy: userId,
+            uploaderUid: userId,
+            uploaderName: currentUser?.displayName || "익명",
+            uploaderEmail: currentUser?.email || "",
+            registeredAt: serverTimestamp(),
+            // 루트 videos 컬렉션의 문서 ID도 저장
+            rootVideoId: videoDoc.id
+          });
+          console.log("✅ 사용자 myVideos 컬렉션에 영상 저장 완료");
+        } catch (error) {
+          console.warn("⚠️ 사용자 myVideos 컬렉션 저장 실패:", error);
+        }
+      }
+      
+      setVideoMsg("영상이 등록되었습니다!");
+      setVideoUrl("");
+      setVideoMeta(null);
+      setVideoLoading(false);
+      setTimeout(() => navigate(-1), 1000); // 1초 후 리스트로 이동
+    } catch (error) {
+      console.error("❌ 영상 등록 실패:", error);
+      setVideoMsg("영상 등록에 실패했습니다.");
+      setVideoLoading(false);
     }
-    // 홈탭/전체 영상 등록 (roomId와 무관하게 항상 저장)
-    await addDoc(collection(db, "videos"), {
-      ...videoMeta,
-      uploaderUid: auth.currentUser?.uid || "anonymous",
-      uploaderName: auth.currentUser?.displayName || "익명",
-      uploaderEmail: auth.currentUser?.email || "",
-      registeredAt: serverTimestamp(),
-    });
-    setVideoMsg("영상이 등록되었습니다!");
-    setVideoUrl("");
-    setVideoMeta(null);
-    setVideoLoading(false);
-    setTimeout(() => navigate(-1), 1000); // 1초 후 리스트로 이동
   };
 
   return (

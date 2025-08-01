@@ -3,13 +3,11 @@ import { motion } from 'framer-motion';
 import { useMyVideoViewers } from '../../hooks/useMyVideoViewers';
 import { useVideoPlayer } from '../../../../contexts/VideoPlayerContext';
 import { useWatchedVideos } from '../../../../contexts/WatchedVideosContext';
-import { useUcraVideos } from '../../hooks/useUcraVideos';
 
 export default function ViewerList() {
   const { loading, viewers } = useMyVideoViewers();
   const { handleVideoSelect, updateVideoList, initializePlayer } = useVideoPlayer();
   const { upsertWatched, watchedMap, canRewatch, getWatchInfo } = useWatchedVideos();
-  const { ucraVideos } = useUcraVideos(); // "내가 시청할 영상" 데이터 추가
   const [selectedViewer, setSelectedViewer] = useState(null);
   const [forceUpdate, setForceUpdate] = useState(0);
 
@@ -18,14 +16,7 @@ export default function ViewerList() {
     setForceUpdate(prev => prev + 1);
   }, [watchedMap]);
 
-  // 시청자의 영상 중에서 "내가 시청할 영상" 리스트에 있는 것들만 필터링
-  const getFilteredViewerVideos = (viewerVideos) => {
-    return viewerVideos.filter(viewerVideo => 
-      ucraVideos.some(ucraVideo => 
-        ucraVideo.videoId === viewerVideo.videoId || ucraVideo.id === viewerVideo.videoId
-      )
-    );
-  };
+
 
 
 
@@ -111,41 +102,60 @@ export default function ViewerList() {
         <div key={viewer.user.uid} className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
           {/* 시청자 정보 헤더 */}
           <div className="p-4 bg-gray-50 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <img
-                  src={viewer.user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(viewer.user.displayName || viewer.user.email || 'User')}&background=random`}
-                  alt={viewer.user.displayName}
-                  className="w-12 h-12 rounded-full object-cover"
-                  onError={(e) => {
-                    e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(viewer.user.displayName || viewer.user.email || 'User')}&background=random`;
-                  }}
-                />
-                <div>
-                  <h3 className="font-semibold text-gray-800">
-                    {viewer.user.displayName || viewer.user.email || '익명 사용자'}
-                  </h3>
-                  <p className="text-sm text-gray-500">
-                    내 영상 {viewer.watchedMyVideos?.length || 0}개 시청
-                  </p>
+                          <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <img
+                    src={viewer.user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(viewer.user.displayName || viewer.user.email || 'User')}&background=random`}
+                    alt={viewer.user.displayName}
+                    className="w-12 h-12 rounded-full object-cover"
+                    onError={(e) => {
+                      e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(viewer.user.displayName || viewer.user.email || 'User')}&background=random`;
+                    }}
+                  />
+                  <div>
+                    <h3 className="font-semibold text-gray-800">
+                      {viewer.user.displayName || viewer.user.email || '익명 사용자'}
+                    </h3>
+                    <p className="text-sm text-gray-500">
+                      내 영상 {viewer.watchedMyVideos?.length || 0}회 시청
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center space-x-2">
+                  {/* YouTube 채널 바로가기 버튼 */}
+                  {viewer.user.youtubeChannel?.channelId && (
+                    <button
+                      onClick={() => {
+                        // YouTube 채널로 이동
+                        window.open(`https://www.youtube.com/channel/${viewer.user.youtubeChannel.channelId}`, '_blank');
+                      }}
+                      className="px-3 py-1 bg-red-500 text-white text-xs rounded-full hover:bg-red-600 transition-colors flex items-center space-x-1"
+                      title="YouTube 채널 바로가기"
+                    >
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                      </svg>
+                      <span>YouTube</span>
+                    </button>
+                  )}
+                  
+                  {/* 펼치기/접기 버튼 */}
+                  <button
+                    onClick={() => setSelectedViewer(selectedViewer === viewer.user.uid ? null : viewer.user.uid)}
+                    className="p-2 hover:bg-gray-200 rounded-full transition-colors"
+                  >
+                    <svg 
+                      className={`w-5 h-5 transform transition-transform ${selectedViewer === viewer.user.uid ? 'rotate-180' : ''}`}
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
                 </div>
               </div>
-              
-              {/* 펼치기/접기 버튼 */}
-              <button
-                onClick={() => setSelectedViewer(selectedViewer === viewer.user.uid ? null : viewer.user.uid)}
-                className="p-2 hover:bg-gray-200 rounded-full transition-colors"
-              >
-                <svg 
-                  className={`w-5 h-5 transform transition-transform ${selectedViewer === viewer.user.uid ? 'rotate-180' : ''}`}
-                  fill="none" 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-            </div>
           </div>
 
           {/* 상세 정보 (펼쳐진 상태) */}
@@ -159,99 +169,7 @@ export default function ViewerList() {
             >
 
 
-              {/* 시청자가 업로드한 영상들 (내가 시청할 영상 리스트에 있는 것만) */}
-              {(() => {
-                const filteredVideos = getFilteredViewerVideos(viewer.uploadedVideos || []);
-                
-                if (filteredVideos.length === 0) {
-                  return (
-                    <div className="text-center py-4 text-gray-500">
-                      <p className="text-sm">이 시청자의 영상 중 시청 가능한 영상이 없습니다.</p>
-                      <p className="text-xs mt-1">전체 영상: {viewer.uploadedVideos?.length || 0}개</p>
-                    </div>
-                  );
-                }
-                
-                return (
-                  <div>
-                    <h4 className="font-medium text-gray-800 mb-2">
-                      {viewer.user.displayName || '이 사용자'}가 업로드한 영상 
-                      <span className="text-sm text-blue-600 font-normal">
-                        (시청 가능: {filteredVideos.length}개 / 전체: {viewer.uploadedVideos?.length || 0}개)
-                      </span>
-                    </h4>
-                    <div className="space-y-2">
-                      {filteredVideos.map((video, idx) => {
-                      const watchStatus = getVideoWatchStatus(video.videoId);
-                      const playerVideo = {
-                        videoId: video.videoId,
-                        id: video.videoId, // id 속성 추가 (VideoPlayerContext에서 필요)
-                        title: video.title,
-                        channel: video.channel || '채널명 없음',
-                        channelTitle: video.channelTitle || viewer.user.displayName || '채널명 없음',
-                        duration: video.durationDisplay || video.duration,
-                        durationDisplay: video.durationDisplay || video.duration,
-                        thumbnail: `https://img.youtube.com/vi/${video.videoId}/mqdefault.jpg`,
-                        description: video.description || '',
-                        ucraViewCount: video.ucraViewCount || 0
-                      };
 
-                      return (
-                        <div key={idx} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-lg">
-                          <img
-                            src={`https://img.youtube.com/vi/${video.videoId}/mqdefault.jpg`}
-                            alt={video.title}
-                            className="w-20 h-15 object-cover rounded"
-                            onError={(e) => {
-                              e.target.src = `https://img.youtube.com/vi/${video.videoId}/default.jpg`;
-                            }}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-800 truncate">{video.title}</p>
-                            <p className="text-xs text-gray-500">
-                              {video.durationDisplay || video.duration} • 
-                              유크라 조회수 {video.ucraViewCount || 0}회
-                              {getWatchInfo(video.videoId).watchCount > 0 && ` • 내가 ${getWatchInfo(video.videoId).watchCount}회 시청`}
-                            </p>
-                          </div>
-                          <button
-                            onClick={() => {
-                              // 시청 가능한 영상들만 playerVideo 형태로 변환
-                              const allFilteredVideos = getFilteredViewerVideos(viewer.uploadedVideos || []).map(v => ({
-                                videoId: v.videoId,
-                                id: v.videoId, // id 속성 추가 (중요!)
-                                title: v.title,
-                                channelTitle: v.channelTitle || viewer.user.displayName,
-                                channel: v.channel || '채널명 없음',
-                                duration: v.duration,
-                                durationDisplay: v.durationDisplay,
-                                thumbnail: `https://img.youtube.com/vi/${v.videoId}/mqdefault.jpg`,
-                                description: v.description || '',
-                                ucraViewCount: v.ucraViewCount || 0
-                              }));
-                              
-                              console.log('🎬 [ViewerList] 시청하기 클릭 (필터링됨):', {
-                                selectedVideo: playerVideo.title,
-                                selectedVideoId: playerVideo.videoId,
-                                totalVideos: viewer.uploadedVideos?.length || 0,
-                                filteredVideosCount: allFilteredVideos.length,
-                                filteredVideos: allFilteredVideos
-                              });
-                              
-                              handleVideoPlay(playerVideo, allFilteredVideos);
-                            }}
-                            disabled={watchStatus.status === 'watched'}
-                            className={`px-3 py-1 text-xs text-white rounded-full transition-colors ${watchStatus.className}`}
-                          >
-                            {watchStatus.label}
-                          </button>
-                        </div>
-                      );
-                      })}
-                    </div>
-                  </div>
-                );
-              })()}
             </motion.div>
           )}
         </div>
