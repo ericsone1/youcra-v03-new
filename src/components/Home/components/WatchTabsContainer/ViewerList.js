@@ -91,9 +91,9 @@ export default function ViewerList() {
       transition={{ duration: 0.3 }}
       className="space-y-4 p-4"
     >
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-bold text-gray-800">내 영상 시청자</h2>
-        <span className="text-sm bg-blue-100 text-blue-800 px-3 py-1 rounded-full">
+      <div className="flex items-center justify-between mb-4 sm:mb-6">
+        <h2 className="text-lg sm:text-xl font-bold text-gray-800">내 영상 시청자</h2>
+        <span className="text-xs sm:text-sm bg-blue-100 text-blue-800 px-2 sm:px-3 py-1 rounded-full whitespace-nowrap">
           총 {viewers.length}명
         </span>
       </div>
@@ -101,61 +101,61 @@ export default function ViewerList() {
       {viewers.map((viewer, index) => (
         <div key={viewer.user.uid} className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
           {/* 시청자 정보 헤더 */}
-          <div className="p-4 bg-gray-50 border-b border-gray-200">
-                          <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <img
-                    src={viewer.user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(viewer.user.displayName || viewer.user.email || 'User')}&background=random`}
-                    alt={viewer.user.displayName}
-                    className="w-12 h-12 rounded-full object-cover"
-                    onError={(e) => {
-                      e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(viewer.user.displayName || viewer.user.email || 'User')}&background=random`;
-                    }}
-                  />
-                  <div>
-                    <h3 className="font-semibold text-gray-800">
-                      {viewer.user.displayName || viewer.user.email || '익명 사용자'}
-                    </h3>
-                    <p className="text-sm text-gray-500">
-                      내 영상 {viewer.watchedMyVideos?.length || 0}회 시청
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center space-x-2">
-                  {/* YouTube 채널 바로가기 버튼 */}
-                  {viewer.user.youtubeChannel?.channelId && (
-                    <button
-                      onClick={() => {
-                        // YouTube 채널로 이동
-                        window.open(`https://www.youtube.com/channel/${viewer.user.youtubeChannel.channelId}`, '_blank');
-                      }}
-                      className="px-3 py-1 bg-red-500 text-white text-xs rounded-full hover:bg-red-600 transition-colors flex items-center space-x-1"
-                      title="YouTube 채널 바로가기"
-                    >
-                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
-                      </svg>
-                      <span>YouTube</span>
-                    </button>
-                  )}
-                  
-                  {/* 펼치기/접기 버튼 */}
-                  <button
-                    onClick={() => setSelectedViewer(selectedViewer === viewer.user.uid ? null : viewer.user.uid)}
-                    className="p-2 hover:bg-gray-200 rounded-full transition-colors"
-                  >
-                    <svg 
-                      className={`w-5 h-5 transform transition-transform ${selectedViewer === viewer.user.uid ? 'rotate-180' : ''}`}
-                      fill="none" 
-                      stroke="currentColor" 
-                      viewBox="0 0 24 24"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
+          <div className="p-3 sm:p-4 bg-gray-50 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
+                <img
+                  src={viewer.user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(viewer.user.displayName || viewer.user.email || 'User')}&background=random`}
+                  alt={viewer.user.displayName}
+                  className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover flex-shrink-0"
+                  onError={(e) => {
+                    e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(viewer.user.displayName || viewer.user.email || 'User')}&background=random`;
+                  }}
+                />
+                <div className="min-w-0 flex-1">
+                  <h3 className="font-semibold text-gray-800 text-sm sm:text-base truncate">
+                    {viewer.user.displayName || viewer.user.email || '익명 사용자'}
+                  </h3>
+                  <p className="text-xs sm:text-sm text-gray-500 truncate">
+                    내 영상 {viewer.watchedMyVideos?.length || 0}회 시청
+                  </p>
                 </div>
               </div>
+              
+              <div className="flex items-center space-x-1 sm:space-x-2 flex-shrink-0">
+                {/* YouTube 채널 바로가기 버튼 */}
+                {viewer.user.youtubeChannel?.channelId && (
+                  <button
+                    onClick={() => {
+                      // YouTube 채널로 이동
+                      window.open(`https://www.youtube.com/channel/${viewer.user.youtubeChannel.channelId}`, '_blank');
+                    }}
+                    className="px-2 py-1 sm:px-3 bg-red-500 text-white text-xs rounded-full hover:bg-red-600 transition-colors flex items-center space-x-1 whitespace-nowrap"
+                    title="YouTube 채널 바로가기"
+                  >
+                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                    </svg>
+                    <span className="hidden sm:inline">YouTube</span>
+                  </button>
+                )}
+                
+                {/* 펼치기/접기 버튼 */}
+                <button
+                  onClick={() => setSelectedViewer(selectedViewer === viewer.user.uid ? null : viewer.user.uid)}
+                  className="p-1 sm:p-2 hover:bg-gray-200 rounded-full transition-colors"
+                >
+                  <svg 
+                    className={`w-4 h-4 sm:w-5 sm:h-5 transform transition-transform ${selectedViewer === viewer.user.uid ? 'rotate-180' : ''}`}
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* 상세 정보 (펼쳐진 상태) */}

@@ -227,14 +227,14 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
             {recommendedVideos.map((video, idx) => (
               <li
                 key={video.id + '-recommended-' + idx}
-                className="bg-gradient-to-r from-purple-50 to-blue-50 p-4 rounded-xl border border-purple-200 flex items-start gap-4"
+                className="bg-gradient-to-r from-purple-50 to-blue-50 p-3 sm:p-4 rounded-xl border border-purple-200 flex items-start gap-3 sm:gap-4"
               >
                 {/* 썸네일 */}
                 <div className="relative flex-shrink-0">
                   <img
                     src={video.thumbnail || video.thumbnailUrl || `https://img.youtube.com/vi/${video.id}/mqdefault.jpg`}
                     alt={video.title}
-                    className="w-32 h-20 object-cover rounded-lg shadow-sm"
+                    className="w-24 h-16 sm:w-32 sm:h-20 object-cover rounded-lg shadow-sm"
                     onError={(e) => {
                       e.target.src = 'https://via.placeholder.com/128x80/f3f4f6/9ca3af?text=영상';
                     }}
@@ -249,20 +249,13 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
                 {/* 정보 */}
                 <div className="flex-1 min-w-0">
                   {/* 제목 */}
-                  <h3 className="text-sm font-semibold text-gray-900 line-clamp-2 mb-1.5 leading-snug">
+                  <h3 className="text-xs sm:text-sm font-semibold text-gray-900 mb-2 sm:mb-3 leading-tight line-clamp-2">
                     {video.title || '제목 없음'}
                   </h3>
                   
-                  {/* 영상 길이 */}
-                  <div className="flex items-center mb-1">
-                    <p className="text-xs text-gray-600 font-medium">
-                      {video.durationDisplay || '시간 미확인'}
-                    </p>
-                  </div>
-                  
                   {/* 조회수 */}
                   <div className="text-xs text-gray-500">
-                    <span>조회수 {(video.viewCount || video.views || 0).toLocaleString()}회</span>
+                    <span>유크라 조회수 {(video.viewCount || video.views || 0).toLocaleString()}회</span>
                   </div>
                 </div>
 
@@ -272,7 +265,7 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
                     // 시청 중인 경우 (재시청 포함)
                     <button
                       onClick={() => handleCompleteClick(video.id)}
-                      className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm rounded-lg font-semibold transition-all duration-200 shadow-md"
+                      className="px-3 py-2 sm:px-4 bg-orange-500 hover:bg-orange-600 text-white text-xs sm:text-sm rounded-lg font-semibold transition-all duration-200 shadow-md whitespace-nowrap"
                     >
                       시청완료(수동)
                     </button>
@@ -280,7 +273,7 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
                     canRewatch(video.id) ? (
                       // 시청완료되었지만 1시간이 지나서 재시청 가능한 경우
                       <button
-                        className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg font-semibold transition-all duration-200 shadow-md"
+                        className="px-3 py-2 sm:px-4 bg-blue-500 hover:bg-blue-600 text-white text-xs sm:text-sm rounded-lg font-semibold transition-all duration-200 shadow-md whitespace-nowrap"
                         onClick={e => { e.stopPropagation(); handleWatchClick(video, idx, recommendedVideos); }}
                       >
                         <FaPlay className="inline mr-1" />
@@ -289,7 +282,7 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
                     ) : (
                       // 시청완료되었고 1시간이 지나지 않아 재시청 불가능한 경우
                       <button
-                        className="px-4 py-2 bg-gray-400 text-white text-sm rounded-lg font-semibold transition-all duration-200 shadow-md"
+                        className="px-3 py-2 sm:px-4 bg-gray-400 text-white text-xs sm:text-sm rounded-lg font-semibold transition-all duration-200 shadow-md whitespace-nowrap"
                         disabled
                       >
                         <FaClock className="inline mr-1" />
@@ -299,7 +292,7 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
                   ) : (
                     // 처음 시청하는 경우
                     <button
-                      className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white text-sm rounded-lg font-semibold transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 whitespace-normal"
+                      className="px-3 py-2 sm:px-4 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white text-xs sm:text-sm rounded-lg font-semibold transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 whitespace-nowrap"
                       onClick={e => { e.stopPropagation(); handleWatchClick(video, idx, recommendedVideos); }}
                     >
                       <FaPlay className="inline mr-1" />
@@ -321,15 +314,15 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
           return (
             <li
               key={videoId + '-' + idx}
-              className="bg-white p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-lg hover:border-gray-200 transition-all duration-200 cursor-pointer"
+              className="bg-white p-3 sm:p-5 rounded-xl shadow-sm border border-gray-100 hover:shadow-lg hover:border-gray-200 transition-all duration-200 cursor-pointer"
             >
-              <div className="flex items-start gap-4">
-                {/* 썸네일 - 더 큰 사이즈로 */}
+              <div className="flex items-start gap-3 sm:gap-4">
+                {/* 썸네일 - 반응형 사이즈 */}
                 <div className="relative flex-shrink-0">
                   <img
                     src={video.thumbnail || video.thumbnailUrl || `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`}
                     alt={video.title}
-                    className="w-40 h-24 object-cover rounded-lg shadow-sm"
+                    className="w-28 h-18 sm:w-40 sm:h-24 object-cover rounded-lg shadow-sm"
                     onError={(e) => {
                       e.target.src = 'https://via.placeholder.com/160x96/f3f4f6/9ca3af?text=영상';
                     }}
@@ -348,25 +341,21 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
                   )}
                 </div>
 
-                {/* 영상 정보 */}
-                <div className="flex-1 min-w-0">
-                  {/* 제목 */}
-                  <h3 className="text-base font-semibold text-gray-900 line-clamp-2 mb-2 leading-snug">
-                    {video.title || '제목 없음'}
-                  </h3>
-                  
-                  {/* 영상 길이 */}
-                  <div className="flex items-center mb-2">
-                    <p className="text-sm text-gray-600 font-medium">
-                      {video.durationDisplay || '시간 미확인'}
-                    </p>
+                {/* 영상 정보 - 더 넓은 공간 활용 */}
+                <div className="flex-1 min-w-0 flex flex-col justify-between h-full">
+                  {/* 상단: 제목과 시간 */}
+                  <div className="flex-1">
+                    {/* 제목 - 두 줄로 표시 가능 */}
+                    <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-2 sm:mb-3 leading-tight line-clamp-2">
+                      {video.title || '제목 없음'}
+                    </h3>
                   </div>
                   
-                  {/* 유크라 플레이 횟수와 업로드일 */}
-                  <div className="flex items-center text-sm text-gray-500">
-                    <span>유크라 플레이 {(video.ucraViewCount || 0).toLocaleString()}회</span>
-                    <span className="mx-2">•</span>
-                    <span>{(() => {
+                  {/* 하단: 유크라 플레이 횟수와 업로드일 */}
+                  <div className="flex flex-row items-center text-xs sm:text-sm text-gray-500 gap-2">
+                    <span className="whitespace-nowrap">유크라 조회수 {(video.ucraViewCount || 0).toLocaleString()}회</span>
+                    <span className="hidden sm:inline">•</span>
+                    <span className="whitespace-nowrap">{(() => {
                       // 디버깅: 실제 registeredAt 값 확인 (모든 영상)
                       console.log(`📅 [날짜표시] "${video.title?.substring(0, 15)}":`, {
                         registeredAt: video.registeredAt,
@@ -393,7 +382,7 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
                     // 시청 중인 경우 (재시청 포함)
                     <button
                       onClick={() => handleCompleteClick(videoId)}
-                      className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm rounded-lg font-semibold transition-all duration-200 shadow-md"
+                      className="px-3 py-2 sm:px-4 bg-orange-500 hover:bg-orange-600 text-white text-xs sm:text-sm rounded-lg font-semibold transition-all duration-200 shadow-md whitespace-nowrap"
                     >
                       시청완료(수동)
                     </button>
@@ -401,7 +390,7 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
                     canRewatch(videoId) ? (
                       // 시청완료되었지만 1시간이 지나서 재시청 가능한 경우
                       <button
-                        className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg font-semibold transition-all duration-200 shadow-md"
+                        className="px-3 py-2 sm:px-4 bg-blue-500 hover:bg-blue-600 text-white text-xs sm:text-sm rounded-lg font-semibold transition-all duration-200 shadow-md whitespace-nowrap"
                         onClick={e => { e.stopPropagation(); handleWatchClick(video, idx, videos); }}
                       >
                         <FaPlay className="inline mr-1" />
@@ -410,7 +399,7 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
                     ) : (
                       // 시청완료되었고 1시간이 지나지 않아 재시청 불가능한 경우
                       <button
-                        className="px-4 py-2 bg-gray-400 text-white text-sm rounded-lg font-semibold transition-all duration-200 shadow-md"
+                        className="px-3 py-2 sm:px-4 bg-gray-400 text-white text-xs sm:text-sm rounded-lg font-semibold transition-all duration-200 shadow-md whitespace-nowrap"
                         disabled
                       >
                         <FaClock className="inline mr-1" />
@@ -420,7 +409,7 @@ const VideoListRenderer = ({ videos, onWatchClick = () => {}, recommendedVideos 
                   ) : (
                     // 처음 시청하는 경우
                     <button
-                      className="px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white text-sm rounded-lg font-semibold transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 whitespace-normal"
+                      className="px-3 py-2 sm:px-4 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white text-xs sm:text-sm rounded-lg font-semibold transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-105 active:scale-95 whitespace-nowrap"
                       onClick={e => { e.stopPropagation(); handleWatchClick(video, idx, videos); }}
                     >
                       <FaPlay className="inline mr-1" />
