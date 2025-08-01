@@ -186,11 +186,40 @@ export const useHomeActions = () => {
       return;
     }
     
-    // YouTube 팝업창 열기
+    // YouTube 팝업창 열기 (PC/모바일 구분)
     const youtubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
-    console.log('🚀 YouTube 팝업창 열기:', youtubeUrl);
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     
-    const popup = window.open(youtubeUrl, 'youtube_view', 'width=800,height=600,scrollbars=yes,resizable=yes');
+    let popup;
+    if (isMobile) {
+      popup = window.open(youtubeUrl, 'youtube_mobile', `
+        width=400,
+        height=600,
+        left=${(screen.width - 400) / 2},
+        top=${(screen.height - 600) / 2},
+        scrollbars=yes,
+        resizable=yes,
+        toolbar=no,
+        menubar=no,
+        location=no,
+        status=no,
+        directories=no
+      `);
+    } else {
+      popup = window.open(youtubeUrl, 'youtube_desktop', `
+        width=1000,
+        height=700,
+        left=${(screen.width - 1000) / 2},
+        top=${(screen.height - 700) / 2},
+        scrollbars=yes,
+        resizable=yes,
+        toolbar=no,
+        menubar=no,
+        location=no,
+        status=no,
+        directories=no
+      `);
+    }
     
     if (popup) {
       console.log('✅ YouTube 팝업창 열기 성공');
