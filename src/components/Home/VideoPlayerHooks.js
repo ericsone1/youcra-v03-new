@@ -57,7 +57,7 @@ export const useDragState = (minimized, pos) => {
     if (pos) return pos;
     return minimized 
       ? { x: window.innerWidth - 100, y: window.innerHeight - 100 }
-      : { x: (window.innerWidth - 400) / 2, y: 50 };
+      : { x: (window.innerWidth - 300) / 2, y: 50 };
   });
 
   return {

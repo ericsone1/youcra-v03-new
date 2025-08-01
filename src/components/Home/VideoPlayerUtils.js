@@ -20,7 +20,7 @@ export function getInitialPosition(minimized, pos) {
   if (pos) return pos;
   return minimized 
     ? { x: window.innerWidth - 100, y: window.innerHeight - 100 }
-    : { x: (window.innerWidth - 400) / 2, y: 50 };
+    : { x: (window.innerWidth - 300) / 2, y: 50 };
 }
 
 // 드래그 시작 핸들러
@@ -59,8 +59,8 @@ export function handleDragMove(e, isDragging, dragStart, setPosition, onDrag) {
   const newY = e.clientY - dragStart.y;
   
   // 화면 경계 체크
-  const maxX = window.innerWidth - 400;
-  const maxY = window.innerHeight - 300;
+  const maxX = window.innerWidth - 300;
+  const maxY = window.innerHeight - 250;
   
   setPosition({
     x: Math.max(0, Math.min(newX, maxX)),
@@ -114,8 +114,8 @@ export function handleTouchMove(e, isDragging, dragStart, setPosition, onDrag) {
   const newX = touch.clientX - dragStart.x;
   const newY = touch.clientY - dragStart.y;
   
-  const maxX = window.innerWidth - 400;
-  const maxY = window.innerHeight - 300;
+  const maxX = window.innerWidth - 300;
+  const maxY = window.innerHeight - 250;
   
   setPosition({
     x: Math.max(0, Math.min(newX, maxX)),

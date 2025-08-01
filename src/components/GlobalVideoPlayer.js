@@ -58,7 +58,7 @@ function GlobalVideoPlayer() {
   const [position, setPosition] = useState(() => {
     return minimized 
       ? { x: window.innerWidth - 100, y: window.innerHeight - 100 }
-      : { x: (window.innerWidth - 400) / 2, y: (window.innerHeight - 350) / 2 };
+      : { x: (window.innerWidth - 300) / 2, y: (window.innerHeight - 250) / 2 };
   });
   
   // 자동 재생 실패 상태 추가
@@ -119,8 +119,8 @@ function GlobalVideoPlayer() {
     const newY = e.clientY - dragStart.y;
     
     // 화면 경계 체크
-    const playerWidth = minimized ? 80 : 400;
-    const playerHeight = minimized ? 80 : 350;
+    const playerWidth = minimized ? 80 : 300;
+    const playerHeight = minimized ? 80 : 250;
     const maxX = window.innerWidth - playerWidth;
     const maxY = window.innerHeight - playerHeight;
     
@@ -221,7 +221,7 @@ function GlobalVideoPlayer() {
       });
     } else {
       setPosition({
-        x: (window.innerWidth - 400) / 2,
+        x: (window.innerWidth - 300) / 2,
         y: 50,
       });
     }

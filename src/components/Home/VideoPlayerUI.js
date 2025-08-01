@@ -152,7 +152,7 @@ export const ExpandedPlayerUI = ({
     style={{
       left: position.x,
       top: position.y,
-      width: '400px',
+      width: '300px',
       touchAction: 'manipulation'
     }}
     onMouseDown={handleMouseDown}
